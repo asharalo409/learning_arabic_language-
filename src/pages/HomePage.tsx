@@ -2,93 +2,112 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
+  Award,
   BookMarked,
   BookOpen,
   BookOpenCheck,
   Bot,
+  ClipboardCheck,
+  Clock,
+  Compass,
   GraduationCap,
+  Headphones,
+  Layers,
   LayoutDashboard,
   ListChecks,
   LogIn,
+  Mic,
   Palette,
   ScrollText,
   Sparkles,
   Trophy,
+  User,
 } from 'lucide-react';
 import { Navbar } from '../components/Navbar';
+import { MuslimCompanionStrip } from '../components/MuslimCompanionStrip';
 import { ResilientImage } from '../components/ResilientImage';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import heroLibraryImg from '../assets/images/hero_islamic_library_1794510739976.jpg';
+import quranArtImg from '../assets/images/quranic_manuscript_art_1794510740673.jpg';
+
+interface RoadmapStep {
+  stepNumber: string;
+  titleBn: string;
+  subtitleBn: string;
+  descBn: string;
+  items: {
+    label: string;
+    to: string;
+    icon: typeof BookOpen;
+  }[];
+}
 
 export const HomePage: React.FC = () => {
   const { t, lang, openWelcome } = useApp();
   const { user } = useAuth();
 
-  const sections = [
+  const roadmapSteps: RoadmapStep[] = [
     {
-      title: 'দৈনন্দিন পাঠ (১–১০০)',
-      tag: 'মাবাদিউল আরাবিয়াহ আদলে',
-      desc: 'সহজ থেকে কঠিন ৬ স্তরে ১৬–২০ লাইন সংলাপ, শব্দার্থ, ব্যাকরণ ও AI চর্চা।',
-      to: '/daily-lessons',
-      icon: ListChecks,
-      accent: 'border-l-4 border-l-sky-500',
+      stepNumber: 'ধাপ ১',
+      titleBn: 'ভিত্তি, বর্ণমালা ও শুরুর স্তর',
+      subtitleBn: 'একদম শুরু থেকে সঠিক ভিত্তি গড়ুন',
+      descBn: 'হরফ, হারাকাত, প্রাথমিক শব্দ ও ১০০ অধ্যায়ের পূর্ণাঙ্গ পাঠ্যক্রমের শুরু।',
+      items: [
+        { label: 'শুরুর ধাপ (Beginner)', to: '/courses/beginners', icon: Compass },
+        { label: '১০০ অধ্যায় কোর্স সূচি', to: '/courses', icon: BookOpen },
+      ],
     },
     {
-      title: 'সফওয়াতুল মাসাদির',
-      tag: '১৪০+ মাসদার ও গর্দান',
-      desc: 'সুলাসি মুজাররাদ ৬ বাব, মাজীদ ফীহ ও হাফত আকসামসহ পূর্ণ ১৪ সিগাহ টেবিল।',
-      to: '/safwatul-masadir',
-      icon: BookOpenCheck,
-      accent: 'border-l-4 border-l-emerald-500',
+      stepNumber: 'ধাপ ২',
+      titleBn: 'দৈনন্দিন পাঠ ও সংলাপ চর্চা',
+      subtitleBn: 'মাবাদিউল আরাবিয়াহ ও বাইনা ইয়াদাইক',
+      descBn: 'ধাপে ধাপে ১৬–২০ লাইনের বাস্তব কথোপকথন ও চার-স্তম্ভের আরবি পাঠ।',
+      items: [
+        { label: 'দৈনন্দিন পাঠ (১–১০০)', to: '/daily-lessons', icon: ListChecks },
+        { label: 'বাইনা ইয়াদাইক ইউনিট', to: '/bayna-yadayk', icon: BookMarked },
+      ],
     },
     {
-      title: 'বাইনা ইয়াদাইক (সংলাপ)',
-      tag: '৪-স্তম্ভ ইউনিট',
-      desc: 'ইউনিটভিত্তিক ৩টি সংলাপ, শব্দকোষ, বাক্য অনুশীলন ও মাখরাজ ধ্বনি চর্চা।',
-      to: '/bayna-yadayk',
-      icon: BookMarked,
-      accent: 'border-l-4 border-l-amber-500',
+      stepNumber: 'ধাপ ৩',
+      titleBn: 'নাহু ও ছরফ (আরবি ব্যাকরণ)',
+      subtitleBn: 'সফওয়াতুল মাসাদির, কাফিয়া ও হেদায়েতুন নাহু',
+      descBn: '১৪০+ মাসদারের ১৪ সিগাহ গর্দান এবং ৪৫টি সুবিন্যস্ত কিতাবি ব্যাকরণ।',
+      items: [
+        { label: 'সফওয়াতুল মাসাদির', to: '/safwatul-masadir', icon: BookOpenCheck },
+        { label: 'নাহু ও ছরফ ব্যাকরণ', to: '/grammar', icon: GraduationCap },
+      ],
     },
     {
-      title: 'নাহু ও ছরফ ব্যাকরণ',
-      tag: 'কাফিয়া ও হেদায়েতুন নাহু',
-      desc: '৪৫টি সুবিন্যস্ত কিতাবি ব্যাকরণ অধ্যায়—মারফুআত, মানসুবাত, আমেল ও ছরফ।',
-      to: '/grammar',
-      icon: GraduationCap,
-      accent: 'border-l-4 border-l-teal-500',
+      stepNumber: 'ধাপ ৪',
+      titleBn: 'কুরআনিক আরবি ও শব্দভাণ্ডার',
+      subtitleBn: 'শব্দের মূলধাতু (জযর) ও স্থায়ী স্মৃতি (SRS)',
+      descBn: 'কুরআনের আয়াত শব্দে শব্দে বিশ্লেষণ ও প্রতিদিন নতুন শব্দ আয়ত্ত করুন।',
+      items: [
+        { label: 'কুরআনিক আরবি ল্যাব', to: '/quranic-arabic', icon: ScrollText },
+        { label: 'শব্দভাণ্ডার (SRS)', to: '/vocabulary', icon: Layers },
+      ],
     },
     {
-      title: 'কুরআনিক আরবি ল্যাব',
-      tag: 'শব্দে শব্দে জذر ও তাদাব্বুর',
-      desc: 'সূরা ফাতিহা ও কুরআনের আয়াতের প্রতিটি শব্দের মূলধাতু, ইরাব ও অর্থ।',
-      to: '/quranic-arabic',
-      icon: ScrollText,
-      accent: 'border-l-4 border-l-yellow-500',
+      stepNumber: 'ধাপ ৫',
+      titleBn: 'শ্রবণ, উচ্চারণ ও AI ভয়েস রোবট',
+      subtitleBn: 'ছেলে/মেয়ে কণ্ঠে সরাসরি আরবি-বাংলা কথা বলুন',
+      descBn: 'গোল AI ভয়েস রোবটের সাথে স্পিকারে কথা বলা, শোনা ও উচ্চারণ অনুশীলন।',
+      items: [
+        { label: 'AI ভয়েস রোবট শিক্ষক', to: '/ai-teacher', icon: Bot },
+        { label: 'শ্রবণ অনুশীলন', to: '/listening', icon: Headphones },
+        { label: 'কথোপকথন ও বলা', to: '/speaking', icon: Mic },
+      ],
     },
     {
-      title: 'AI আরবি শিক্ষক ও ভয়েস',
-      tag: '২৪/৭ বাংলা-আরবি টিউটর',
-      desc: 'বাংলা বা আরবিতে কথা বলে প্রশ্ন করুন এবং হারাকাতসহ উত্তর ও অডিও শুনুন।',
-      to: '/ai-teacher',
-      icon: Bot,
-      accent: 'border-l-4 border-l-indigo-500',
-    },
-    {
-      title: 'লাইভ থিম স্টুডিও',
-      tag: 'ডিএনএ ঢেউ, মেঘ ও বুদবুদ',
-      desc: 'উজ্জ্বল আকাশ, মেঘ ও হাত ছোঁয়ালে নেচে ওঠা ডিএনএ ঢেউয়ের ৮টি জীবন্ত থিম।',
-      to: '/themes',
-      icon: Palette,
-      accent: 'border-l-4 border-l-cyan-500',
-    },
-    {
-      title: 'ড্যাশবোর্ড ও লিডারবোর্ড',
-      tag: 'পয়েন্ট ও র‍্যাঙ্কিং',
-      desc: 'সকল শিক্ষার্থীর XP পয়েন্ট, দৈনিক স্ট্রিক ও ব্যক্তিগত শেখার উন্নতি দেখুন।',
-      to: '/leaderboard',
-      icon: Trophy,
-      accent: 'border-l-4 border-l-orange-500',
+      stepNumber: 'ধাপ ৬',
+      titleBn: 'পরীক্ষা, চ্যালেঞ্জ ও সার্টিফিকেট',
+      subtitleBn: 'নিজের দক্ষতা যাচাই ও অর্জন',
+      descBn: 'অধ্যায়ভিত্তিক কুইজ, দৈনিক চ্যালেঞ্জ ও একাডেমিক মূল্যায়ন।',
+      items: [
+        { label: 'কুইজ ও পরীক্ষা', to: '/quiz', icon: ClipboardCheck },
+        { label: 'দৈনিক চ্যালেঞ্জ', to: '/daily-challenge', icon: Trophy },
+        { label: 'সার্টিফিকেট', to: '/certificates', icon: Award },
+      ],
     },
   ];
 
@@ -96,10 +115,10 @@ export const HomePage: React.FC = () => {
     <div className="min-h-screen bg-transparent text-[var(--text-primary)]">
       <Navbar />
 
-      {/* Clean, Spacious Hero Section */}
-      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-12 lg:pt-16 lg:pb-16">
+      {/* Clean Hero Section (Zero human photos) */}
+      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-10 lg:pt-14 lg:pb-12">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-          <div className="lg:col-span-7 space-y-6">
+          <div className="lg:col-span-7 space-y-5">
             <button
               type="button"
               onClick={openWelcome}
@@ -117,20 +136,28 @@ export const HomePage: React.FC = () => {
               {t.hero.subtitle}
             </p>
 
-            {/* Primary Actions — Clean & Focused */}
+            {/* Primary Entry Actions: Clear Guest vs Account Choice */}
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <Link
                 to="/courses/beginners"
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-semibold btn-primary shadow-md whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-sm font-bold btn-primary shadow-md whitespace-nowrap"
               >
                 <BookOpen className="w-4 h-4" />
-                <span>{t.hero.primaryCta}</span>
+                <span>{user ? 'ধাপ ১ থেকে শুরু করুন' : 'গেস্ট হিসেবে শেখা শুরু করুন'}</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
 
               <Link
+                to="/ai-teacher"
+                className="inline-flex items-center gap-2 px-5 py-3.5 rounded-full text-sm font-semibold btn-secondary whitespace-nowrap"
+              >
+                <Bot className="w-4 h-4 text-[var(--accent)]" />
+                <span>AI ভয়েস রোবট</span>
+              </Link>
+
+              <Link
                 to={user ? '/dashboard' : '/auth'}
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-semibold btn-secondary whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-5 py-3.5 rounded-full text-sm font-semibold btn-secondary whitespace-nowrap"
               >
                 {user ? (
                   <>
@@ -140,27 +167,19 @@ export const HomePage: React.FC = () => {
                 ) : (
                   <>
                     <LogIn className="w-4 h-4 text-[var(--accent)]" />
-                    <span>Gmail দিয়ে লগইন / অ্যাকাউন্ট</span>
+                    <span>লগইন (ড্যাশবোর্ডের জন্য)</span>
                   </>
                 )}
-              </Link>
-
-              <Link
-                to="/themes"
-                className="inline-flex items-center gap-2 px-4 py-3.5 rounded-2xl text-sm btn-secondary whitespace-nowrap"
-              >
-                <Palette className="w-4 h-4 text-[var(--accent)]" />
-                <span>থিম ও বুদবুদ</span>
               </Link>
             </div>
           </div>
 
-          {/* Right Radiant Showcase Card */}
+          {/* Right Radiant Quranic Manuscript Card (No people) */}
           <div className="lg:col-span-5">
             <div className="relative rounded-3xl overflow-hidden border border-[var(--border-strong)] shadow-xl aspect-[4/3]">
               <ResilientImage
-                src={heroLibraryImg}
-                alt="AI Arabic Academy study sanctuary"
+                src={quranArtImg}
+                alt="Illuminated Quranic Arabic Manuscript"
                 className="w-full h-full object-cover"
                 fallbackTitle="AI Arabic Academy"
               />
@@ -170,8 +189,8 @@ export const HomePage: React.FC = () => {
                 </p>
                 <p className="text-xs text-white/90">
                   {lang === 'bn'
-                    ? 'প্রত্যেকটি মডিউল নিজস্ব আলাদা ডিজাইনের পৃষ্ঠায় সুসজ্জিত'
-                    : 'Every learning lab lives on its own dedicated, distraction-free page'}
+                    ? 'শুরু থেকে উচ্চতর স্তর পর্যন্ত ৬ ধাপের সুশৃঙ্খল আরবি শিক্ষা'
+                    : 'A clean 6-step curriculum from Arabic letters to fluency'}
                 </p>
               </div>
             </div>
@@ -179,48 +198,111 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Clean Dedicated Pages Directory (No Clutter!) */}
-      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pb-14 space-y-6">
+      {/* Live Muslim Companion Strip: Clock + Next Prayer/Adhan + Weather */}
+      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pb-10">
+        <MuslimCompanionStrip />
+      </section>
+
+      {/* Step-by-Step 6-Stage Organized Curriculum */}
+      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pb-12 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold">
-              {lang === 'bn' ? 'সুবিন্যস্ত শিক্ষণ পৃষ্ঠাসমূহ' : 'Dedicated Learning Pages'}
+            <span className="text-xs font-bold text-[var(--accent)] uppercase tracking-wider">
+              STEP-BY-STEP LEARNING PATH
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold mt-1">
+              ধাপে ধাপে সাজানো পূর্ণাঙ্গ আরবি শিক্ষা
             </h2>
             <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1">
-              যেকোনো কার্ডে ক্লিক করে সরাসরি সেই বিষয়ের নিজস্ব আলাদা পৃষ্ঠা ও সাউন্ড অভিজ্ঞতায় প্রবেশ করুন।
+              অগোছালো নয় — ১ম ধাপ থেকে শুরু করে প্রতিটি বিষয় ক্রমানুসারে অনুশীলন করুন।
             </p>
           </div>
           <Link to="/courses" className="text-xs sm:text-sm font-semibold text-[var(--accent)] hover:underline whitespace-nowrap">
-            ১০০ অধ্যায় সিলেবাস →
+            ১০০ অধ্যায় সম্পূর্ণ রোডম্যাপ →
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {sections.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`surface-card rounded-2xl p-5 flex flex-col justify-between gap-4 hover:border-[var(--border-strong)] hover:-translate-y-0.5 transition-all ${item.accent}`}
-              >
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="w-10 h-10 rounded-xl bg-[var(--emerald-highlight)] flex items-center justify-center text-[var(--accent)]">
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <span className="text-[11px] font-medium text-[var(--text-muted)]">{item.tag}</span>
-                  </div>
-                  <h3 className="text-base font-bold">{item.title}</h3>
-                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{item.desc}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {roadmapSteps.map((step) => (
+            <div
+              key={step.stepNumber}
+              className="surface-card rounded-3xl p-6 border border-[var(--border-subtle)] hover:border-[var(--border-strong)] transition-all flex flex-col justify-between gap-5"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="px-3 py-1 rounded-full bg-[var(--accent)] text-[var(--accent-fg)] text-xs font-bold">
+                    {step.stepNumber}
+                  </span>
+                  <span className="text-[11px] font-medium text-[var(--text-muted)]">{step.subtitleBn}</span>
                 </div>
-                <div className="text-xs font-semibold text-[var(--accent)] inline-flex items-center gap-1 pt-2 border-t border-[var(--border-subtle)]">
-                  <span>পৃষ্ঠা খুলুন</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </div>
-              </Link>
-            );
-          })}
+                <h3 className="text-lg font-bold">{step.titleBn}</h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{step.descBn}</p>
+              </div>
+
+              <div className="space-y-2 pt-3 border-t border-[var(--border-subtle)]">
+                {step.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className="flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-2xl surface-alt border border-[var(--border-subtle)] hover:border-[var(--accent)] transition-colors text-xs font-semibold"
+                    >
+                      <span className="inline-flex items-center gap-2.5">
+                        <Icon className="w-4 h-4 text-[var(--accent)]" />
+                        <span>{item.label}</span>
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Clean Companion & Personalization Row */}
+      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Link
+            to="/prayer-weather"
+            className="surface-card rounded-2xl p-5 border border-[var(--border-subtle)] hover:border-[var(--border-strong)] flex items-center gap-4 transition-all"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-[var(--emerald-highlight)] text-[var(--accent)] flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-bold">নামাজ, আজান, ঘড়ি ও আবহাওয়া</div>
+              <div className="text-xs text-[var(--text-secondary)] mt-0.5">৫ ওয়াক্ত সময়সূচি, কিবলা ও লাইভ আবহাওয়া</div>
+            </div>
+          </Link>
+
+          <Link
+            to="/themes"
+            className="surface-card rounded-2xl p-5 border border-[var(--border-subtle)] hover:border-[var(--border-strong)] flex items-center gap-4 transition-all"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-[var(--emerald-highlight)] text-[var(--accent)] flex items-center justify-center shrink-0">
+              <Palette className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-bold">ইসলামিক থিম ও বুদবুদ স্টুডিও</div>
+              <div className="text-xs text-[var(--text-secondary)] mt-0.5">মসজিদ, কাবা, মদীনা ও উজ্জ্বল আকাশের থিম</div>
+            </div>
+          </Link>
+
+          <Link
+            to="/profile"
+            className="surface-card rounded-2xl p-5 border border-[var(--border-subtle)] hover:border-[var(--border-strong)] flex items-center gap-4 transition-all"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-[var(--emerald-highlight)] text-[var(--accent)] flex items-center justify-center shrink-0">
+              <User className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-bold">প্রোফাইল ও ছেলে/মেয়ে কণ্ঠ সেটিংস</div>
+              <div className="text-xs text-[var(--text-secondary)] mt-0.5">AI শিক্ষক ছেলে না মেয়ে কণ্ঠে কথা বলবে তা ঠিক করুন</div>
+            </div>
+          </Link>
         </div>
       </section>
 
@@ -233,22 +315,22 @@ export const HomePage: React.FC = () => {
               তাসীন বিল্লাহ — আল কুরআন এণ্ড ইসলামিক স্টাডিজ বিভাগ, কুষ্টিয়া ইসলামী বিশ্ববিদ্যালয়
             </h2>
             <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-              মাদরাসা, স্কুল, কলেজ ও বিশ্ববিদ্যালয়ের সকল শিক্ষার্থীর জন্য কুরআনিক ও আধুনিক আরবি শেখাকে আনন্দময় করতে এই প্ল্যাটফর্ম গড়ে তোলা হয়েছে। আপনার নিজস্ব অ্যাকাউন্টে লগইন করে নিয়মিত পয়েন্ট অর্জন করুন ও লিডারবোর্ডে এগিয়ে থাকুন।
+              মাদরাসা, স্কুল, কলেজ ও বিশ্ববিদ্যালয়ের সকল শিক্ষার্থীর জন্য কুরআনিক ও আধুনিক আরবি শেখাকে সহজ ও গোছালো করতে এই একাডেমি নির্মিত হয়েছে। চাইলে গেস্ট হিসেবে পড়তে পারেন, অথবা লগইন করে নিজের ড্যাশবোর্ডে উন্নতি সংরক্ষণ করতে পারেন।
             </p>
           </div>
           <div className="flex flex-wrap gap-3 shrink-0">
             <button
               type="button"
               onClick={openWelcome}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold btn-secondary whitespace-nowrap"
+              className="px-4 py-2.5 rounded-full text-xs font-semibold btn-secondary whitespace-nowrap"
             >
-              স্বাগতম ও সালাম শুনুন
+              আহলান ওয়া সাহলান কার্ড
             </button>
             <Link
-              to="/auth"
-              className="px-5 py-2.5 rounded-xl text-xs font-semibold btn-primary whitespace-nowrap"
+              to={user ? '/dashboard' : '/auth'}
+              className="px-5 py-2.5 rounded-full text-xs font-semibold btn-primary whitespace-nowrap"
             >
-              {user ? 'প্রোফাইল দেখুন' : 'লগইন করুন'}
+              {user ? 'আমার ড্যাশবোর্ড' : 'লগইন করুন'}
             </Link>
           </div>
         </div>
@@ -262,10 +344,10 @@ export const HomePage: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-4">
             <Link to="/courses" className="hover:text-[var(--accent)]">কোর্স</Link>
+            <Link to="/ai-teacher" className="hover:text-[var(--accent)]">AI ভয়েস রোবট</Link>
+            <Link to="/prayer-weather" className="hover:text-[var(--accent)]">নামাজ ও আবহাওয়া</Link>
             <Link to="/themes" className="hover:text-[var(--accent)]">থিম স্টুডিও</Link>
-            <Link to="/leaderboard" className="hover:text-[var(--accent)]">লিডারবোর্ড</Link>
             <Link to="/auth" className="hover:text-[var(--accent)]">লগইন</Link>
-            <Link to="/admin" className="hover:text-[var(--accent)]">অ্যাডমিন</Link>
           </div>
         </div>
       </footer>

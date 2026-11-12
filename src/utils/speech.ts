@@ -1,7 +1,30 @@
+import { VoiceGender } from '../types/academy';
+
+const VOICE_GENDER_STORAGE_KEY = 'aaa_voice_gender_v1';
+
 export interface SpeechSupportInfo {
   ttsSupported: boolean;
   hasArabicTtsVoice: boolean;
   sttSupported: boolean;
+}
+
+export function getPreferredVoiceGender(): VoiceGender {
+  if (typeof window === 'undefined') return 'male';
+  try {
+    const saved = localStorage.getItem(VOICE_GENDER_STORAGE_KEY);
+    return saved === 'female' ? 'female' : 'male';
+  } catch {
+    return 'male';
+  }
+}
+
+export function setPreferredVoiceGender(gender: VoiceGender): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(VOICE_GENDER_STORAGE_KEY, gender);
+  } catch {
+    // ignore storage failures
+  }
 }
 
 export function getSpeechSupport(): SpeechSupportInfo {
@@ -25,11 +48,96 @@ export function stopArabicSpeech(): void {
   }
 }
 
+const MALE_VOICE_HINTS = [
+  'male',
+  'man',
+  'maged',
+  'majed',
+  'tarik',
+  'tariq',
+  'naayf',
+  'bassel',
+  'hamed',
+  'shakir',
+  'pradeep',
+  'tanvir',
+  'bashkar',
+  'nabanita-male',
+  'daniel',
+  'david',
+  'mark',
+  'alex',
+  'rishi',
+  'george',
+  'ryan',
+  'guy',
+  'andrew',
+];
+
+const FEMALE_VOICE_HINTS = [
+  'female',
+  'woman',
+  'hoda',
+  'salma',
+  'laila',
+  'zeina',
+  'fatima',
+  'rana',
+  'zariyah',
+  'tanisha',
+  'nabanita',
+  'zira',
+  'samantha',
+  'aria',
+  'jenny',
+  'sonia',
+  'victoria',
+  'karen',
+];
+
+function selectVoiceByGender(
+  voices: SpeechSynthesisVoice[],
+  langCode: string,
+  gender: VoiceGender
+): { voice?: SpeechSynthesisVoice; matchedRequestedGender: boolean } {
+  const prefix = langCode.split('-')[0].toLowerCase();
+  const exactPool = voices.filter((v) => v.lang.toLowerCase() === langCode.toLowerCase());
+  const prefixPool = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
+  const pool = exactPool.length > 0 ? exactPool : prefixPool;
+
+  if (pool.length === 0) {
+    return { voice: undefined, matchedRequestedGender: false };
+  }
+
+  const targetHints = gender === 'male' ? MALE_VOICE_HINTS : FEMALE_VOICE_HINTS;
+  const oppositeHints = gender === 'male' ? FEMALE_VOICE_HINTS : MALE_VOICE_HINTS;
+
+  const exactGenderMatch = pool.find((v) => {
+    const name = `${v.name} ${v.voiceURI}`.toLowerCase();
+    return targetHints.some((hint) => name.includes(hint));
+  });
+  if (exactGenderMatch) {
+    return { voice: exactGenderMatch, matchedRequestedGender: true };
+  }
+
+  const nonOppositeMatch = pool.find((v) => {
+    const name = `${v.name} ${v.voiceURI}`.toLowerCase();
+    return !oppositeHints.some((hint) => name.includes(hint));
+  });
+
+  if (nonOppositeMatch) {
+    return { voice: nonOppositeMatch, matchedRequestedGender: false };
+  }
+
+  return { voice: pool[0], matchedRequestedGender: false };
+}
+
 export function speakText(
   text: string,
   langCode: 'ar-SA' | 'bn-BD' | 'en-US' = 'ar-SA',
   options?: {
     rate?: number;
+    voiceGender?: VoiceGender;
     onStart?: () => void;
     onEnd?: () => void;
     onError?: (msg: string) => void;
@@ -44,10 +152,12 @@ export function speakText(
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
-    const prefix = langCode.split('-')[0].toLowerCase();
-    const matchedVoice =
-      voices.find((v) => v.lang.toLowerCase() === langCode.toLowerCase()) ||
-      voices.find((v) => v.lang.toLowerCase().startsWith(prefix));
+    const desiredGender = options?.voiceGender || getPreferredVoiceGender();
+    const { voice: matchedVoice, matchedRequestedGender } = selectVoiceByGender(
+      voices,
+      langCode,
+      desiredGender
+    );
 
     if (matchedVoice) {
       utterance.voice = matchedVoice;
@@ -56,18 +166,27 @@ export function speakText(
       utterance.lang = langCode;
     }
 
-    utterance.rate = options?.rate ?? (langCode.startsWith('ar') ? 0.92 : 1.0);
-    utterance.pitch = 1.0;
+    const baseRate = options?.rate ?? (langCode.startsWith('ar') ? 0.92 : 1.0);
+    utterance.rate = desiredGender === 'male' ? Math.max(0.75, baseRate - 0.03) : baseRate;
+
+    // Modulate pitch cleanly so Male vs Female sounds distinct even when browser exposes only 1 voice per language
+    if (desiredGender === 'male') {
+      utterance.pitch = matchedRequestedGender ? 0.94 : 0.72;
+    } else {
+      utterance.pitch = matchedRequestedGender ? 1.04 : 1.18;
+    }
 
     utterance.onstart = () => options?.onStart?.();
     utterance.onend = () => options?.onEnd?.();
     utterance.onerror = () => {
+      options?.onEnd?.();
       options?.onError?.('অডিও প্লে করতে সমস্যা হয়েছে অথবা ডিভাইসে ভয়েস প্যাকেজ পাওয়া যায়নি।');
     };
 
     window.speechSynthesis.speak(utterance);
     return true;
   } catch {
+    options?.onEnd?.();
     options?.onError?.('ব্রাউজার অডিও ইঞ্জিন চালু করা যায়নি।');
     return false;
   }
@@ -77,6 +196,7 @@ export function speakArabic(
   text: string,
   options?: {
     rate?: number;
+    voiceGender?: VoiceGender;
     onStart?: () => void;
     onEnd?: () => void;
     onError?: (msg: string) => void;

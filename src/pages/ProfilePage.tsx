@@ -3,7 +3,8 @@ import { Bell, Check, RotateCcw, Sparkles, Volume2, VolumeX } from 'lucide-react
 import { AppShell } from '../components/AppShell';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { useApp } from '../context/AppContext';
-import { InterfaceLang, LearningTrack, ThemeMode } from '../types/academy';
+import { InterfaceLang, LearningTrack, ThemeMode, VoiceGender } from '../types/academy';
+import { speakText } from '../utils/speech';
 
 const ALL_THEMES: { id: ThemeMode; swatch: string; accent: string }[] = [
   { id: 'sky-cloud', swatch: '#bae6fd', accent: '#0284c7' },
@@ -41,6 +42,7 @@ export const ProfilePage: React.FC = () => {
 
   const [name, setName] = useState(progress.studentName);
   const [track, setTrack] = useState<LearningTrack>(progress.preferredTrack);
+  const [voiceGender, setVoiceGender] = useState<VoiceGender>(progress.voiceGender || 'male');
   const [dailyMins, setDailyMins] = useState(progress.dailyTargetMinutes);
   const [savedToast, setSavedToast] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -48,12 +50,25 @@ export const ProfilePage: React.FC = () => {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     updateProfile({
-      studentName: name.trim() || 'Student',
+      studentName: name.trim() || 'প্রিয় শিক্ষার্থী',
       preferredTrack: track,
+      voiceGender,
       dailyTargetMinutes: Math.max(5, Math.min(180, Number(dailyMins) || 20)),
     });
     setSavedToast(true);
     window.setTimeout(() => setSavedToast(false), 2000);
+  };
+
+  const handleSelectVoiceGender = (gender: VoiceGender) => {
+    setVoiceGender(gender);
+    updateProfile({ voiceGender: gender });
+    speakText(
+      gender === 'male'
+        ? 'আসসালামু আলাইকুম, আমি এখন পুরুষ কণ্ঠে আরবি ও বাংলা পড়াব।'
+        : 'আসসালামু আলাইকুম, আমি এখন নারী কণ্ঠে আরবি ও বাংলা পড়াব।',
+      'bn-BD',
+      { voiceGender: gender }
+    );
   };
 
   return (
@@ -103,6 +118,58 @@ export const ProfilePage: React.FC = () => {
                 onChange={(e) => setDailyMins(Number(e.target.value))}
                 className="w-full px-3 py-2.5 rounded-lg bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-sm font-mono-num"
               />
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl surface-alt border border-[var(--border-subtle)] space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold">AI ও অডিও কণ্ঠস্বর (ছেলে / মেয়ে)</div>
+                <div className="text-xs text-[var(--text-muted)]">
+                  এখান থেকে ছেলে বা মেয়ে নির্বাচন করলে AI রোবট ও সব পাঠের অডিও সেই কণ্ঠে কথা বলবে
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  speakText(
+                    voiceGender === 'male'
+                      ? 'السَّلَامُ عَلَيْكُمْ، أَنَا مُعَلِّمُ اللُّغَةِ الْعَرَبِيَّةِ'
+                      : 'السَّلَامُ عَلَيْكُمْ، أَنَا مُعَلِّمَةُ اللُّغَةِ الْعَرَبِيَّةِ',
+                    'ar-SA',
+                    { voiceGender }
+                  )
+                }
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs btn-secondary"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-[var(--accent)]" />
+                <span>কণ্ঠ পরীক্ষা করুন</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => handleSelectVoiceGender('male')}
+                className={`py-2.5 px-4 rounded-xl text-xs font-bold border transition-all ${
+                  voiceGender === 'male'
+                    ? 'btn-primary border-transparent shadow-sm'
+                    : 'btn-secondary border-[var(--border-subtle)]'
+                }`}
+              >
+                ছেলে কণ্ঠ (পুরুষ)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectVoiceGender('female')}
+                className={`py-2.5 px-4 rounded-xl text-xs font-bold border transition-all ${
+                  voiceGender === 'female'
+                    ? 'btn-primary border-transparent shadow-sm'
+                    : 'btn-secondary border-[var(--border-subtle)]'
+                }`}
+              >
+                মেয়ে কণ্ঠ (নারী)
+              </button>
             </div>
           </div>
 

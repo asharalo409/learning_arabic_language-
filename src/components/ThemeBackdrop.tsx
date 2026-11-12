@@ -2,6 +2,33 @@ import React, { useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { ThemeMode } from '../types/academy';
 import { playSound } from '../utils/soundEffects';
+import skyMosqueImg from '../assets/images/theme_bright_sky_mosque_1794521633239.jpg';
+import kaabaImg from '../assets/images/theme_kaaba_sanctuary_1794521633707.jpg';
+import madinahImg from '../assets/images/theme_madinah_courtyard_1794521633886.jpg';
+import quranArtImg from '../assets/images/quranic_manuscript_art_1794510740673.jpg';
+
+const THEME_WALLPAPERS: Partial<Record<ThemeMode, { src: string; overlay: string }>> = {
+  'sky-cloud': {
+    src: skyMosqueImg,
+    overlay: 'linear-gradient(180deg, rgba(226, 243, 255, 0.48) 0%, rgba(240, 248, 255, 0.72) 100%)',
+  },
+  kaaba: {
+    src: kaabaImg,
+    overlay: 'linear-gradient(180deg, rgba(9, 9, 11, 0.56) 0%, rgba(9, 9, 11, 0.78) 100%)',
+  },
+  madinah: {
+    src: madinahImg,
+    overlay: 'linear-gradient(180deg, rgba(6, 27, 25, 0.54) 0%, rgba(6, 27, 25, 0.76) 100%)',
+  },
+  emerald: {
+    src: quranArtImg,
+    overlay: 'linear-gradient(180deg, rgba(11, 34, 21, 0.64) 0%, rgba(6, 20, 12, 0.84) 100%)',
+  },
+  parchment: {
+    src: quranArtImg,
+    overlay: 'linear-gradient(180deg, rgba(250, 243, 230, 0.68) 0%, rgba(244, 232, 212, 0.84) 100%)',
+  },
+};
 
 interface ThemePalette {
   dnaPrimary: string;
@@ -17,91 +44,91 @@ interface ThemePalette {
 
 const PALETTES: Record<ThemeMode, ThemePalette> = {
   'sky-cloud': {
-    dnaPrimary: 'rgba(2, 132, 199, 0.36)',
-    dnaSecondary: 'rgba(245, 158, 11, 0.36)',
-    dnaRung: 'rgba(14, 165, 233, 0.22)',
-    bubbleStroke: 'rgba(255, 255, 255, 0.85)',
-    bubbleFill: 'rgba(186, 230, 253, 0.28)',
-    cloudColor: 'rgba(255, 255, 255, 0.72)',
-    sparkleColor: 'rgba(245, 158, 11, 0.65)',
-    rippleColor: 'rgba(2, 132, 199, 0.38)',
+    dnaPrimary: 'rgba(79, 70, 229, 0.2)',
+    dnaSecondary: 'rgba(14, 165, 233, 0.24)',
+    dnaRung: 'rgba(99, 102, 241, 0.12)',
+    bubbleStroke: 'rgba(255, 255, 255, 0.88)',
+    bubbleFill: 'rgba(186, 230, 253, 0.22)',
+    cloudColor: 'rgba(255, 255, 255, 0.58)',
+    sparkleColor: 'rgba(245, 158, 11, 0.5)',
+    rippleColor: 'rgba(79, 70, 229, 0.34)',
     isBrightSky: true,
   },
   emerald: {
-    dnaPrimary: 'rgba(229, 193, 88, 0.34)',
-    dnaSecondary: 'rgba(52, 211, 153, 0.3)',
-    dnaRung: 'rgba(212, 175, 55, 0.18)',
-    bubbleStroke: 'rgba(167, 243, 208, 0.45)',
-    bubbleFill: 'rgba(16, 185, 129, 0.12)',
-    cloudColor: 'rgba(16, 185, 129, 0.11)',
-    sparkleColor: 'rgba(229, 193, 88, 0.72)',
-    rippleColor: 'rgba(229, 193, 88, 0.42)',
+    dnaPrimary: 'rgba(229, 193, 88, 0.28)',
+    dnaSecondary: 'rgba(74, 222, 128, 0.24)',
+    dnaRung: 'rgba(212, 175, 55, 0.15)',
+    bubbleStroke: 'rgba(167, 243, 208, 0.42)',
+    bubbleFill: 'rgba(16, 185, 129, 0.1)',
+    cloudColor: 'rgba(16, 185, 129, 0.09)',
+    sparkleColor: 'rgba(229, 193, 88, 0.68)',
+    rippleColor: 'rgba(229, 193, 88, 0.4)',
     isBrightSky: false,
   },
   midnight: {
-    dnaPrimary: 'rgba(56, 189, 248, 0.34)',
-    dnaSecondary: 'rgba(226, 183, 75, 0.32)',
-    dnaRung: 'rgba(125, 211, 252, 0.2)',
-    bubbleStroke: 'rgba(186, 230, 253, 0.45)',
+    dnaPrimary: 'rgba(56, 189, 248, 0.32)',
+    dnaSecondary: 'rgba(226, 183, 75, 0.28)',
+    dnaRung: 'rgba(125, 211, 252, 0.18)',
+    bubbleStroke: 'rgba(186, 230, 253, 0.42)',
     bubbleFill: 'rgba(56, 189, 248, 0.12)',
     cloudColor: 'rgba(59, 130, 246, 0.12)',
-    sparkleColor: 'rgba(253, 224, 71, 0.75)',
-    rippleColor: 'rgba(56, 189, 248, 0.42)',
+    sparkleColor: 'rgba(253, 224, 71, 0.72)',
+    rippleColor: 'rgba(56, 189, 248, 0.4)',
     isBrightSky: false,
   },
   light: {
-    dnaPrimary: 'rgba(15, 107, 78, 0.28)',
-    dnaSecondary: 'rgba(217, 119, 6, 0.28)',
-    dnaRung: 'rgba(16, 185, 129, 0.18)',
+    dnaPrimary: 'rgba(67, 56, 202, 0.18)',
+    dnaSecondary: 'rgba(14, 165, 233, 0.18)',
+    dnaRung: 'rgba(99, 102, 241, 0.1)',
     bubbleStroke: 'rgba(255, 255, 255, 0.85)',
-    bubbleFill: 'rgba(167, 243, 208, 0.26)',
-    cloudColor: 'rgba(255, 255, 255, 0.65)',
-    sparkleColor: 'rgba(217, 119, 6, 0.52)',
-    rippleColor: 'rgba(15, 107, 78, 0.34)',
+    bubbleFill: 'rgba(224, 231, 255, 0.26)',
+    cloudColor: 'rgba(255, 255, 255, 0.55)',
+    sparkleColor: 'rgba(79, 70, 229, 0.34)',
+    rippleColor: 'rgba(67, 56, 202, 0.26)',
     isBrightSky: true,
   },
   madinah: {
-    dnaPrimary: 'rgba(45, 212, 191, 0.32)',
-    dnaSecondary: 'rgba(230, 185, 121, 0.34)',
-    dnaRung: 'rgba(45, 212, 191, 0.18)',
-    bubbleStroke: 'rgba(153, 246, 228, 0.45)',
-    bubbleFill: 'rgba(20, 184, 166, 0.14)',
-    cloudColor: 'rgba(45, 212, 191, 0.1)',
-    sparkleColor: 'rgba(241, 202, 144, 0.75)',
-    rippleColor: 'rgba(230, 185, 121, 0.42)',
+    dnaPrimary: 'rgba(45, 212, 191, 0.26)',
+    dnaSecondary: 'rgba(230, 185, 121, 0.28)',
+    dnaRung: 'rgba(45, 212, 191, 0.15)',
+    bubbleStroke: 'rgba(153, 246, 228, 0.4)',
+    bubbleFill: 'rgba(20, 184, 166, 0.1)',
+    cloudColor: 'rgba(45, 212, 191, 0.08)',
+    sparkleColor: 'rgba(241, 202, 144, 0.7)',
+    rippleColor: 'rgba(230, 185, 121, 0.4)',
     isBrightSky: false,
   },
   kaaba: {
-    dnaPrimary: 'rgba(240, 196, 77, 0.36)',
-    dnaSecondary: 'rgba(251, 191, 36, 0.26)',
-    dnaRung: 'rgba(240, 196, 77, 0.2)',
-    bubbleStroke: 'rgba(253, 230, 138, 0.45)',
-    bubbleFill: 'rgba(245, 158, 11, 0.1)',
-    cloudColor: 'rgba(240, 196, 77, 0.08)',
-    sparkleColor: 'rgba(248, 212, 109, 0.8)',
-    rippleColor: 'rgba(240, 196, 77, 0.45)',
+    dnaPrimary: 'rgba(240, 196, 77, 0.28)',
+    dnaSecondary: 'rgba(251, 191, 36, 0.22)',
+    dnaRung: 'rgba(240, 196, 77, 0.16)',
+    bubbleStroke: 'rgba(253, 230, 138, 0.4)',
+    bubbleFill: 'rgba(245, 158, 11, 0.09)',
+    cloudColor: 'rgba(240, 196, 77, 0.07)',
+    sparkleColor: 'rgba(248, 212, 109, 0.76)',
+    rippleColor: 'rgba(240, 196, 77, 0.42)',
     isBrightSky: false,
   },
   parchment: {
-    dnaPrimary: 'rgba(154, 91, 19, 0.26)',
-    dnaSecondary: 'rgba(15, 118, 110, 0.24)',
-    dnaRung: 'rgba(180, 134, 28, 0.16)',
-    bubbleStroke: 'rgba(255, 250, 240, 0.8)',
-    bubbleFill: 'rgba(253, 230, 138, 0.24)',
-    cloudColor: 'rgba(255, 252, 245, 0.62)',
-    sparkleColor: 'rgba(180, 110, 20, 0.5)',
-    rippleColor: 'rgba(154, 91, 19, 0.32)',
+    dnaPrimary: 'rgba(154, 91, 19, 0.22)',
+    dnaSecondary: 'rgba(15, 118, 110, 0.2)',
+    dnaRung: 'rgba(180, 134, 28, 0.12)',
+    bubbleStroke: 'rgba(255, 250, 240, 0.78)',
+    bubbleFill: 'rgba(253, 230, 138, 0.2)',
+    cloudColor: 'rgba(255, 252, 245, 0.5)',
+    sparkleColor: 'rgba(180, 110, 20, 0.45)',
+    rippleColor: 'rgba(154, 91, 19, 0.3)',
     isBrightSky: true,
   },
   andalus: {
-    dnaPrimary: 'rgba(56, 189, 248, 0.38)',
-    dnaSecondary: 'rgba(168, 85, 247, 0.28)',
-    dnaRung: 'rgba(125, 211, 252, 0.22)',
-    bubbleStroke: 'rgba(186, 230, 253, 0.5)',
-    bubbleFill: 'rgba(56, 189, 248, 0.14)',
-    cloudColor: 'rgba(56, 189, 248, 0.12)',
-    sparkleColor: 'rgba(196, 181, 253, 0.78)',
-    rippleColor: 'rgba(56, 189, 248, 0.45)',
+    dnaPrimary: 'rgba(56, 189, 248, 0.32)',
+    dnaSecondary: 'rgba(168, 85, 247, 0.24)',
+    dnaRung: 'rgba(125, 211, 252, 0.18)',
+    bubbleStroke: 'rgba(186, 230, 253, 0.45)',
+    bubbleFill: 'rgba(56, 189, 248, 0.12)',
+    cloudColor: 'rgba(56, 189, 248, 0.1)',
+    sparkleColor: 'rgba(196, 181, 253, 0.74)',
+    rippleColor: 'rgba(56, 189, 248, 0.42)',
     isBrightSky: false,
   },
 };
@@ -190,34 +217,34 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
     resize();
 
     const intensityScale = backdropIntensity === 'vivid' ? 1 : 0.55;
-    const bubbleCount = Math.round((width < 640 ? 22 : 34) * intensityScale);
-    const cloudCount = Math.round((width < 640 ? 5 : 8) * intensityScale);
-    const sparkleCount = Math.round((width < 640 ? 24 : 42) * intensityScale);
+    const bubbleCount = Math.round((width < 640 ? 18 : 28) * intensityScale);
+    const cloudCount = Math.round((width < 640 ? 4 : 6) * intensityScale);
+    const sparkleCount = Math.round((width < 640 ? 22 : 36) * intensityScale);
 
     const bubbles: Bubble[] = Array.from({ length: bubbleCount }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
-      r: 7 + Math.random() * 18,
-      vy: -(0.35 + Math.random() * 0.75),
-      vx: (Math.random() - 0.5) * 0.35,
+      r: 6 + Math.random() * 15,
+      vy: -(0.35 + Math.random() * 0.7),
+      vx: (Math.random() - 0.5) * 0.3,
       wobblePhase: Math.random() * Math.PI * 2,
-      alpha: 0.45 + Math.random() * 0.45,
+      alpha: 0.4 + Math.random() * 0.4,
     }));
 
     const clouds: CloudPuff[] = Array.from({ length: cloudCount }, (_, idx) => ({
       x: (idx / Math.max(1, cloudCount)) * (width + 260) - 130,
-      y: 55 + Math.random() * (height * 0.45),
-      scale: 0.75 + Math.random() * 0.95,
-      speed: 0.16 + Math.random() * 0.24,
-      alpha: 0.55 + Math.random() * 0.4,
+      y: 55 + Math.random() * (height * 0.4),
+      scale: 0.75 + Math.random() * 0.9,
+      speed: 0.14 + Math.random() * 0.22,
+      alpha: 0.45 + Math.random() * 0.35,
     }));
 
     const sparkles: Sparkle[] = Array.from({ length: sparkleCount }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
-      r: 1.2 + Math.random() * 2.2,
+      r: 1.2 + Math.random() * 2,
       phase: Math.random() * Math.PI * 2,
-      speed: 0.02 + Math.random() * 0.04,
+      speed: 0.02 + Math.random() * 0.035,
     }));
 
     const ripples: TouchRipple[] = [];
@@ -227,35 +254,34 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
       pointer.x = e.clientX;
       pointer.y = e.clientY;
       pointer.active = true;
-      pointer.energy = Math.min(1.6, pointer.energy + 0.18);
+      pointer.energy = Math.min(1.5, pointer.energy + 0.16);
     };
 
     const handlePointerDown = (e: PointerEvent) => {
       pointer.x = e.clientX;
       pointer.y = e.clientY;
       pointer.active = true;
-      pointer.energy = 1.8;
+      pointer.energy = 1.7;
 
       ripples.push({
         x: e.clientX,
         y: e.clientY,
         radius: 6,
-        maxRadius: 150,
-        alpha: 0.75,
+        maxRadius: 140,
+        alpha: 0.7,
       });
 
-      // Spawn joyful burst of floating bubbles around touch point
       for (let i = 0; i < 4; i += 1) {
         const angle = (Math.PI * 2 * i) / 4 + Math.random() * 0.6;
-        if (bubbles.length < 56) {
+        if (bubbles.length < 48) {
           bubbles.push({
             x: e.clientX + Math.cos(angle) * 14,
             y: e.clientY + Math.sin(angle) * 14,
-            r: 5 + Math.random() * 11,
-            vy: -(0.8 + Math.random() * 1.1),
-            vx: Math.cos(angle) * 1.6,
+            r: 5 + Math.random() * 10,
+            vy: -(0.8 + Math.random() * 1.0),
+            vx: Math.cos(angle) * 1.4,
             wobblePhase: Math.random() * Math.PI * 2,
-            alpha: 0.85,
+            alpha: 0.8,
           });
         }
       }
@@ -294,30 +320,20 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
 
       pointer.energy *= 0.96;
 
-      // 1. Radiant Sunburst / Aurora Glow
-      const glowX = pal.isBrightSky ? width * 0.82 : width * 0.25;
-      const glowY = pal.isBrightSky ? height * 0.14 : height * 0.2;
-      const grad = ctx.createRadialGradient(glowX, glowY, 10, glowX, glowY, Math.max(width, height) * 0.55);
-      grad.addColorStop(0, pal.isBrightSky ? 'rgba(255, 244, 194, 0.52)' : pal.cloudColor);
-      grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, width, height);
-
-      // 2. Drifting Fluffy Clouds
       for (const c of clouds) {
         drawCloud(c, pal.cloudColor);
         if (!prefersReduced) {
           c.x += c.speed * mult;
           if (c.x - 120 > width) {
             c.x = -140;
-            c.y = 50 + Math.random() * (height * 0.45);
+            c.y = 50 + Math.random() * (height * 0.4);
           }
         }
       }
 
-      // 3. DNA Double-Helix Sine Wave Ribbons (interactive with touch/pointer)
-      const waveCenterY = height * 0.56;
-      const baseAmp = (width < 640 ? 28 : 42) * mult;
+      // DNA Double-Helix Wave Ribbons
+      const waveCenterY = height * 0.58;
+      const baseAmp = (width < 640 ? 24 : 36) * mult;
       const step = width < 640 ? 18 : 22;
 
       const strandA: { x: number; y: number }[] = [];
@@ -327,20 +343,16 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
         const distToPointer = pointer.active
           ? Math.hypot(x - pointer.x, waveCenterY - pointer.y)
           : 9999;
-        const influence = Math.max(0, 1 - distToPointer / 260) * (0.65 + pointer.energy * 0.55);
-        const phase = x * 0.011 + time * 1.35;
-        const amp = baseAmp * (1 + influence * 0.9);
-        const yOffset = pointer.active ? (pointer.y - waveCenterY) * influence * 0.22 : 0;
+        const influence = Math.max(0, 1 - distToPointer / 240) * (0.65 + pointer.energy * 0.5);
+        const phase = x * 0.011 + time * 1.3;
+        const amp = baseAmp * (1 + influence * 0.85);
+        const yOffset = pointer.active ? (pointer.y - waveCenterY) * influence * 0.2 : 0;
 
-        const y1 = waveCenterY + yOffset + Math.sin(phase) * amp;
-        const y2 = waveCenterY + yOffset + Math.sin(phase + Math.PI) * amp;
-
-        strandA.push({ x, y: y1 });
-        strandB.push({ x, y: y2 });
+        strandA.push({ x, y: waveCenterY + yOffset + Math.sin(phase) * amp });
+        strandB.push({ x, y: waveCenterY + yOffset + Math.sin(phase + Math.PI) * amp });
       }
 
-      // Connecting DNA Rungs
-      ctx.lineWidth = 1.4;
+      ctx.lineWidth = 1.2;
       ctx.strokeStyle = pal.dnaRung;
       for (let i = 0; i < strandA.length; i += 2) {
         ctx.beginPath();
@@ -349,26 +361,17 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
         ctx.stroke();
       }
 
-      // Ribbon A
-      ctx.lineWidth = 2.6;
+      ctx.lineWidth = 2.2;
       ctx.strokeStyle = pal.dnaPrimary;
       ctx.beginPath();
-      strandA.forEach((pt, idx) => {
-        if (idx === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
-      });
+      strandA.forEach((pt, idx) => (idx === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
       ctx.stroke();
 
-      // Ribbon B
       ctx.strokeStyle = pal.dnaSecondary;
       ctx.beginPath();
-      strandB.forEach((pt, idx) => {
-        if (idx === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
-      });
+      strandB.forEach((pt, idx) => (idx === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
       ctx.stroke();
 
-      // 4. Twinkling Sparkles
       for (const s of sparkles) {
         s.phase += s.speed;
         const twinkle = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(s.phase));
@@ -381,12 +384,11 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
         ctx.restore();
       }
 
-      // 5. Interactive Floating Bubbles
       for (let i = bubbles.length - 1; i >= 0; i -= 1) {
         const b = bubbles[i];
         if (!prefersReduced) {
           b.wobblePhase += 0.03;
-          b.x += b.vx + Math.sin(b.wobblePhase) * 0.32;
+          b.x += b.vx + Math.sin(b.wobblePhase) * 0.3;
           b.y += b.vy * mult;
           b.vx *= 0.97;
 
@@ -394,10 +396,10 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
             const dx = b.x - pointer.x;
             const dy = b.y - pointer.y;
             const dist = Math.hypot(dx, dy);
-            if (dist > 1 && dist < 130) {
-              const push = ((130 - dist) / 130) * 1.1;
-              b.vx += (dx / dist) * push * 0.45;
-              b.y += (dy / dist) * push * 0.25;
+            if (dist > 1 && dist < 120) {
+              const push = ((120 - dist) / 120) * 1.0;
+              b.vx += (dx / dist) * push * 0.42;
+              b.y += (dy / dist) * push * 0.22;
             }
           }
 
@@ -417,13 +419,12 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
         ctx.globalAlpha = b.alpha * mult;
         ctx.fillStyle = pal.bubbleFill;
         ctx.strokeStyle = pal.bubbleStroke;
-        ctx.lineWidth = 1.3;
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
-        // Specular highlight crescent
         ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
         ctx.beginPath();
         ctx.arc(b.x - b.r * 0.32, b.y - b.r * 0.32, Math.max(1.5, b.r * 0.22), 0, Math.PI * 2);
@@ -431,7 +432,6 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
         ctx.restore();
       }
 
-      // 6. Touch Ripples
       for (let i = ripples.length - 1; i >= 0; i -= 1) {
         const rp = ripples[i];
         rp.radius += 4.5;
@@ -443,7 +443,7 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
         ctx.save();
         ctx.globalAlpha = rp.alpha;
         ctx.strokeStyle = pal.rippleColor;
-        ctx.lineWidth = 2.2;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(rp.x, rp.y, rp.radius, 0, Math.PI * 2);
         ctx.stroke();
@@ -466,13 +466,27 @@ export const ThemeBackdrop: React.FC<{ soundOnBubbleTap?: boolean }> = ({
     };
   }, [backdropIntensity]);
 
-  if (backdropIntensity === 'off') return null;
+  const wallpaper = THEME_WALLPAPERS[theme];
 
   return (
-    <canvas
-      ref={canvasRef}
-      aria-hidden="true"
-      className="fixed inset-0 z-0 pointer-events-none no-print"
-    />
+    <>
+      {wallpaper && (
+        <div aria-hidden="true" className="fixed inset-0 z-0 pointer-events-none no-print overflow-hidden">
+          <img
+            src={wallpaper.src}
+            alt=""
+            className="w-full h-full object-cover scale-105 transition-opacity duration-700"
+          />
+          <div className="absolute inset-0" style={{ background: wallpaper.overlay }} />
+        </div>
+      )}
+      {backdropIntensity !== 'off' && (
+        <canvas
+          ref={canvasRef}
+          aria-hidden="true"
+          className="fixed inset-0 z-0 pointer-events-none no-print"
+        />
+      )}
+    </>
   );
 };

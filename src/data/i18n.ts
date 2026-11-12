@@ -32,6 +32,7 @@ export interface Translations {
     profile: string;
     admin: string;
     themes: string;
+    prayerWeather: string;
     auth: string;
     theme: string;
     language: string;
@@ -106,6 +107,7 @@ export const I18N: Record<InterfaceLang, Translations> = {
       profile: 'প্রোফাইল ও সেটিংস',
       admin: 'অ্যাডমিন প্যানেল',
       themes: 'লাইভ থিম স্টুডিও',
+      prayerWeather: 'নামাজ, ঘড়ি ও আবহাওয়া',
       auth: 'লগইন / অ্যাকাউন্ট',
       theme: 'থিম',
       language: 'ভাষা',
@@ -179,6 +181,7 @@ export const I18N: Record<InterfaceLang, Translations> = {
       profile: 'Profile & Settings',
       admin: 'Admin Control',
       themes: 'Live Theme Studio',
+      prayerWeather: 'Prayer, Clock & Weather',
       auth: 'Login / Account',
       theme: 'Theme',
       language: 'Language',
@@ -252,6 +255,7 @@ export const I18N: Record<InterfaceLang, Translations> = {
       profile: 'الملف الشخصي',
       admin: 'لوحة المشرف',
       themes: 'استوديو المظاهر',
+      prayerWeather: 'الصلاة والساعة والطقس',
       auth: 'تسجيل الدخول',
       theme: 'المظهر',
       language: 'اللغة',

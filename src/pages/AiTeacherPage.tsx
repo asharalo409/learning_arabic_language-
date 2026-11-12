@@ -14,12 +14,14 @@ import {
 } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
 import { AudioButton } from '../components/AudioButton';
+import { AiVoiceRobotOrb } from '../components/AiVoiceRobotOrb';
 import { useApp } from '../context/AppContext';
+import { VoiceGender } from '../types/academy';
 import { getSpeechSupport, RecognitionHandle, speakText, startVoiceRecognition, stopArabicSpeech } from '../utils/speech';
 
 type TutorMode =
-  | 'chat'
   | 'voice-dialogue'
+  | 'chat'
   | 'translate-ar-bn'
   | 'translate-bn-ar'
   | 'grammar'
@@ -37,7 +39,7 @@ interface ChatMessage {
 const CHAT_STORAGE_KEY = 'aaa_ai_teacher_history_v1';
 
 const MODE_LABELS: { id: TutorMode; labelBn: string; labelEn: string }[] = [
-  { id: 'voice-dialogue', labelBn: 'ভয়েস কথোপকথন (AI Talk)', labelEn: 'Voice Conversation' },
+  { id: 'voice-dialogue', labelBn: 'ভয়েস রোবট সংলাপ (Talk)', labelEn: 'Voice Conversation' },
   { id: 'chat', labelBn: 'সাধারণ আরবি শিক্ষক', labelEn: 'General Tutor' },
   { id: 'translate-ar-bn', labelBn: 'আরবি → বাংলা', labelEn: 'Arabic → Bengali' },
   { id: 'translate-bn-ar', labelBn: 'বাংলা → আরবি', labelEn: 'Bengali → Arabic' },
@@ -59,7 +61,7 @@ function extractArabicSnippet(text: string): string {
 }
 
 export const AiTeacherPage: React.FC = () => {
-  const { t, lang, awardXp, currentLevelNumber } = useApp();
+  const { t, lang, awardXp, currentLevelNumber, progress, updateProfile } = useApp();
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<TutorMode>('voice-dialogue');
   const [studentLevel, setStudentLevel] = useState(`Level ${currentLevelNumber}`);
@@ -72,9 +74,12 @@ export const AiTeacherPage: React.FC = () => {
   const [voiceLang, setVoiceLang] = useState<'bn-BD' | 'ar-SA' | 'en-US'>('bn-BD');
   const [autoSpeakReply, setAutoSpeakReply] = useState(true);
   const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const [speechSupport] = useState(() => getSpeechSupport());
   const recRef = useRef<RecognitionHandle | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+
+  const activeGender: VoiceGender = progress.voiceGender === 'female' ? 'female' : 'male';
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
@@ -90,7 +95,7 @@ export const AiTeacherPage: React.FC = () => {
         mode: 'voice-dialogue',
         timestamp: new Date().toISOString(),
         content:
-          'السَّلَامُ عَلَيْكُمْ وَرَحْمَةُ اللَّهِ!\n\nআসসালামু আলাইকুম। আমি আপনার AI আরবি স্যার। আপনি নিচের লাল মাইক্রোফোন বাটনে চেপে বাংলা বা আরবিতে সরাসরি ভয়েসে কথা বলতে পারেন, অথবা লিখেও প্রশ্ন করতে পারেন!',
+          'السَّلَامُ عَلَيْكُمْ وَرَحْمَةُ اللَّهِ!\n\nআসসালামু আলাইকুম। আমি আপনার AI আরবি শিক্ষক। উপরের গোল রোবট বা নিচের মাইক্রোফোন বাটনে চেপে বাংলা বা আরবিতে সরাসরি কথা বলুন — প্রোফাইল বা উপরের সুইচ থেকে ছেলে বা মেয়ে কণ্ঠ বেছে নিতে পারেন!',
       },
     ];
   });
@@ -118,15 +123,44 @@ export const AiTeacherPage: React.FC = () => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  const speakAiMessage = (replyText: string) => {
+  const speakAiMessage = (replyText: string, genderOverride?: VoiceGender) => {
     const arabicPart = extractArabicSnippet(replyText);
+    const chosenGender = genderOverride || activeGender;
+    const callbacks = {
+      voiceGender: chosenGender,
+      onStart: () => setSpeaking(true),
+      onEnd: () => setSpeaking(false),
+      onError: () => setSpeaking(false),
+    };
+
     if (arabicPart) {
-      speakText(arabicPart, 'ar-SA');
+      speakText(arabicPart, 'ar-SA', callbacks);
     } else if (voiceLang === 'bn-BD') {
-      speakText(replyText.slice(0, 280), 'bn-BD');
+      speakText(replyText.slice(0, 280), 'bn-BD', callbacks);
     } else {
-      speakText(replyText.slice(0, 280), 'en-US');
+      speakText(replyText.slice(0, 280), 'en-US', callbacks);
     }
+  };
+
+  const handleStopSpeaking = () => {
+    stopArabicSpeech();
+    setSpeaking(false);
+  };
+
+  const handleGenderChange = (g: VoiceGender) => {
+    updateProfile({ voiceGender: g });
+    speakText(
+      g === 'male'
+        ? 'আসসালামু আলাইকুম, আমি এখন পুরুষ কণ্ঠে কথা বলছি।'
+        : 'আসসালামু আলাইকুম, আমি এখন নারী কণ্ঠে কথা বলছি।',
+      'bn-BD',
+      {
+        voiceGender: g,
+        onStart: () => setSpeaking(true),
+        onEnd: () => setSpeaking(false),
+        onError: () => setSpeaking(false),
+      }
+    );
   };
 
   const sendMessage = async (textToSend?: string) => {
@@ -189,7 +223,7 @@ export const AiTeacherPage: React.FC = () => {
       }
 
       awardXp(10, {
-        titleBn: mode === 'voice-dialogue' ? 'AI স্যারের সাথে ভয়েস কথোপকথন' : 'AI শিক্ষকের সাথে আরবি চর্চা',
+        titleBn: mode === 'voice-dialogue' ? 'AI রোবটের সাথে ভয়েস কথোপকথন' : 'AI শিক্ষকের সাথে আরবি চর্চা',
         titleEn: 'Practiced Arabic with AI Teacher',
         type: 'ai',
       });
@@ -208,13 +242,11 @@ export const AiTeacherPage: React.FC = () => {
       return;
     }
 
-    stopArabicSpeech();
+    handleStopSpeaking();
     setListening(true);
-    let latestTranscript = '';
 
     const handle = startVoiceRecognition(voiceLang, {
       onResult: (transcript, isFinal) => {
-        latestTranscript = transcript;
         setInput(transcript);
         if (isFinal && transcript.trim()) {
           recRef.current?.stop();
@@ -229,9 +261,6 @@ export const AiTeacherPage: React.FC = () => {
       },
       onEnd: () => {
         setListening(false);
-        if (latestTranscript.trim() && !loading) {
-          // If browser ended cleanly without firing final flag on last chunk
-        }
       },
     });
 
@@ -243,7 +272,7 @@ export const AiTeacherPage: React.FC = () => {
   };
 
   const handleClearChat = () => {
-    stopArabicSpeech();
+    handleStopSpeaking();
     const initial: ChatMessage = {
       id: `welcome-${Date.now()}`,
       role: 'assistant',
@@ -270,11 +299,27 @@ export const AiTeacherPage: React.FC = () => {
       title={t.sidebar.aiTeacher}
       subtitle={
         lang === 'bn'
-          ? 'ভয়েস ও টেক্সটে সরাসরি AI আরবি স্যারের সাথে কথা বলুন — বাংলা, আরবি ও ইংরেজিতে'
-          : 'Talk by voice or text with your Gemini AI Arabic Teacher'
+          ? 'ভয়েস রোবট ও টেক্সটে সরাসরি AI আরবি শিক্ষকের সাথে কথা বলুন — বাংলা, আরবি ও ইংরেজিতে'
+          : 'Talk by voice or text with your circular AI Voice Robot'
       }
     >
       <div className="space-y-5">
+        {/* Gemini-Live Style Circular Glowing Voice Robot Orb Stage */}
+        {(mode === 'voice-dialogue' || speaking || listening) && (
+          <AiVoiceRobotOrb
+            listening={listening}
+            speaking={speaking}
+            thinking={loading}
+            voiceGender={activeGender}
+            voiceLang={voiceLang}
+            sttSupported={speechSupport.sttSupported}
+            onToggleVoice={handleToggleVoice}
+            onStopSpeaking={handleStopSpeaking}
+            onChangeGender={handleGenderChange}
+            onChangeLang={setVoiceLang}
+          />
+        )}
+
         {/* Controls Toolbar */}
         <div className="surface-card rounded-2xl p-4 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -299,7 +344,7 @@ export const AiTeacherPage: React.FC = () => {
                 onClick={() => {
                   const next = !autoSpeakReply;
                   setAutoSpeakReply(next);
-                  if (!next) stopArabicSpeech();
+                  if (!next) handleStopSpeaking();
                 }}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${
                   autoSpeakReply ? 'btn-primary' : 'btn-secondary'
@@ -334,37 +379,7 @@ export const AiTeacherPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--border-subtle)]">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-[var(--text-muted)]">ভয়েস বলার ভাষা:</span>
-              {(
-                [
-                  { code: 'bn-BD', label: 'বাংলা' },
-                  { code: 'ar-SA', label: 'العربية (আরবি)' },
-                  { code: 'en-US', label: 'English' },
-                ] as const
-              ).map((vl) => (
-                <button
-                  key={vl.code}
-                  type="button"
-                  onClick={() => setVoiceLang(vl.code)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium ${
-                    voiceLang === vl.code ? 'btn-primary' : 'btn-secondary'
-                  }`}
-                >
-                  {vl.label}
-                </button>
-              ))}
-            </div>
-
-            {!speechSupport.sttSupported && (
-              <span className="text-xs text-[var(--warning)]">
-                ভয়েস ইনপুটের জন্য Chrome বা Edge ব্যবহার করুন
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs pt-2 border-t border-[var(--border-subtle)]">
             <span className="text-[var(--text-muted)]">
               {lang === 'bn' ? 'দ্রুত শুরু:' : 'Starter Prompts:'}
             </span>
@@ -383,7 +398,7 @@ export const AiTeacherPage: React.FC = () => {
         </div>
 
         {/* Chat Stream */}
-        <div className="surface-card rounded-2xl flex flex-col h-[520px]">
+        <div className="surface-card rounded-2xl flex flex-col h-[460px]">
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
             {messages.map((msg) => {
               const isUser = msg.role === 'user';
@@ -403,7 +418,7 @@ export const AiTeacherPage: React.FC = () => {
                     {!isUser && (
                       <div className="flex items-center gap-2 text-xs font-semibold text-[var(--accent)] mb-2">
                         <Bot className="w-4 h-4" />
-                        <span>AI স্যার (Ustadh AI)</span>
+                        <span>AI শিক্ষক ({activeGender === 'male' ? 'পুরুষ কণ্ঠ' : 'নারী কণ্ঠ'})</span>
                       </div>
                     )}
                     <div className="font-arabic-ui">{msg.content}</div>
@@ -414,7 +429,14 @@ export const AiTeacherPage: React.FC = () => {
                       {arabicChunk && <AudioButton text={arabicChunk} showSlow compact />}
                       <button
                         type="button"
-                        onClick={() => speakText(msg.content.slice(0, 350), 'bn-BD')}
+                        onClick={() =>
+                          speakText(msg.content.slice(0, 350), 'bn-BD', {
+                            voiceGender: activeGender,
+                            onStart: () => setSpeaking(true),
+                            onEnd: () => setSpeaking(false),
+                            onError: () => setSpeaking(false),
+                          })
+                        }
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs btn-secondary"
                       >
                         <Volume2 className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -445,7 +467,7 @@ export const AiTeacherPage: React.FC = () => {
             {loading && (
               <div className="flex items-start">
                 <div className="surface-alt rounded-2xl px-4 py-3 text-sm text-[var(--text-muted)]">
-                  {lang === 'bn' ? 'AI স্যার উত্তর প্রস্তুত করছেন...' : 'Ustadh AI is responding...'}
+                  {lang === 'bn' ? 'AI রোবট উত্তর প্রস্তুত করছে...' : 'AI Teacher is responding...'}
                 </div>
               </div>
             )}

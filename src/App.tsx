@@ -28,6 +28,7 @@ import { BaynaYadaykPage } from './pages/BaynaYadaykPage';
 import { SafwatulMasadirPage } from './pages/SafwatulMasadirPage';
 import { AuthPage } from './pages/AuthPage';
 import { ThemesPage } from './pages/ThemesPage';
+import { PrayerWeatherPage } from './pages/PrayerWeatherPage';
 import { WelcomeOverlay } from './components/WelcomeOverlay';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { ThemeBackdrop } from './components/ThemeBackdrop';
@@ -43,6 +44,7 @@ function AppRoutesWrapper() {
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/themes" element={<ThemesPage />} />
+          <Route path="/prayer-weather" element={<PrayerWeatherPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/ai-teacher" element={<AiTeacherPage />} />
           <Route path="/courses" element={<CoursesPage />} />

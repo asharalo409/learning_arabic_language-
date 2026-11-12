@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LogIn, Menu, Palette, UserCheck, X } from 'lucide-react';
+import { Clock, LogIn, Menu, Palette, UserCheck, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { InterfaceLang, ThemeMode } from '../types/academy';
@@ -60,16 +60,19 @@ export const Navbar: React.FC = () => {
           <Link to="/ai-teacher" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
             {t.nav.aiTeacher}
           </Link>
+          <Link to="/prayer-weather" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
+            <span>{t.sidebar.prayerWeather}</span>
+          </Link>
           <Link to="/themes" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5">
             <Palette className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>{t.sidebar.themes}</span>
           </Link>
-          <Link to="/leaderboard" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
-            {t.sidebar.leaderboard}
-          </Link>
-          <Link to="/dashboard" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
-            {t.nav.dashboard}
-          </Link>
+          {user && (
+            <Link to="/dashboard" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
+              {t.nav.dashboard}
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -121,15 +124,17 @@ export const Navbar: React.FC = () => {
             <Link to="/ai-teacher" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
               {t.nav.aiTeacher}
             </Link>
+            <Link to="/prayer-weather" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
+              {t.sidebar.prayerWeather}
+            </Link>
             <Link to="/themes" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
               {t.sidebar.themes}
             </Link>
-            <Link to="/leaderboard" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
-              {t.sidebar.leaderboard}
-            </Link>
-            <Link to="/dashboard" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
-              {t.nav.dashboard}
-            </Link>
+            {user && (
+              <Link to="/dashboard" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
+                {t.nav.dashboard}
+              </Link>
+            )}
             <Link to="/auth" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt text-[var(--accent)]">
               {user ? user.fullName : t.sidebar.auth}
             </Link>

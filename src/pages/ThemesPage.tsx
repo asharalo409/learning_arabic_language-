@@ -1,72 +1,92 @@
 import React, { useState } from 'react';
-import { Check, CloudSun, Sparkles, Volume2, Waves } from 'lucide-react';
+import { Check, CloudSun, Sliders, Sparkles, Volume2 } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
 import { useApp } from '../context/AppContext';
 import { BackdropIntensity, ThemeMode } from '../types/academy';
+import skyMosqueImg from '../assets/images/theme_bright_sky_mosque_1794521633239.jpg';
+import kaabaImg from '../assets/images/theme_kaaba_sanctuary_1794521633707.jpg';
+import madinahImg from '../assets/images/theme_madinah_courtyard_1794521633886.jpg';
+import quranArtImg from '../assets/images/quranic_manuscript_art_1794510740673.jpg';
 
 interface ThemeCardMeta {
   id: ThemeMode;
   bgPreview: string;
+  imageSrc?: string;
   accentPreview: string;
   vibeBn: string;
-  isNew?: boolean;
+  tag?: string;
 }
 
 const THEME_SHOWCASE: ThemeCardMeta[] = [
   {
     id: 'sky-cloud',
-    bgPreview: 'linear-gradient(135deg, #bae6fd 0%, #f0f9ff 60%, #fef3c7 100%)',
-    accentPreview: '#0284c7',
-    vibeBn: 'উজ্জ্বল নীল আকাশ, সাদা ভাসমান মেঘ ও সোনালি রোদের ঝলমলে পরিবেশ',
-    isNew: true,
-  },
-  {
-    id: 'emerald',
-    bgPreview: 'linear-gradient(135deg, #063125 0%, #0a221a 100%)',
-    accentPreview: '#e5c158',
-    vibeBn: 'গভীর ইসলামিক পান্না সবুজ ও স্বর্ণালী ক্যালিগ্রাফি আবহ',
-  },
-  {
-    id: 'andalus',
-    bgPreview: 'linear-gradient(135deg, #102a5c 0%, #0b1224 100%)',
-    accentPreview: '#38bdf8',
-    vibeBn: 'আন্দালুসিয়ান রাতের আকাশে উজ্জ্বল নীলাভ ঢেউ ও তারকা',
-  },
-  {
-    id: 'madinah',
-    bgPreview: 'linear-gradient(135deg, #0d3b36 0%, #061b19 100%)',
-    accentPreview: '#e6b979',
-    vibeBn: 'মদীনা রোজ-টিল প্রশান্তি ও কোমল সোনালি আভা',
-  },
-  {
-    id: 'midnight',
-    bgPreview: 'linear-gradient(135deg, #15254d 0%, #060b18 100%)',
-    accentPreview: '#e2b74b',
-    vibeBn: 'রাতের নীরব পড়াশোনার জন্য আরামদায়ক মিডনাইট আকাশ',
-  },
-  {
-    id: 'light',
-    bgPreview: 'linear-gradient(135deg, #dcfce7 0%, #ffffff 100%)',
-    accentPreview: '#0f6b4e',
-    vibeBn: 'দিনে পড়ার জন্য স্বচ্ছ সবুজ-সাদা একাডেমিক পরিবেশ',
-  },
-  {
-    id: 'parchment',
-    bgPreview: 'linear-gradient(135deg, #f6efe2 0%, #e7d4b3 100%)',
-    accentPreview: '#9a5b13',
-    vibeBn: 'ক্লাসিক্যাল আরবি পাণ্ডুলিপি ও প্রাচীন কিতাবের উষ্ণ কাগজ',
+    bgPreview: 'linear-gradient(145deg, #dff0fb 0%, #eef7f5 50%, #eef2ff 100%)',
+    imageSrc: skyMosqueImg,
+    accentPreview: '#4f46e5',
+    vibeBn: 'হালকা উজ্জ্বল আকাশ, শুভ্র মেঘ ও প্রশান্ত মসজিদ দৃশ্য',
+    tag: 'উজ্জ্বল আকাশ',
   },
   {
     id: 'kaaba',
-    bgPreview: 'linear-gradient(135deg, #1f1a10 0%, #09090b 100%)',
+    bgPreview: 'linear-gradient(145deg, #241d0f 0%, #09090b 100%)',
+    imageSrc: kaabaImg,
     accentPreview: '#f0c44d',
-    vibeBn: 'কিসওয়া কালো ও স্বর্ণালী জৌলুসের গাম্ভীর্যপূর্ণ রূপ',
+    vibeBn: 'পবিত্র কাবা শরীফ ও সোনালী গোধূলির নূরানী আবহ',
+    tag: 'কাবা শরীফ',
+  },
+  {
+    id: 'madinah',
+    bgPreview: 'linear-gradient(145deg, #092c28 0%, #061b19 60%, #103b35 100%)',
+    imageSrc: madinahImg,
+    accentPreview: '#e6b979',
+    vibeBn: 'মসজিদে নববীর প্রশান্ত সবুজ গম্বুজ ও ভোরের স্নিগ্ধ আলো',
+    tag: 'মদীনা শরীফ',
+  },
+  {
+    id: 'emerald',
+    bgPreview: 'linear-gradient(145deg, #0b2215 0%, #1c472c 65%, #06140c 100%)',
+    imageSrc: quranArtImg,
+    accentPreview: '#ffffff',
+    vibeBn: 'ইসলামিক পাণ্ডুলিপি, গভীর এমারেল্ড ও স্নিগ্ধ গ্লাসমরফিজম',
+    tag: 'গ্লাস এমারেল্ড',
+  },
+  {
+    id: 'parchment',
+    bgPreview: 'linear-gradient(145deg, #fcf8f0 0%, #ebd9bb 100%)',
+    imageSrc: quranArtImg,
+    accentPreview: '#9a5b13',
+    vibeBn: 'কুরআনিক পাণ্ডুলিপি, ক্যালিগ্রাফি ও উষ্ণ ক্রিম কাগজ',
+    tag: 'কুরআনিক',
+  },
+  {
+    id: 'light',
+    bgPreview: 'linear-gradient(145deg, #f5f6fa 0%, #ffffff 60%, #e0e7ff 100%)',
+    accentPreview: '#4338ca',
+    vibeBn: 'পরিচ্ছন্ন সাদা একাডেমিক ড্যাশবোর্ড ও তীক্ষ্ণ কন্ট্রাস্ট',
+    tag: 'ক্লিন স্টুডিও',
+  },
+  {
+    id: 'andalus',
+    bgPreview: 'linear-gradient(145deg, #091334 0%, #1d397e 55%, #476ec9 100%)',
+    accentPreview: '#ffffff',
+    vibeBn: 'আন্দালুসীয় স্যাফায়ার আকাশ ও ভাসমান গ্লাস কার্ড',
+    tag: 'স্যাফায়ার',
+  },
+  {
+    id: 'midnight',
+    bgPreview: 'linear-gradient(145deg, #182a59 0%, #070d1b 100%)',
+    accentPreview: '#818cf8',
+    vibeBn: 'রাতের নীরব পড়াশোনার জন্য মিডনাইট ইন্ডিগো',
   },
 ];
 
 export const ThemesPage: React.FC = () => {
-  const { t, theme, setTheme, backdropIntensity, setBackdropIntensity, triggerSound } = useApp();
+  const { t, theme, setTheme, backdropIntensity, setBackdropIntensity, soundEnabled, setSoundEnabled, triggerSound } =
+    useApp();
   const [tapCount, setTapCount] = useState(0);
+
+  const activeMeta = THEME_SHOWCASE.find((m) => m.id === theme) || THEME_SHOWCASE[0];
+  const isLightActive = ['sky-cloud', 'light', 'parchment'].includes(theme) && !activeMeta.imageSrc;
 
   const handleStageTap = () => {
     setTapCount((c) => c + 1);
@@ -76,83 +96,155 @@ export const ThemesPage: React.FC = () => {
   return (
     <AppShell
       title={t.sidebar.themes}
-      subtitle="হাত দিয়ে ছুঁয়ে দেখুন — জীবন্ত আকাশ, মেঘ, বুদবুদ ও ডিএনএ-সদৃশ ঢেউয়ের ঝলমলে থিম স্টুডিও"
+      subtitle="মসজিদ, পবিত্র কাবা শরীফ, মদীনা ও হালকা উজ্জ্বল আকাশের ইসলামিক থিম, ডিএনএ ঢেউ এবং বুদবুদ"
     >
-      <div className="space-y-8">
-        {/* Interactive Touch Stage */}
-        <div
-          onClick={handleStageTap}
-          className="surface-card rounded-3xl p-6 sm:p-8 border border-[var(--border-strong)] cursor-pointer select-none transition-transform active:scale-[0.995]"
-        >
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="space-y-2.5 max-w-2xl">
-              <div className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--accent)]">
-                <CloudSun className="w-4 h-4" />
-                <span>ইন্টারঅ্যাক্টিভ থিম প্লেগ্রাউন্ড · বর্তমান: {t.themes[theme]}</span>
+      <div className="space-y-6">
+        {/* Top Row: Live Scenic Stage Preview + Animation/Sound Controls */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          <div
+            onClick={handleStageTap}
+            className="lg:col-span-6 rounded-3xl p-7 flex flex-col justify-between gap-6 cursor-pointer select-none border border-[var(--border-strong)] shadow-lg relative overflow-hidden min-h-[300px]"
+            style={{ background: activeMeta.bgPreview }}
+          >
+            {activeMeta.imageSrc && (
+              <>
+                <img
+                  src={activeMeta.imageSrc}
+                  alt={t.themes[theme]}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      'linear-gradient(180deg, rgba(10, 18, 30, 0.25) 0%, rgba(10, 18, 30, 0.72) 100%)',
+                  }}
+                />
+              </>
+            )}
+
+            <div className="relative z-10 flex items-center justify-between">
+              <span
+                className="px-3 py-1 rounded-full text-[11px] font-bold shadow"
+                style={{
+                  backgroundColor: activeMeta.accentPreview,
+                  color: activeMeta.accentPreview === '#ffffff' ? '#0f172a' : '#ffffff',
+                }}
+              >
+                {t.themes[theme]}
+              </span>
+              <span
+                className={`text-xs font-mono-num ${
+                  isLightActive ? 'text-slate-700' : 'text-white/90'
+                }`}
+              >
+                TAP STAGE · {tapCount}
+              </span>
+            </div>
+
+            <div className="relative z-10 my-auto py-4 flex flex-col items-center text-center gap-3">
+              <div
+                className="w-16 h-16 rounded-full shadow-xl flex items-center justify-center animate-float-slow"
+                style={{
+                  background: `radial-gradient(circle at 30% 30%, #ffffff, ${activeMeta.accentPreview})`,
+                }}
+              >
+                <CloudSun className="w-8 h-8 text-white drop-shadow" />
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold">
-                যেকোনো জায়গায় হাত বোলালে বা ট্যাপ করলে ডিএনএর ঢেউ ও বুদবুদ নেচে উঠবে!
+              <h2 className={`text-xl sm:text-2xl font-bold ${isLightActive ? 'text-slate-900' : 'text-white'}`}>
+                ইসলামিক ও জীবন্ত থিম স্টেজ
               </h2>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                আঙুল বা মাউস নাড়াচাড়া করে পেছনের ডিএনএ-সদৃশ জোড়া ঢেউ, ভাসমান বুদবুদ এবং উজ্জ্বল মেঘ অনুভব করুন। এখানে ট্যাপ করলে বুদবুদের মিষ্টি শব্দও শোনা যাবে।
+              <p
+                className={`text-xs sm:text-sm max-w-md ${
+                  isLightActive ? 'text-slate-700' : 'text-white/85'
+                }`}
+              >
+                মসজিদ, কাবা শরীফ ও হালকা উজ্জ্বল আকাশের ছবির ওপর ডিএনএ ঢেউ ও ভাসমান বুদবুদ হাতের স্পর্শে নেচে ওঠে।
               </p>
             </div>
 
-            <div className="flex flex-col items-start md:items-end gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleStageTap();
-                }}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm btn-primary shadow-md"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>বুদবুদ ও ঢেউ তুলুন ({tapCount})</span>
-              </button>
-              <span className="text-[11px] text-[var(--text-muted)] inline-flex items-center gap-1">
-                <Volume2 className="w-3.5 h-3.5 text-[var(--accent)]" />
-                প্রতিটি থিম পরিবর্তনে আলাদা ঝলমলে সাউন্ড বাজবে
-              </span>
-            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStageTap();
+              }}
+              className="relative z-10 w-full py-3 rounded-full text-xs font-bold shadow-md flex items-center justify-center gap-2"
+              style={{
+                backgroundColor: activeMeta.accentPreview,
+                color: activeMeta.accentPreview === '#ffffff' ? '#0f172a' : '#ffffff',
+              }}
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>বুদবুদ ও ঢেউ তুলুন ({tapCount})</span>
+            </button>
           </div>
-        </div>
 
-        {/* Motion Intensity Control */}
-        <div className="surface-card rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <Waves className="w-5 h-5 text-[var(--accent)]" />
-            <div>
-              <div className="text-sm font-bold">ডিএনএ ঢেউ, মেঘ ও বুদবুদের গতি</div>
-              <div className="text-xs text-[var(--text-muted)]">
-                আপনার পছন্দ অনুযায়ী জীবন্ত ব্যাকগ্রাউন্ডের মাত্রা ঠিক করুন
+          {/* Right: Animation & Sound Settings */}
+          <div className="lg:col-span-6 surface-card rounded-3xl p-6 space-y-5 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-bold">
+                <Sliders className="w-4 h-4 text-[var(--accent)]" />
+                <span>অ্যানিমেশন ও সাউন্ড কন্ট্রোল</span>
+              </div>
+
+              <div className="surface-alt rounded-2xl divide-y divide-[var(--border-subtle)] border border-[var(--border-subtle)]">
+                <div className="p-4 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">ডিএনএ ঢেউ ও ভাসমান বুদবুদ</div>
+                    <div className="text-xs text-[var(--text-muted)]">ব্যাকগ্রাউন্ড মোশন মাত্রা</div>
+                  </div>
+                  <div className="inline-flex gap-1 bg-[var(--bg-canvas)] p-1 rounded-full border border-[var(--border-subtle)]">
+                    {(
+                      [
+                        { id: 'vivid', label: 'ঝলমলে' },
+                        { id: 'gentle', label: 'শান্ত' },
+                        { id: 'off', label: 'বন্ধ' },
+                      ] as { id: BackdropIntensity; label: string }[]
+                    ).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setBackdropIntensity(opt.id)}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                          backdropIntensity === opt.id ? 'btn-primary' : 'text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <Volume2 className="w-4 h-4 text-[var(--accent)]" />
+                    <div>
+                      <div className="text-sm font-semibold">ইন্টারঅ্যাক্টিভ সাউন্ড ইফেক্ট</div>
+                      <div className="text-xs text-[var(--text-muted)]">পৃষ্ঠা, কুইজ ও বুদবুদ সাউন্ড</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-semibold ${
+                      soundEnabled ? 'btn-primary' : 'btn-secondary'
+                    }`}
+                  >
+                    {soundEnabled ? 'চালু' : 'বন্ধ'}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {(
-              [
-                { id: 'vivid', label: 'ঝলমলে (Vivid)' },
-                { id: 'gentle', label: 'শান্ত (Gentle)' },
-                { id: 'off', label: 'বন্ধ (Static)' },
-              ] as { id: BackdropIntensity; label: string }[]
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setBackdropIntensity(opt.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                  backdropIntensity === opt.id ? 'btn-primary' : 'btn-secondary'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+
+            <div className="p-4 rounded-2xl surface-alt border border-[var(--border-subtle)] text-xs text-[var(--text-secondary)] leading-relaxed">
+              🕌 পরামর্শ: দিনের বেলায় পড়ার জন্য <strong>{t.themes['sky-cloud']}</strong>, আর আধ্যাত্মিক পরিবেশের জন্য <strong>{t.themes['kaaba']}</strong> বা <strong>{t.themes['madinah']}</strong> নির্বাচন করুন।
+            </div>
           </div>
         </div>
 
-        {/* 8 Living Themes Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* 8 Islamic Scenic + Studio Theme Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {THEME_SHOWCASE.map((item) => {
             const active = theme === item.id;
             return (
@@ -160,33 +252,47 @@ export const ThemesPage: React.FC = () => {
                 key={item.id}
                 type="button"
                 onClick={() => setTheme(item.id)}
-                className={`text-left surface-card rounded-2xl overflow-hidden border transition-all flex flex-col justify-between ${
+                className={`text-left surface-card rounded-3xl overflow-hidden border transition-all flex flex-col justify-between ${
                   active
-                    ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/35 shadow-lg'
+                    ? 'border-[var(--accent)] ring-2 ring-[var(--accent)]/30 shadow-lg'
                     : 'border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
                 }`}
               >
                 <div
-                  className="h-28 w-full relative flex items-end justify-between p-4"
+                  className="h-32 w-full relative flex items-end justify-between p-3.5 overflow-hidden"
                   style={{ background: item.bgPreview }}
                 >
+                  {item.imageSrc && (
+                    <>
+                      <img
+                        src={item.imageSrc}
+                        alt={t.themes[item.id]}
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/15" />
+                    </>
+                  )}
+
                   <span
-                    className="w-8 h-8 rounded-full border-2 border-white/80 shadow-md"
+                    className="relative z-10 w-7 h-7 rounded-full border-2 border-white/90 shadow"
                     style={{ backgroundColor: item.accentPreview }}
                   />
-                  {item.isNew && (
-                    <span className="px-2.5 py-1 rounded-full bg-white/90 text-[#0284c7] text-[10px] font-bold shadow-xs">
-                      নতুন · সুপারিশকৃত
-                    </span>
-                  )}
-                  {active && (
-                    <span className="w-7 h-7 rounded-full bg-[var(--accent)] text-[var(--accent-fg)] flex items-center justify-center shadow">
-                      <Check className="w-4 h-4" />
-                    </span>
-                  )}
+
+                  <div className="relative z-10 flex items-center gap-1.5">
+                    {item.tag && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-white/95 text-slate-900 text-[10px] font-bold shadow-xs">
+                        {item.tag}
+                      </span>
+                    )}
+                    {active && (
+                      <span className="w-6 h-6 rounded-full bg-[var(--accent)] text-[var(--accent-fg)] flex items-center justify-center shadow">
+                        <Check className="w-3.5 h-3.5" />
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="p-4 space-y-1.5">
+                <div className="p-4 space-y-1">
                   <div className="text-sm font-bold text-[var(--text-primary)]">{t.themes[item.id]}</div>
                   <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{item.vibeBn}</p>
                 </div>

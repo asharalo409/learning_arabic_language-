@@ -10,6 +10,7 @@ export type ThemeMode =
 export type BackdropIntensity = 'vivid' | 'gentle' | 'off';
 export type InterfaceLang = 'bn' | 'en' | 'ar';
 export type LearningTrack = 'MSA' | 'Quranic' | 'Combined';
+export type VoiceGender = 'male' | 'female';
 
 export type CurriculumLevelNumber = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -267,6 +268,7 @@ export interface ActivityLogEntry {
 export interface StudentProgress {
   studentName: string;
   preferredTrack: LearningTrack;
+  voiceGender?: VoiceGender;
   dailyTargetMinutes: number;
   xp: number;
   streakDays: number;

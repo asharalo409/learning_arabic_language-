@@ -17,6 +17,7 @@ import { CURRICULUM_CHAPTERS } from '../data/curriculum';
 import { DETAILED_LESSONS } from '../data/detailedLessons';
 import { EXAM_QUESTION_BANK, VOCABULARY_BANK } from '../data/practiceAndVocabData';
 import { isSoundEnabled, playSound, setSoundEnabledPref, SoundEffectType } from '../utils/soundEffects';
+import { setPreferredVoiceGender } from '../utils/speech';
 import {
   AcademyNotification,
   dispatchBrowserNotification,
@@ -65,10 +66,11 @@ function todayDateKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function getDefaultProgress(name = 'নতুন শিক্ষার্থী'): StudentProgress {
+export function getDefaultProgress(name = 'প্রিয় শিক্ষার্থী'): StudentProgress {
   return {
     studentName: name,
     preferredTrack: 'Combined',
+    voiceGender: 'male',
     dailyTargetMinutes: 20,
     xp: 120,
     streakDays: 1,
@@ -205,7 +207,9 @@ interface AppContextValue {
   toggleFavoriteVocab: (wordId: string) => void;
   recordExamResult: (entry: Omit<ExamHistoryEntry, 'id' | 'dateIso'>) => void;
   completeDailyChallenge: (score: number, total: number) => void;
-  updateProfile: (updates: Partial<Pick<StudentProgress, 'studentName' | 'preferredTrack' | 'dailyTargetMinutes'>>) => void;
+  updateProfile: (
+    updates: Partial<Pick<StudentProgress, 'studentName' | 'preferredTrack' | 'voiceGender' | 'dailyTargetMinutes'>>
+  ) => void;
   resetProgress: () => void;
   addCustomChapter: (chapter: ChapterInfo) => void;
   saveCustomLesson: (lesson: DetailedLesson) => void;
@@ -259,7 +263,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const raw = localStorage.getItem(STORAGE_KEYS.progress);
       if (!raw) return getDefaultProgress();
       const parsed = JSON.parse(raw) as StudentProgress;
-      return { ...getDefaultProgress(), ...parsed };
+      if (parsed.studentName === 'তাসীন বিল্লাহ (Student)') {
+        parsed.studentName = 'প্রিয় শিক্ষার্থী';
+      }
+      const hydrated = { ...getDefaultProgress(), ...parsed };
+      setPreferredVoiceGender(hydrated.voiceGender || 'male');
+      return hydrated;
     } catch {
       return getDefaultProgress();
     }
@@ -809,7 +818,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateProfile = useCallback(
-    (updates: Partial<Pick<StudentProgress, 'studentName' | 'preferredTrack' | 'dailyTargetMinutes'>>) => {
+    (
+      updates: Partial<Pick<StudentProgress, 'studentName' | 'preferredTrack' | 'voiceGender' | 'dailyTargetMinutes'>>
+    ) => {
+      if (updates.voiceGender) {
+        setPreferredVoiceGender(updates.voiceGender);
+      }
       setProgress((prev) => ({ ...prev, ...updates }));
       triggerSound('success');
     },
