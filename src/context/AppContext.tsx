@@ -1,13 +1,13 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityLogEntry,
   AdminCustomContent,
+  BackdropIntensity,
   ChapterInfo,
   DetailedLesson,
   ExamHistoryEntry,
   ExamQuestion,
   InterfaceLang,
-  LearningTrack,
   StudentProgress,
   ThemeMode,
   VocabItem,
@@ -16,21 +16,58 @@ import { I18N, Translations } from '../data/i18n';
 import { CURRICULUM_CHAPTERS } from '../data/curriculum';
 import { DETAILED_LESSONS } from '../data/detailedLessons';
 import { EXAM_QUESTION_BANK, VOCABULARY_BANK } from '../data/practiceAndVocabData';
+import { isSoundEnabled, playSound, setSoundEnabledPref, SoundEffectType } from '../utils/soundEffects';
+import {
+  AcademyNotification,
+  dispatchBrowserNotification,
+  getBrowserNotificationStatus,
+  getReminderSettings,
+  getStoredNotifications,
+  ReminderSettings,
+  requestBrowserNotificationPermission,
+  saveReminderSettings,
+  saveStoredNotifications,
+} from '../utils/notifications';
+import { useAuth } from './AuthContext';
 
 const STORAGE_KEYS = {
   theme: 'aaa_theme_v1',
+  backdrop: 'aaa_backdrop_intensity_v1',
   lang: 'aaa_lang_v1',
   progress: 'aaa_progress_v1',
   admin: 'aaa_admin_content_v1',
+  welcomeSeen: 'aaa_welcome_session_v1',
+};
+
+const VALID_THEMES: ThemeMode[] = [
+  'sky-cloud',
+  'emerald',
+  'midnight',
+  'light',
+  'madinah',
+  'kaaba',
+  'parchment',
+  'andalus',
+];
+
+const THEME_BAR_COLORS: Record<ThemeMode, string> = {
+  'sky-cloud': '#dff2ff',
+  emerald: '#041510',
+  midnight: '#060b18',
+  light: '#f2f8f5',
+  madinah: '#051a18',
+  kaaba: '#09090b',
+  parchment: '#f6efe2',
+  andalus: '#0b1224',
 };
 
 function todayDateKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function getDefaultProgress(): StudentProgress {
+export function getDefaultProgress(name = 'নতুন শিক্ষার্থী'): StudentProgress {
   return {
-    studentName: 'তাসীন বিল্লাহ (Student)',
+    studentName: name,
     preferredTrack: 'Combined',
     dailyTargetMinutes: 20,
     xp: 120,
@@ -128,9 +165,32 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
 interface AppContextValue {
   theme: ThemeMode;
   setTheme: (t: ThemeMode) => void;
+  backdropIntensity: BackdropIntensity;
+  setBackdropIntensity: (b: BackdropIntensity) => void;
   lang: InterfaceLang;
   setLang: (l: InterfaceLang) => void;
   t: Translations;
+  soundEnabled: boolean;
+  setSoundEnabled: (enabled: boolean) => void;
+  triggerSound: (type: SoundEffectType, force?: boolean) => boolean;
+  notifications: AcademyNotification[];
+  unreadNotificationCount: number;
+  activeToast: AcademyNotification | null;
+  dismissToast: () => void;
+  pushNotification: (
+    item: Omit<AcademyNotification, 'id' | 'timestampIso' | 'read'>,
+    alsoBrowserNotify?: boolean
+  ) => void;
+  markAllNotificationsRead: () => void;
+  clearNotifications: () => void;
+  reminderSettings: ReminderSettings;
+  updateReminderSettings: (updates: Partial<ReminderSettings>) => void;
+  browserNotifPermission: NotificationPermission | 'unsupported';
+  enableBrowserNotifications: () => Promise<NotificationPermission | 'unsupported'>;
+  sendTestNotification: () => Promise<void>;
+  welcomeOpen: boolean;
+  openWelcome: () => void;
+  dismissWelcome: () => void;
   progress: StudentProgress;
   currentLevelNumber: number;
   allChapters: ChapterInfo[];
@@ -160,16 +220,37 @@ function computeBadges(progress: StudentProgress): string[] {
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const { user, syncProgressToAccount } = useAuth();
+
   const [theme, setThemeState] = useState<ThemeMode>(() => {
-    if (typeof window === 'undefined') return 'emerald';
-    const saved = localStorage.getItem(STORAGE_KEYS.theme);
-    return saved === 'midnight' || saved === 'light' || saved === 'emerald' ? saved : 'emerald';
+    if (typeof window === 'undefined') return 'sky-cloud';
+    const saved = localStorage.getItem(STORAGE_KEYS.theme) as ThemeMode | null;
+    return saved && VALID_THEMES.includes(saved) ? saved : 'sky-cloud';
+  });
+
+  const [backdropIntensity, setBackdropIntensityState] = useState<BackdropIntensity>(() => {
+    if (typeof window === 'undefined') return 'vivid';
+    const saved = localStorage.getItem(STORAGE_KEYS.backdrop) as BackdropIntensity | null;
+    return saved === 'vivid' || saved === 'gentle' || saved === 'off' ? saved : 'vivid';
   });
 
   const [lang, setLangState] = useState<InterfaceLang>(() => {
     if (typeof window === 'undefined') return 'bn';
     const saved = localStorage.getItem(STORAGE_KEYS.lang);
     return saved === 'en' || saved === 'ar' || saved === 'bn' ? saved : 'bn';
+  });
+
+  const [soundEnabled, setSoundEnabledState] = useState<boolean>(() => isSoundEnabled());
+  const [notifications, setNotifications] = useState<AcademyNotification[]>(() => getStoredNotifications());
+  const [activeToast, setActiveToast] = useState<AcademyNotification | null>(null);
+  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(() => getReminderSettings());
+  const [browserNotifPermission, setBrowserNotifPermission] = useState<NotificationPermission | 'unsupported'>(() =>
+    getBrowserNotificationStatus()
+  );
+
+  const [welcomeOpen, setWelcomeOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return !sessionStorage.getItem(STORAGE_KEYS.welcomeSeen);
   });
 
   const [progress, setProgress] = useState<StudentProgress>(() => {
@@ -195,24 +276,207 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   });
 
-  const setTheme = useCallback((next: ThemeMode) => {
-    setThemeState(next);
-    localStorage.setItem(STORAGE_KEYS.theme, next);
+  const toastTimerRef = useRef<number | null>(null);
+  const hydratedUserRef = useRef<string | null>(null);
+  const syncTimeoutRef = useRef<number | null>(null);
+
+  // Hydrate progress when an authenticated user logs in
+  useEffect(() => {
+    if (!user) {
+      hydratedUserRef.current = null;
+      return;
+    }
+    if (hydratedUserRef.current === user.id) return;
+    hydratedUserRef.current = user.id;
+
+    if (user.progressSnapshot) {
+      setProgress((prev) => ({
+        ...getDefaultProgress(user.fullName),
+        ...prev,
+        ...user.progressSnapshot,
+        studentName: user.progressSnapshot?.studentName || user.fullName || prev.studentName,
+      }));
+    } else {
+      setProgress((prev) => ({
+        ...prev,
+        studentName: user.fullName || prev.studentName,
+      }));
+    }
+  }, [user]);
+
+  // Debounced cloud/account progress sync whenever signed-in progress updates
+  useEffect(() => {
+    if (!user) return;
+    if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = window.setTimeout(() => {
+      void syncProgressToAccount(progress);
+    }, 900);
+    return () => {
+      if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
+    };
+  }, [progress, user, syncProgressToAccount]);
+
+  const triggerSound = useCallback(
+    (type: SoundEffectType, force = false) => {
+      if (!force && !soundEnabled) return false;
+      return playSound(type, force);
+    },
+    [soundEnabled]
+  );
+
+  const setSoundEnabled = useCallback((enabled: boolean) => {
+    setSoundEnabledState(enabled);
+    setSoundEnabledPref(enabled);
+    if (enabled) {
+      playSound('success', true);
+    }
   }, []);
 
-  const setLang = useCallback((next: InterfaceLang) => {
-    setLangState(next);
-    localStorage.setItem(STORAGE_KEYS.lang, next);
+  const dismissToast = useCallback(() => {
+    setActiveToast(null);
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
   }, []);
 
-  // Apply theme & RTL direction to <html>
+  const pushNotification = useCallback(
+    (
+      item: Omit<AcademyNotification, 'id' | 'timestampIso' | 'read'>,
+      alsoBrowserNotify = false
+    ) => {
+      const entry: AcademyNotification = {
+        ...item,
+        id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestampIso: new Date().toISOString(),
+        read: false,
+      };
+      setNotifications((prev) => {
+        const next = [entry, ...prev].slice(0, 30);
+        saveStoredNotifications(next);
+        return next;
+      });
+      setActiveToast(entry);
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = window.setTimeout(() => setActiveToast(null), 5000);
+
+      if (soundEnabled) {
+        playSound(item.category === 'achievement' ? 'badge' : 'notification');
+      }
+      if (alsoBrowserNotify) {
+        void dispatchBrowserNotification(entry.titleBn, entry.bodyBn);
+      }
+    },
+    [soundEnabled]
+  );
+
+  const markAllNotificationsRead = useCallback(() => {
+    setNotifications((prev) => {
+      const next = prev.map((n) => ({ ...n, read: true }));
+      saveStoredNotifications(next);
+      return next;
+    });
+  }, []);
+
+  const clearNotifications = useCallback(() => {
+    setNotifications([]);
+    saveStoredNotifications([]);
+  }, []);
+
+  const updateReminderSettings = useCallback((updates: Partial<ReminderSettings>) => {
+    setReminderSettings((prev) => {
+      const next = { ...prev, ...updates };
+      saveReminderSettings(next);
+      return next;
+    });
+  }, []);
+
+  const enableBrowserNotifications = useCallback(async () => {
+    const result = await requestBrowserNotificationPermission();
+    setBrowserNotifPermission(result);
+    if (result === 'granted') {
+      pushNotification(
+        {
+          titleBn: 'নোটিফিকেশন সফলভাবে চালু হয়েছে!',
+          titleEn: 'Notifications Enabled!',
+          bodyBn: 'প্রতিদিন আরবি অনুশীলনের স্মারক ও সাফল্যের বার্তা আপনি সময়মতো পাবেন।',
+          bodyEn: 'You will now receive daily Arabic practice reminders and achievement alerts.',
+          category: 'system',
+        },
+        true
+      );
+    }
+    return result;
+  }, [pushNotification]);
+
+  const sendTestNotification = useCallback(async () => {
+    const perm = getBrowserNotificationStatus();
+    setBrowserNotifPermission(perm);
+    if (perm === 'default') {
+      const asked = await requestBrowserNotificationPermission();
+      setBrowserNotifPermission(asked);
+    }
+    pushNotification(
+      {
+        titleBn: 'আসসালামু আলাইকুম! আজকের আরবি পাঠ প্রস্তুত',
+        titleEn: 'Assalamu Alaikum! Today’s Arabic lesson is ready',
+        bodyBn: 'সফওয়াতুল মাসাদির, মাবাদিউল আরাবিয়াহ ও AI শিক্ষকের সাথে ১০ মিনিট চর্চা করুন।',
+        bodyEn: 'Practice 10 minutes with Safwatul Masadir, Mabadiul Arabiyyah, and AI Teacher.',
+        category: 'reminder',
+      },
+      true
+    );
+  }, [pushNotification]);
+
+  const openWelcome = useCallback(() => {
+    setWelcomeOpen(true);
+    triggerSound('welcome');
+  }, [triggerSound]);
+
+  const dismissWelcome = useCallback(() => {
+    setWelcomeOpen(false);
+    sessionStorage.setItem(STORAGE_KEYS.welcomeSeen, '1');
+  }, []);
+
+  const setTheme = useCallback(
+    (next: ThemeMode) => {
+      setThemeState(next);
+      localStorage.setItem(STORAGE_KEYS.theme, next);
+      triggerSound('theme');
+    },
+    [triggerSound]
+  );
+
+  const setBackdropIntensity = useCallback(
+    (next: BackdropIntensity) => {
+      setBackdropIntensityState(next);
+      localStorage.setItem(STORAGE_KEYS.backdrop, next);
+      triggerSound('bubble');
+    },
+    [triggerSound]
+  );
+
+  const setLang = useCallback(
+    (next: InterfaceLang) => {
+      setLangState(next);
+      localStorage.setItem(STORAGE_KEYS.lang, next);
+      triggerSound('click');
+    },
+    [triggerSound]
+  );
+
+  // Apply theme, light/dark class, and PWA theme-color meta tag
   useEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-theme', theme);
-    if (theme === 'light') {
+    if (theme === 'light' || theme === 'parchment' || theme === 'sky-cloud') {
       root.classList.remove('dark');
     } else {
       root.classList.add('dark');
+    }
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', THEME_BAR_COLORS[theme]);
     }
   }, [theme]);
 
@@ -222,7 +486,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     root.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
   }, [lang]);
 
-  // Persist progress and admin content
+  // Persist local progress and admin content
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.progress, JSON.stringify(progress));
@@ -239,7 +503,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [adminContent]);
 
-  // Real active study timer: increments totalMinutesLearned every 60s when tab is visible
+  // Daily study reminder checker
+  useEffect(() => {
+    const checkReminder = () => {
+      if (!reminderSettings.enabled) return;
+      const today = todayDateKey();
+      if (reminderSettings.lastReminderDate === today) return;
+      const now = new Date();
+      const [targetH, targetM] = reminderSettings.timeHHMM.split(':').map(Number);
+      if (
+        Number.isFinite(targetH) &&
+        Number.isFinite(targetM) &&
+        (now.getHours() > targetH || (now.getHours() === targetH && now.getMinutes() >= targetM))
+      ) {
+        updateReminderSettings({ lastReminderDate: today });
+        pushNotification(
+          {
+            titleBn: 'দৈনিক আরবি অনুশীলনের সময় হয়েছে!',
+            titleEn: 'Time for Your Daily Arabic Study!',
+            bodyBn: `আপনার দৈনিক ${progress.dailyTargetMinutes} মিনিটের আরবি পাঠ এখন শুরু করুন।`,
+            bodyEn: `Start your daily ${progress.dailyTargetMinutes}-minute Arabic session now.`,
+            category: 'reminder',
+          },
+          true
+        );
+      }
+    };
+    checkReminder();
+    const id = window.setInterval(checkReminder, 60000);
+    return () => window.clearInterval(id);
+  }, [progress.dailyTargetMinutes, pushNotification, reminderSettings, updateReminderSettings]);
+
+  // Active study timer
   useEffect(() => {
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -252,7 +547,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => window.clearInterval(interval);
   }, []);
 
-  // Check and update daily streak on mount
+  // Daily streak check
   useEffect(() => {
     const today = todayDateKey();
     setProgress((prev) => {
@@ -269,18 +564,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const updateWithBadges = useCallback((updater: (prev: StudentProgress) => StudentProgress) => {
-    setProgress((prev) => {
-      const next = updater(prev);
-      return {
-        ...next,
-        unlockedBadgeIds: computeBadges(next),
-      };
-    });
-  }, []);
+  const updateWithBadges = useCallback(
+    (updater: (prev: StudentProgress) => StudentProgress) => {
+      setProgress((prev) => {
+        const next = updater(prev);
+        const nextBadges = computeBadges(next);
+        const newlyUnlocked = nextBadges.filter((id) => !prev.unlockedBadgeIds.includes(id));
+        if (newlyUnlocked.length > 0) {
+          const def = BADGE_DEFINITIONS.find((b) => b.id === newlyUnlocked[0]);
+          if (def) {
+            window.setTimeout(() => {
+              pushNotification(
+                {
+                  titleBn: `নতুন ব্যাজ অর্জিত: ${def.titleBn}!`,
+                  titleEn: `New Badge Unlocked: ${def.titleEn}!`,
+                  bodyBn: def.criteriaBn,
+                  bodyEn: def.criteriaEn,
+                  category: 'achievement',
+                },
+                true
+              );
+            }, 50);
+          }
+        }
+        return {
+          ...next,
+          unlockedBadgeIds: nextBadges,
+        };
+      });
+    },
+    [pushNotification]
+  );
 
   const awardXp = useCallback(
     (amount: number, activity: Omit<ActivityLogEntry, 'id' | 'timestampIso' | 'xpEarned'>) => {
+      triggerSound('success');
       updateWithBadges((prev) => ({
         ...prev,
         xp: prev.xp + amount,
@@ -296,11 +614,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ].slice(0, 20),
       }));
     },
-    [updateWithBadges]
+    [triggerSound, updateWithBadges]
   );
 
   const completeLesson = useCallback(
     (lessonId: string, lessonTitleBn: string, lessonTitleEn: string) => {
+      triggerSound('success');
       updateWithBadges((prev) => {
         const alreadyDone = prev.completedLessonIds.includes(lessonId);
         const xpGain = alreadyDone ? 10 : 50;
@@ -323,11 +642,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [updateWithBadges]
+    [triggerSound, updateWithBadges]
   );
 
   const completeGrammarTopic = useCallback(
     (topicId: string, titleBn: string, titleEn: string) => {
+      triggerSound('success');
       updateWithBadges((prev) => {
         const alreadyDone = prev.completedGrammarIds.includes(topicId);
         const xpGain = alreadyDone ? 5 : 35;
@@ -349,11 +669,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [updateWithBadges]
+    [triggerSound, updateWithBadges]
   );
 
   const reviewVocabWord = useCallback(
     (wordId: string, quality: 'again' | 'good' | 'easy') => {
+      triggerSound(quality === 'again' ? 'click' : 'success');
       updateWithBadges((prev) => {
         const existing = prev.vocabProgress[wordId] || {
           wordId,
@@ -399,11 +720,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [updateWithBadges]
+    [triggerSound, updateWithBadges]
   );
 
   const toggleFavoriteVocab = useCallback(
     (wordId: string) => {
+      triggerSound('bubble');
       updateWithBadges((prev) => {
         const existing = prev.vocabProgress[wordId] || {
           wordId,
@@ -422,11 +744,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [updateWithBadges]
+    [triggerSound, updateWithBadges]
   );
 
   const recordExamResult = useCallback(
     (entry: Omit<ExamHistoryEntry, 'id' | 'dateIso'>) => {
+      triggerSound(entry.percentage >= 60 ? 'badge' : 'click');
       updateWithBadges((prev) => {
         const xpGain = Math.max(15, Math.round(entry.percentage * 0.6));
         const newEntry: ExamHistoryEntry = {
@@ -452,11 +775,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [updateWithBadges]
+    [triggerSound, updateWithBadges]
   );
 
   const completeDailyChallenge = useCallback(
     (score: number, total: number) => {
+      triggerSound('badge');
       const today = todayDateKey();
       updateWithBadges((prev) => {
         const already = prev.dailyChallengeCompletedDates.includes(today);
@@ -481,21 +805,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [updateWithBadges]
+    [triggerSound, updateWithBadges]
   );
 
   const updateProfile = useCallback(
     (updates: Partial<Pick<StudentProgress, 'studentName' | 'preferredTrack' | 'dailyTargetMinutes'>>) => {
       setProgress((prev) => ({ ...prev, ...updates }));
+      triggerSound('success');
     },
-    []
+    [triggerSound]
   );
 
   const resetProgress = useCallback(() => {
-    const fresh = getDefaultProgress();
+    const fresh = getDefaultProgress(user?.fullName || 'নতুন শিক্ষার্থী');
     setProgress(fresh);
     localStorage.setItem(STORAGE_KEYS.progress, JSON.stringify(fresh));
-  }, []);
+  }, [user?.fullName]);
 
   const addCustomChapter = useCallback((chapter: ChapterInfo) => {
     setAdminContent((prev) => ({
@@ -553,12 +878,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return 1;
   }, [progress.xp]);
 
+  const unreadNotificationCount = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications]
+  );
+
   const value: AppContextValue = {
     theme,
     setTheme,
+    backdropIntensity,
+    setBackdropIntensity,
     lang,
     setLang,
     t: I18N[lang],
+    soundEnabled,
+    setSoundEnabled,
+    triggerSound,
+    notifications,
+    unreadNotificationCount,
+    activeToast,
+    dismissToast,
+    pushNotification,
+    markAllNotificationsRead,
+    clearNotifications,
+    reminderSettings,
+    updateReminderSettings,
+    browserNotifPermission,
+    enableBrowserNotifications,
+    sendTestNotification,
+    welcomeOpen,
+    openWelcome,
+    dismissWelcome,
     progress,
     currentLevelNumber,
     allChapters,

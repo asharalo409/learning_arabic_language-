@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, Clock, Flame, Layers, Target, Trophy } from 'lucide-react';
+import { ArrowRight, BookOpen, Clock, Cloud, Flame, Layers, LogIn, Target, Trophy } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
 import { BADGE_DEFINITIONS, useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { CURRICULUM_LEVELS } from '../data/curriculum';
 
 export const DashboardPage: React.FC = () => {
   const { t, lang, progress, currentLevelNumber, allChapters, updateProfile } = useApp();
+  const { user, supabaseConnected } = useAuth();
   const [editingTarget, setEditingTarget] = useState(false);
   const [targetInput, setTargetInput] = useState(progress.dailyTargetMinutes);
 
@@ -31,11 +33,37 @@ export const DashboardPage: React.FC = () => {
       title={t.sidebar.dashboard}
       subtitle={
         lang === 'bn'
-          ? `স্বাগতম, ${progress.studentName} — আপনার অগ্রগতি স্বয়ংক্রিয়ভাবে সংরক্ষিত হচ্ছে`
+          ? `স্বাগতম, ${progress.studentName} — আপনার ব্যক্তিগত শেখার উন্নতি ও অগ্রগতি`
           : `Welcome back, ${progress.studentName}`
       }
     >
       <div className="space-y-8">
+        {/* Account Sync Banner */}
+        <div className="surface-alt rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 border border-[var(--border-subtle)]">
+          <div className="flex items-center gap-3 text-xs sm:text-sm">
+            <Cloud className="w-5 h-5 text-[var(--accent)] shrink-0" />
+            <div>
+              {user ? (
+                <span>
+                  সিঙ্ককৃত অ্যাকাউন্ট: <strong>{user.email}</strong>{' '}
+                  ({supabaseConnected ? 'Supabase Cloud' : 'Local Account Sync'})
+                </span>
+              ) : (
+                <span>
+                  আপনি এখন গেস্ট মোডে আছেন। সব ডিভাইসে উন্নতি ও লিডারবোর্ড সেভ রাখতে Gmail দিয়ে লগইন করুন।
+                </span>
+              )}
+            </div>
+          </div>
+          <Link
+            to="/auth"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold btn-secondary whitespace-nowrap"
+          >
+            <LogIn className="w-3.5 h-3.5 text-[var(--accent)]" />
+            <span>{user ? 'অ্যাকাউন্ট পরিচালনা' : 'Gmail লগইন / সাইনআপ'}</span>
+          </Link>
+        </div>
+
         {/* Top Continue Learning Hero Strip */}
         <div className="surface-card rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">

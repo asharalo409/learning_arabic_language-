@@ -6,7 +6,7 @@ import { useApp } from '../context/AppContext';
 import { GRAMMAR_TOPICS } from '../data/grammarData';
 
 export const GrammarPage: React.FC = () => {
-  const { t, lang, progress, completeGrammarTopic } = useApp();
+  const { t, lang, progress, completeGrammarTopic, triggerSound } = useApp();
   const [branchFilter, setBranchFilter] = useState<'all' | 'Nahw' | 'Sarf'>('all');
   const [bookFilter, setBookFilter] = useState<
     | 'all'
@@ -223,7 +223,10 @@ export const GrammarPage: React.FC = () => {
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => setQuizChoice((prev) => ({ ...prev, [q.id]: idx }))}
+                          onClick={() => {
+                            triggerSound(idx === q.correctIndex ? 'success' : 'error');
+                            setQuizChoice((prev) => ({ ...prev, [q.id]: idx }));
+                          }}
                           className={`px-3.5 py-2 rounded-lg text-sm text-left border ${
                             chosen === idx
                               ? idx === q.correctIndex

@@ -31,6 +31,8 @@ export interface Translations {
     certificates: string;
     profile: string;
     admin: string;
+    themes: string;
+    auth: string;
     theme: string;
     language: string;
   };
@@ -42,9 +44,14 @@ export interface Translations {
     secondaryCta: string;
   };
   themes: {
+    'sky-cloud': string;
     emerald: string;
     midnight: string;
     light: string;
+    madinah: string;
+    kaaba: string;
+    parchment: string;
+    andalus: string;
   };
   common: {
     playAudio: string;
@@ -97,7 +104,9 @@ export const I18N: Record<InterfaceLang, Translations> = {
       leaderboard: 'লিডারবোর্ড ও ব্যাজ',
       certificates: 'সার্টিফিকেট',
       profile: 'প্রোফাইল ও সেটিংস',
-      admin: 'অ্যাডমিন প্রোটোটাইপ',
+      admin: 'অ্যাডমিন প্যানেল',
+      themes: 'লাইভ থিম স্টুডিও',
+      auth: 'লগইন / অ্যাকাউন্ট',
       theme: 'থিম',
       language: 'ভাষা',
     },
@@ -110,9 +119,14 @@ export const I18N: Record<InterfaceLang, Translations> = {
       secondaryCta: 'AI শিক্ষককে প্রশ্ন করুন',
     },
     themes: {
+      'sky-cloud': 'উজ্জ্বল আকাশ ও মেঘ',
       emerald: 'ইসলামিক এমারেল্ড',
       midnight: 'মিডনাইট ডার্ক',
       light: 'লাইট একাডেমিক',
+      madinah: 'মদীনা রোজ-টিল',
+      kaaba: 'কিসওয়া গোল্ড',
+      parchment: 'পাণ্ডুলিপি ক্রিম',
+      andalus: 'আন্দালুসীয় নীল',
     },
     common: {
       playAudio: 'শুনুন',
@@ -163,7 +177,9 @@ export const I18N: Record<InterfaceLang, Translations> = {
       leaderboard: 'Leaderboard',
       certificates: 'Certificates',
       profile: 'Profile & Settings',
-      admin: 'Admin Prototype',
+      admin: 'Admin Control',
+      themes: 'Live Theme Studio',
+      auth: 'Login / Account',
       theme: 'Theme',
       language: 'Language',
     },
@@ -176,9 +192,14 @@ export const I18N: Record<InterfaceLang, Translations> = {
       secondaryCta: 'Ask AI Teacher',
     },
     themes: {
+      'sky-cloud': 'Radiant Sky & Clouds',
       emerald: 'Islamic Emerald',
       midnight: 'Midnight Dark',
       light: 'Light Academic',
+      madinah: 'Madinah Rose-Teal',
+      kaaba: 'Kiswah Gold',
+      parchment: 'Manuscript Cream',
+      andalus: 'Andalusian Sky',
     },
     common: {
       playAudio: 'Listen',
@@ -229,7 +250,9 @@ export const I18N: Record<InterfaceLang, Translations> = {
       leaderboard: 'لوحة المتصدرين',
       certificates: 'الشهادات',
       profile: 'الملف الشخصي',
-      admin: 'إدارة المحتوى',
+      admin: 'لوحة المشرف',
+      themes: 'استوديو المظاهر',
+      auth: 'تسجيل الدخول',
       theme: 'المظهر',
       language: 'اللغة',
     },
@@ -242,9 +265,14 @@ export const I18N: Record<InterfaceLang, Translations> = {
       secondaryCta: 'اسأل المعلم الذكي',
     },
     themes: {
+      'sky-cloud': 'السماء المشرقة والسحب',
       emerald: 'الزمرد الإسلامي',
       midnight: 'الليلي الداكن',
       light: 'الأكاديمي الفاتح',
+      madinah: 'روضة المدينة',
+      kaaba: 'الذهب الكسوة',
+      parchment: 'ورق المخطوطات',
+      andalus: 'الأزرق الأندلسي',
     },
     common: {
       playAudio: 'استمع',

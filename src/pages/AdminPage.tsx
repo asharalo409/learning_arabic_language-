@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Plus, Check } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Check, Copy, Database, Lock, LogIn, Plus, ShieldCheck } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
 import { useApp } from '../context/AppContext';
+import { ADMIN_EMAIL, useAuth } from '../context/AuthContext';
+import { SUPABASE_SQL_SCHEMA } from '../data/supabaseSqlSchema';
 import { CurriculumLevelNumber, DetailedLesson, LearningTrack } from '../types/academy';
 
 export const AdminPage: React.FC = () => {
@@ -12,10 +15,13 @@ export const AdminPage: React.FC = () => {
     saveCustomLesson,
     addCustomVocab,
     addCustomQuestion,
+    triggerSound,
   } = useApp();
+  const { user, supabaseConnected, leaderboard } = useAuth();
 
-  const [tab, setTab] = useState<'chapters' | 'lessons' | 'vocab' | 'quiz'>('chapters');
+  const [tab, setTab] = useState<'chapters' | 'lessons' | 'vocab' | 'quiz' | 'supabase'>('chapters');
   const [toast, setToast] = useState<string | null>(null);
+  const [copiedSql, setCopiedSql] = useState(false);
 
   // Chapter form
   const [chNum, setChNum] = useState(101);
@@ -52,8 +58,54 @@ export const AdminPage: React.FC = () => {
   const [qExp, setQExp] = useState('');
 
   const showToast = (msg: string) => {
+    triggerSound('success');
     setToast(msg);
-    window.setTimeout(() => setToast(null), 2500);
+    window.setTimeout(() => setToast(null), 2600);
+  };
+
+  if (!user || !user.isAdmin) {
+    return (
+      <AppShell
+        title={t.sidebar.admin}
+        subtitle="শুধুমাত্র অনুমোদিত অ্যাডমিন অ্যাকাউন্টের জন্য সংরক্ষিত"
+      >
+        <div className="max-w-lg mx-auto surface-card rounded-3xl p-8 text-center space-y-5 border border-[var(--border-strong)] my-8">
+          <div className="w-16 h-16 rounded-2xl bg-[var(--emerald-highlight)] text-[var(--accent)] flex items-center justify-center mx-auto">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold">অ্যাডমিন প্যানেল সুরক্ষিত</h2>
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+              কোর্স, পাঠ, শব্দ ও Supabase ডাটাবেজ পরিচালনা করতে শুধুমাত্র প্রতিষ্ঠাতা অ্যাডমিন Gmail (
+              <span className="font-mono-num font-semibold text-[var(--accent)]">{ADMIN_EMAIL}</span>) দিয়ে লগইন করুন।
+            </p>
+            {user && (
+              <p className="text-xs text-[var(--danger)] pt-1">
+                বর্তমানে লগইন করা আছে: {user.email} (সাধারণ শিক্ষার্থী অ্যাকাউন্ট)
+              </p>
+            )}
+          </div>
+          <Link
+            to="/auth"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold btn-primary"
+          >
+            <LogIn className="w-4 h-4" />
+            <span>অ্যাডমিন Gmail দিয়ে লগইন করুন</span>
+          </Link>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const handleCopySql = async () => {
+    try {
+      await navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+      setCopiedSql(true);
+      triggerSound('success');
+      window.setTimeout(() => setCopiedSql(false), 2200);
+    } catch {
+      // ignore clipboard restrictions
+    }
   };
 
   const handleAddChapter = (e: React.FormEvent) => {
@@ -186,17 +238,20 @@ export const AdminPage: React.FC = () => {
   return (
     <AppShell
       title={t.sidebar.admin}
-      subtitle="ডেভেলপমেন্ট প্রোটোটাইপ (Local Storage CMS — কন্টেন্ট সরাসরি অ্যাপে যুক্ত হয়)"
+      subtitle={`স্বাগতম অ্যাডমিন (${user.email}) — একাডেমি কন্টেন্ট ও Supabase ডাটাবেজ কন্ট্রোল`}
     >
       <div className="space-y-6">
-        {/* Explicit Prototype Warning Banner */}
-        <div className="p-4 rounded-xl border border-[var(--warning)]/50 bg-[var(--warning)]/10 text-sm flex items-start gap-3">
-          <ShieldAlert className="w-5 h-5 text-[var(--warning)] shrink-0 mt-0.5" />
-          <div>
-            <div className="font-semibold">ডেভেলপমেন্ট প্রোটোটাইপ অ্যাডমিন প্যানেল (Local-Only Prototype)</div>
-            <p className="text-xs text-[var(--text-secondary)] mt-1">
-              এটি একটি ডেভেলপমেন্ট প্রোটোটাইপ কন্টেন্ট ম্যানেজার। এখানে যুক্ত করা অধ্যায়, পাঠ, শব্দ ও কুইজ আপনার ব্রাউজারের LocalStorage-এ সংরক্ষিত হয়। প্রোডাকশন ব্যবহারের জন্য সার্ভার-সাইড অ্যাডমিন অথেনটিকেশন ও ডাটাবেস যুক্ত করতে হবে।
-            </p>
+        {/* Verified Admin Status Banner */}
+        <div className="p-4 rounded-2xl border border-[var(--border-strong)] bg-[var(--emerald-highlight)] text-sm flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="w-5 h-5 text-[var(--accent)] shrink-0" />
+            <div>
+              <div className="font-bold">অ্যাডমিন অনুমোদিত: {user.email}</div>
+              <p className="text-xs text-[var(--text-secondary)]">
+                মোট নিবন্ধিত/দৃশ্যমান শিক্ষার্থী: {leaderboard.length} · Supabase Cloud:{' '}
+                {supabaseConnected ? 'সংযুক্ত' : 'Vercel এনভায়রনমেন্ট ভ্যারিয়েবল অপেক্ষমাণ'}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -208,13 +263,14 @@ export const AdminPage: React.FC = () => {
               { id: 'lessons', label: 'পাঠ যুক্ত/সম্পাদনা' },
               { id: 'vocab', label: 'শব্দভাণ্ডার পরিচালনা' },
               { id: 'quiz', label: 'কুইজ প্রশ্ন পরিচালনা' },
+              { id: 'supabase', label: 'Supabase SQL ও সেটআপ' },
             ] as const
           ).map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setTab(item.id)}
-              className={`px-4 py-2 rounded-lg text-xs font-medium ${
+              className={`px-4 py-2 rounded-xl text-xs font-medium ${
                 tab === item.id ? 'btn-primary' : 'btn-secondary'
               }`}
             >
@@ -224,9 +280,35 @@ export const AdminPage: React.FC = () => {
         </div>
 
         {toast && (
-          <div className="p-3 rounded-lg bg-[var(--emerald-highlight)] text-[var(--success)] text-xs font-semibold flex items-center gap-2">
+          <div className="p-3 rounded-xl bg-[var(--emerald-highlight)] text-[var(--success)] text-xs font-semibold flex items-center gap-2">
             <Check className="w-4 h-4" />
             <span>{toast}</span>
+          </div>
+        )}
+
+        {tab === 'supabase' && (
+          <div className="surface-card rounded-2xl p-6 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Database className="w-5 h-5 text-[var(--accent)]" />
+                <h2 className="text-base font-bold">Supabase SQL Schema (SQL Editor-এ রান করুন)</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleCopySql()}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs btn-primary"
+              >
+                {copiedSql ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedSql ? 'কপি হয়েছে!' : 'সম্পূর্ণ SQL কপি করুন'}</span>
+              </button>
+            </div>
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              Supabase ড্যাশবোর্ডের <strong>SQL Editor</strong>-এ নিচের কোডটি পেস্ট করে Run করুন। তারপর Vercel-এ{' '}
+              <code>VITE_SUPABASE_URL</code> ও <code>VITE_SUPABASE_ANON_KEY</code> যোগ করলেই সকল শিক্ষার্থীর লগইন, ড্যাশবোর্ড ও লাইভ লিডারবোর্ড ক্লাউডে কাজ শুরু করবে।
+            </p>
+            <pre className="p-4 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-[11px] font-mono-num overflow-x-auto max-h-96 leading-relaxed">
+              {SUPABASE_SQL_SCHEMA}
+            </pre>
           </div>
         )}
 

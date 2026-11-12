@@ -1,4 +1,13 @@
-export type ThemeMode = 'emerald' | 'midnight' | 'light';
+export type ThemeMode =
+  | 'sky-cloud'
+  | 'emerald'
+  | 'midnight'
+  | 'light'
+  | 'madinah'
+  | 'kaaba'
+  | 'parchment'
+  | 'andalus';
+export type BackdropIntensity = 'vivid' | 'gentle' | 'off';
 export type InterfaceLang = 'bn' | 'en' | 'ar';
 export type LearningTrack = 'MSA' | 'Quranic' | 'Combined';
 
