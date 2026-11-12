@@ -45,10 +45,10 @@ export function buildDetailedLessonForSlot(
   // Append a 16th Safwatul Masadir integration line so every lesson has 16 lines (between 15 and 20 lines)
   conversation.push({
     speaker: 'الأُسْتَاذُ',
-    speakerRoleBn: 'উস্তায (ছরফ চর্চা)',
+    speakerRoleBn: 'উস্তায (সফওয়াতুল মাসাদির চর্চা)',
     arabic: m1.exampleAr,
-    pronunciationBn: `${m1.masdarPronunciationBn} — (${m1.babNameBn})`,
-    translationBn: `${m1.exampleBn} [মাসদার: ${m1.masdarAr} = ${m1.meaningBn}]`,
+    pronunciationBn: m1.masdarPronunciationBn,
+    translationBn: m1.exampleBn,
     translationEn: `${m1.meaningEn} (${m1.masdarAr})`,
   });
 
@@ -59,7 +59,7 @@ export function buildDetailedLessonForSlot(
       pronunciationBn: v.pronunciationBn,
       meaningBn: v.meaningBn,
       meaningEn: v.meaningEn,
-      category: chapter.titleEn,
+      category: chapter.titleBn,
       root: v.masdarNote,
       exampleAr: rawDialogue[idx % rawDialogue.length]?.arabic || m1.exampleAr,
       exampleBn: rawDialogue[idx % rawDialogue.length]?.meaningBn || m1.exampleBn,
@@ -67,12 +67,12 @@ export function buildDetailedLessonForSlot(
     })),
     ...[m1, m2].map((m, idx) => ({
       id: `gen-sm-${chapter.chapterNumber}-${lessonNumber}-${idx}`,
-      arabic: `${m.masdarAr} (${m.madiAr} / ${m.mudariAr})`,
+      arabic: m.masdarAr,
       pronunciationBn: m.masdarPronunciationBn,
-      meaningBn: `${m.meaningBn} [${m.babNameBn}]`,
+      meaningBn: m.meaningBn,
       meaningEn: m.meaningEn,
-      category: 'সফওয়াতুল মাসাদির',
-      root: m.rootLetters,
+      category: m.babNameBn,
+      root: `${m.rootLetters} · মাদি: ${m.madiAr} · মুদারি: ${m.mudariAr}`,
       exampleAr: m.exampleAr,
       exampleBn: m.exampleBn,
       exampleEn: m.meaningEn,
@@ -84,10 +84,10 @@ export function buildDetailedLessonForSlot(
       id: `gen-rev-${chapter.chapterNumber}-${lessonNumber}`,
       arabic: m3.masdarAr,
       pronunciationBn: m3.masdarPronunciationBn,
-      meaningBn: `${m3.meaningBn} (${m3.madiAr} / ${m3.mudariAr})`,
+      meaningBn: m3.meaningBn,
       meaningEn: m3.meaningEn,
-      category: 'সফওয়াতুল মাসাদির রিভিশন',
-      root: m3.rootLetters,
+      category: m3.babNameBn,
+      root: `${m3.rootLetters} · মাদি: ${m3.madiAr} · মুদারি: ${m3.mudariAr}`,
       exampleAr: m3.exampleAr,
       exampleBn: m3.exampleBn,
       exampleEn: m3.meaningEn,
@@ -97,8 +97,8 @@ export function buildDetailedLessonForSlot(
   const grammarExamples = grammarTopic.examples.map((ex) => ({
     arabic: ex.arabic,
     pronunciationBn: ex.pronunciationBn,
-    meaningBn: `${ex.meaningBn} — বিশ্লেষণ: ${ex.analysisBn}`,
-    meaningEn: ex.meaningBn,
+    meaningBn: ex.meaningBn,
+    meaningEn: ex.analysisBn,
   }));
 
   const firstQuiz = grammarTopic.quiz[0];

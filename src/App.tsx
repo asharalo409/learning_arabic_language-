@@ -11,6 +11,8 @@ import { HomePage } from './pages/HomePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AiTeacherPage } from './pages/AiTeacherPage';
 import { CoursesPage } from './pages/CoursesPage';
+import { ChapterDetailPage } from './pages/ChapterDetailPage';
+import { LessonDetailPage } from './pages/LessonDetailPage';
 import { ListeningPage } from './pages/ListeningPage';
 import { SpeakingPage } from './pages/SpeakingPage';
 import { GrammarPage } from './pages/GrammarPage';
@@ -49,6 +51,8 @@ function AppRoutesWrapper() {
           <Route path="/ai-teacher" element={<AiTeacherPage />} />
           <Route path="/courses" element={<CoursesPage />} />
           <Route path="/courses/beginners" element={<CoursesPage initialLevel={1} />} />
+          <Route path="/courses/chapter/:chapterNumber" element={<ChapterDetailPage />} />
+          <Route path="/courses/lesson/:chapterNumber/:lessonNumber" element={<LessonDetailPage />} />
           <Route path="/daily-lessons" element={<DailyLessonsPage />} />
           <Route path="/bayna-yadayk" element={<BaynaYadaykPage />} />
           <Route path="/safwatul-masadir" element={<SafwatulMasadirPage />} />

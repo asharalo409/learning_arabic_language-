@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
+  ArrowLeft,
   Award,
   BookMarked,
   BookOpen,
@@ -50,8 +51,13 @@ export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children })
   const { t, theme, setTheme, lang, setLang, progress, currentLevelNumber, triggerSound } = useApp();
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const prevPathRef = useRef(location.pathname);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [location.pathname]);
 
   useEffect(() => {
     if (prevPathRef.current !== location.pathname) {
@@ -59,6 +65,15 @@ export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children })
       triggerSound(getRouteSoundEffect(location.pathname));
     }
   }, [location.pathname, triggerSound]);
+
+  const handleGoBack = () => {
+    triggerSound('click');
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
 
   const isDarkTheme = !['sky-cloud', 'light', 'parchment'].includes(theme);
 
@@ -258,21 +273,41 @@ export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children })
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Clean Top App Bar (Prodex style) */}
-        <header className="sticky top-0 z-30 glass-panel border-b border-[var(--border-subtle)] px-4 sm:px-8 h-16 flex items-center justify-between gap-4 no-print">
-          <div className="flex items-center gap-3 min-w-0">
+        {/* Clean Top App Bar with Back & Home Exit Controls */}
+        <header className="sticky top-0 z-30 bg-[var(--bg-surface)]/95 backdrop-blur-xl border-b border-[var(--border-subtle)] px-3 sm:px-7 h-16 flex items-center justify-between gap-3 shadow-xs no-print">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden p-2 rounded-xl btn-secondary shrink-0"
               aria-label="Open Navigation"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-4 h-4" />
             </button>
+
+            <button
+              type="button"
+              onClick={handleGoBack}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl btn-secondary text-xs font-semibold shrink-0"
+              title="পূর্ববর্তী পৃষ্ঠায় ফিরুন"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span className="hidden sm:inline">ফিরে যান</span>
+            </button>
+
+            <Link
+              to="/"
+              className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl btn-secondary text-xs font-semibold shrink-0"
+              title="হোমপেজে বের হয়ে যান"
+            >
+              <Home className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>হোম</span>
+            </Link>
+
             <div className="min-w-0">
-              <h1 className="text-base sm:text-xl font-bold truncate">{title}</h1>
+              <h1 className="text-sm sm:text-lg font-bold truncate">{title}</h1>
               {subtitle && (
-                <p className="text-[11px] text-[var(--text-muted)] truncate hidden sm:block">{subtitle}</p>
+                <p className="text-[11px] text-[var(--text-muted)] truncate hidden md:block">{subtitle}</p>
               )}
             </div>
           </div>
@@ -302,7 +337,7 @@ export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children })
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 max-w-[1260px] w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-32 lg:pb-10 max-w-[1260px] w-full mx-auto">
           {children}
         </main>
       </div>

@@ -236,16 +236,22 @@ export const VocabularyPage: React.FC = () => {
               const isFav = Boolean(rec?.favorite);
               return (
                 <div key={word.id} className="surface-card rounded-xl p-5 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <span className="text-xs text-[var(--text-muted)]">
+                  <div className="flex items-start justify-between gap-3 pb-2 border-b border-[var(--border-subtle)]">
+                    <div className="space-y-1">
+                      <div className="text-xs font-semibold text-[var(--accent)]">
                         {word.category}
-                        {word.root ? ` · মূলধাতু: ${word.root}` : ''}
-                      </span>
+                      </div>
                       <p className="font-arabic text-2xl sm:text-3xl text-[var(--accent)] mt-1" dir="rtl">
                         {word.arabic}
                       </p>
-                      <p className="text-xs text-[var(--text-muted)]">{word.pronunciationBn}</p>
+                      <div className="text-xs text-[var(--text-muted)]">
+                        উচ্চারণ: <span className="font-semibold text-[var(--text-primary)]">{word.pronunciationBn}</span>
+                      </div>
+                      {word.root && (
+                        <div className="text-xs text-[var(--text-muted)]">
+                          মূলধাতু: <span className="font-arabic text-sm text-[var(--text-secondary)]">{word.root}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1.5">
@@ -265,9 +271,14 @@ export const VocabularyPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="text-sm font-semibold">
-                    {word.meaningBn}{' '}
-                    <span className="font-normal text-[var(--text-secondary)]">· {word.meaningEn}</span>
+                  <div className="space-y-1 text-sm">
+                    <div>
+                      <span className="text-xs text-[var(--text-muted)]">বাংলা অর্থ: </span>
+                      <span className="font-bold text-[var(--text-primary)]">{word.meaningBn}</span>
+                    </div>
+                    <div className="text-xs text-[var(--text-secondary)]">
+                      ইংরেজি: {word.meaningEn}
+                    </div>
                   </div>
 
                   <div className="surface-alt rounded-lg p-3 space-y-1">
