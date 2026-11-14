@@ -25,8 +25,6 @@ import { LeaderboardPage } from './pages/LeaderboardPage';
 import { CertificatesPage } from './pages/CertificatesPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { AdminPage } from './pages/AdminPage';
-import { DailyLessonsPage } from './pages/DailyLessonsPage';
-import { BaynaYadaykPage } from './pages/BaynaYadaykPage';
 import { SafwatulMasadirPage } from './pages/SafwatulMasadirPage';
 import { AuthPage } from './pages/AuthPage';
 import { ThemesPage } from './pages/ThemesPage';
@@ -35,6 +33,7 @@ import { WelcomeOverlay } from './components/WelcomeOverlay';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { ThemeBackdrop } from './components/ThemeBackdrop';
 import { SplashScreen } from './components/SplashScreen';
+import { GlobalGrammarMonitor } from './components/GlobalGrammarMonitor';
 
 function AppRoutesWrapper() {
   const location = useLocation();
@@ -50,11 +49,11 @@ function AppRoutesWrapper() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/ai-teacher" element={<AiTeacherPage />} />
           <Route path="/courses" element={<CoursesPage />} />
-          <Route path="/courses/beginners" element={<CoursesPage initialLevel={1} />} />
+          <Route path="/courses/beginners" element={<Navigate to="/courses?level=1" replace />} />
           <Route path="/courses/chapter/:chapterNumber" element={<ChapterDetailPage />} />
           <Route path="/courses/lesson/:chapterNumber/:lessonNumber" element={<LessonDetailPage />} />
-          <Route path="/daily-lessons" element={<DailyLessonsPage />} />
-          <Route path="/bayna-yadayk" element={<BaynaYadaykPage />} />
+          <Route path="/daily-lessons" element={<Navigate to="/courses" replace />} />
+          <Route path="/bayna-yadayk" element={<Navigate to="/courses" replace />} />
           <Route path="/safwatul-masadir" element={<SafwatulMasadirPage />} />
           <Route path="/listening" element={<ListeningPage />} />
           <Route path="/speaking" element={<SpeakingPage />} />
@@ -73,6 +72,7 @@ function AppRoutesWrapper() {
       </div>
       <WelcomeOverlay />
       <OfflineIndicator />
+      <GlobalGrammarMonitor />
     </>
   );
 }

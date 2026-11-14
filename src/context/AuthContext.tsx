@@ -133,8 +133,27 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabaseConnected = isSupabaseConfigured();
-  const [user, setUser] = useState<AuthUserProfile | null>(null);
-  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<AuthUserProfile | null>(() => {
+    if (typeof window === 'undefined' || supabaseConnected) return null;
+    try {
+      const savedEmail = localStorage.getItem(LOCAL_SESSION_KEY);
+      if (!savedEmail) return null;
+      const accounts = readLocalAccounts();
+      const found = accounts[savedEmail.toLowerCase()];
+      if (!found) return null;
+      return {
+        id: found.id,
+        email: found.email,
+        fullName: found.fullName,
+        isAdmin: isAdminEmail(found.email) || found.role === 'admin',
+        source: 'local',
+        progressSnapshot: found.progress,
+      };
+    } catch {
+      return null;
+    }
+  });
+  const [authLoading, setAuthLoading] = useState<boolean>(supabaseConnected);
   const [leaderboard, setLeaderboard] = useState<LeaderboardStudent[]>(SEEDED_COMMUNITY_PEERS);
   const [leaderboardLoading, setLeaderboardLoading] = useState<boolean>(false);
 

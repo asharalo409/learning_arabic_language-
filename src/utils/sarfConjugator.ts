@@ -128,15 +128,128 @@ const EXPLICIT_MUDARI_14: Record<string, string[]> = {
   'يَطْمَئِنُّ': ['يَطْمَئِنُّ', 'يَطْمَئِنَّانِ', 'يَطْمَئِنُّونَ', 'تَطْمَئِنُّ', 'تَطْمَئِنَّانِ', 'يَطْمَأْنِنَّ', 'تَطْمَئِنُّ', 'تَطْمَئِنَّانِ', 'تَطْمَئِنُّونَ', 'تَطْمَئِنِّينَ', 'تَطْمَئِنَّانِ', 'تَطْمَأْنِنَّ', 'أَطْمَئِنُّ', 'نَطْمَئِنُّ'],
 };
 
-function conjugateRegularMadi(madiAr: string): string[] {
+function conjugateRegularMadi(madiAr: string, mudariHint?: string, sarfType?: MasdarEntry['sarfType']): string[] {
   const clean = madiAr.trim();
   if (EXPLICIT_MADI_14[clean]) return EXPLICIT_MADI_14[clean];
 
   const units = splitConsonantUnits(clean);
   if (units.length === 0) return Array(14).fill(clean);
 
-  const last = units[units.length - 1];
-  const lastPlain = stripHarakat(last);
+  // Generic Mudaaf: ends with shadda (e.g. بَلَّ، أَحَبَّ، اِسْتَقَرَّ)
+  const lastUnit = units[units.length - 1];
+  const lastPlain = stripHarakat(lastUnit);
+  if (lastUnit.includes('ّ') || sarfType === 'Mudaaf') {
+    const stemUnits = units.slice(0, -1);
+    const stemBase = stemUnits.join('');
+    const doubleBase = `${stemBase}${lastPlain}َّ`;
+    const deGeminatedVowel = clean.startsWith('اِسْتَ') || clean.startsWith('أَ') || clean.startsWith('اِ') ? 'َ' : 'َ';
+    const openStem = `${stemBase}${lastPlain}${deGeminatedVowel}${lastPlain}`;
+    return [
+      doubleBase,
+      `${stemBase}${lastPlain}َّا`,
+      `${stemBase}${lastPlain}ُّوا`,
+      `${doubleBase}تْ`,
+      `${doubleBase}تَا`,
+      `${openStem}ْنَ`,
+      `${openStem}ْتَ`,
+      `${openStem}ْتُمَا`,
+      `${openStem}ْتُمْ`,
+      `${openStem}ْتِ`,
+      `${openStem}ْتُمَا`,
+      `${openStem}ْتُنَّ`,
+      `${openStem}ْتُ`,
+      `${openStem}ْنَا`,
+    ];
+  }
+
+  // Generic Naqis / Lafif ending in ا or ى (e.g. دَعَا / مَشَى / نَادَى / اِشْتَرَى)
+  if (lastPlain === 'ا' || lastPlain === 'ى') {
+    const prevUnits = units.slice(0, -1);
+    const prevBase = prevUnits.join('');
+    const prevLast = prevUnits[prevUnits.length - 1] || '';
+    const prevPlain = stripHarakat(prevLast);
+    const prevStem = prevUnits.slice(0, -1).join('');
+    const isWaw = lastPlain === 'ا' && units.length === 3;
+    const glide = isWaw ? 'و' : 'ي';
+    const dual = `${prevBase}${glide}َا`;
+    const mPl = `${prevBase}وْا`;
+    const fSg = `${prevStem}${prevPlain}َتْ`;
+    const fDual = `${prevStem}${prevPlain}َتَا`;
+    const restStem = `${prevBase}${glide}`;
+    return [
+      clean,
+      dual,
+      mPl,
+      fSg,
+      fDual,
+      `${restStem}ْنَ`,
+      `${restStem}ْتَ`,
+      `${restStem}ْتُمَا`,
+      `${restStem}ْتُمْ`,
+      `${restStem}ْتِ`,
+      `${restStem}ْتُمَا`,
+      `${restStem}ْتُنَّ`,
+      `${restStem}ْتُ`,
+      `${restStem}ْنَا`,
+    ];
+  }
+
+  // Generic Naqis with يَ ending (e.g. رَضِيَ، خَشِيَ، بَقِيَ)
+  if (units.length >= 3 && lastPlain === 'ي' && units[units.length - 2]?.includes('ِ')) {
+    const base = units.slice(0, -1).join('');
+    return [
+      clean,
+      `${base}يَا`,
+      `${base.replace(/ِ$/, 'ُ')}وا`,
+      `${clean}تْ`,
+      `${clean}تَا`,
+      `${base}ينَ`,
+      `${base}يتَ`,
+      `${base}يتُمَا`,
+      `${base}يتُمْ`,
+      `${base}يتِ`,
+      `${base}يتُمَا`,
+      `${base}يتُنَّ`,
+      `${base}يتُ`,
+      `${base}ينَا`,
+    ];
+  }
+
+  // Generic Ajwaf: penultimate unit is bare ا (e.g. جَالَ، بَاعَ، أَقَامَ، اِخْتَارَ، اِسْتَغَاثَ)
+  const penult = units[units.length - 2];
+  if (units.length >= 3 && penult && stripHarakat(penult) === 'ا') {
+    const beforeAlif = units.slice(0, -2);
+    const prevBeforeAlif = beforeAlif[beforeAlif.length - 1] || '';
+    const prevCharPlain = stripHarakat(prevBeforeAlif);
+    const prefixStart = beforeAlif.slice(0, -1).join('');
+    let shortVowel = 'َ';
+    if (units.length === 3) {
+      shortVowel = mudariHint?.includes('ُو') ? 'ُ' : 'ِ';
+    } else if (clean.startsWith('أَ') || clean.startsWith('اِسْتَ')) {
+      shortVowel = 'َ';
+    } else if (clean.startsWith('اِ')) {
+      shortVowel = 'َ';
+    }
+    const shortStem = `${prefixStart}${prevCharPlain}${shortVowel}${lastPlain}`;
+    const femPl = lastPlain === 'ن' ? `${prefixStart}${prevCharPlain}${shortVowel}نَّ` : `${shortStem}ْنَ`;
+    return [
+      clean,
+      `${clean}ا`.replace(/َ$/, '') === clean ? `${clean}ا` : `${units.slice(0, -1).join('')}${lastPlain}َا`,
+      `${units.slice(0, -1).join('')}${lastPlain}ُوا`,
+      `${clean}تْ`,
+      `${clean}تَا`,
+      femPl,
+      `${shortStem}ْتَ`,
+      `${shortStem}ْتُمَا`,
+      `${shortStem}ْتُمْ`,
+      `${shortStem}ْتِ`,
+      `${shortStem}ْتُمَا`,
+      `${shortStem}ْتُنَّ`,
+      `${shortStem}ْتُ`,
+      `${shortStem}ْنَا`,
+    ];
+  }
+
   const stemUnits = units.slice(0, -1);
   const stemBase = stemUnits.join('');
 
@@ -167,7 +280,7 @@ function conjugateRegularMadi(madiAr: string): string[] {
   ];
 }
 
-function conjugateRegularMudari(mudariAr: string): string[] {
+function conjugateRegularMudari(mudariAr: string, sarfType?: MasdarEntry['sarfType']): string[] {
   const clean = mudariAr.trim();
   if (EXPLICIT_MUDARI_14[clean]) return EXPLICIT_MUDARI_14[clean];
 
@@ -179,13 +292,126 @@ function conjugateRegularMudari(mudariAr: string): string[] {
   const hasDammaPrefix = firstUnit.includes('ُ');
   const prefixVowel = hasDammaPrefix ? 'ُ' : 'َ';
   const bodyUnits = units.slice(1);
-  const bodyWithoutLast = bodyUnits.slice(0, -1).join('');
-  const lastPlain = stripHarakat(bodyUnits[bodyUnits.length - 1]);
+  const lastBody = bodyUnits[bodyUnits.length - 1];
+  const lastPlain = stripHarakat(lastBody);
 
   const yPrefix = `ي${prefixVowel}`;
   const tPrefix = `ت${prefixVowel}`;
   const nPrefix = `ن${prefixVowel}`;
   const aPrefix = hasDammaPrefix ? 'أُ' : 'أَ';
+
+  // Generic Naqis / Lafif mudari (ends in و / ي / ى)
+  if (lastPlain === 'و' || lastPlain === 'ي' || lastPlain === 'ى') {
+    const stemUnits = bodyUnits.slice(0, -1);
+    const stemStr = stemUnits.join('');
+    const tailPrev = stripHarakat(stemUnits[stemUnits.length - 1] || '');
+    const beforeTail = stemUnits.slice(0, -1).join('');
+
+    if (lastPlain === 'و') {
+      const mPlStem = `${beforeTail}${tailPrev}ُ`;
+      return [
+        `${yPrefix}${stemStr}و`,
+        `${yPrefix}${stemStr}وَانِ`,
+        `${yPrefix}${mPlStem}ونَ`,
+        `${tPrefix}${stemStr}و`,
+        `${tPrefix}${stemStr}وَانِ`,
+        `${yPrefix}${mPlStem}ونَ`,
+        `${tPrefix}${stemStr}و`,
+        `${tPrefix}${stemStr}وَانِ`,
+        `${tPrefix}${mPlStem}ونَ`,
+        `${tPrefix}${beforeTail}${tailPrev}ِينَ`,
+        `${tPrefix}${stemStr}وَانِ`,
+        `${tPrefix}${mPlStem}ونَ`,
+        `${aPrefix}${stemStr}و`,
+        `${nPrefix}${stemStr}و`,
+      ];
+    }
+    if (lastPlain === 'ى') {
+      const dualStem = `${stemStr}ي`;
+      const mPl = `${beforeTail}${tailPrev}َوْنَ`;
+      const fSg2 = `${beforeTail}${tailPrev}َيْنَ`;
+      const fPl = `${beforeTail}${tailPrev}َيْنَ`;
+      return [
+        `${yPrefix}${stemStr}ى`,
+        `${yPrefix}${dualStem}َانِ`,
+        `${yPrefix}${mPl}`,
+        `${tPrefix}${stemStr}ى`,
+        `${tPrefix}${dualStem}َانِ`,
+        `${yPrefix}${fPl}`,
+        `${tPrefix}${stemStr}ى`,
+        `${tPrefix}${dualStem}َانِ`,
+        `${tPrefix}${mPl}`,
+        `${tPrefix}${fSg2}`,
+        `${tPrefix}${dualStem}َانِ`,
+        `${tPrefix}${fPl}`,
+        `${aPrefix}${stemStr}ى`,
+        `${nPrefix}${stemStr}ى`,
+      ];
+    }
+    // ي ending (e.g., يَهْدِي، يَقِي، يُرَبِّي)
+    const mPl = `${beforeTail}${tailPrev}ُونَ`;
+    const fSg2 = `${beforeTail}${tailPrev}ِينَ`;
+    return [
+      `${yPrefix}${stemStr}ي`,
+      `${yPrefix}${stemStr}يَانِ`,
+      `${yPrefix}${mPl}`,
+      `${tPrefix}${stemStr}ي`,
+      `${tPrefix}${stemStr}يَانِ`,
+      `${yPrefix}${stemStr}ينَ`,
+      `${tPrefix}${stemStr}ي`,
+      `${tPrefix}${stemStr}يَانِ`,
+      `${tPrefix}${mPl}`,
+      `${tPrefix}${fSg2}`,
+      `${tPrefix}${stemStr}يَانِ`,
+      `${tPrefix}${stemStr}ينَ`,
+      `${aPrefix}${stemStr}ي`,
+      `${nPrefix}${stemStr}ي`,
+    ];
+  }
+
+  // Generic Mudaaf mudari (ends in shadda, e.g., يَبُلُّ، يَفِرُّ، يَسْتَقِرُّ)
+  if (lastBody.includes('ّ') || sarfType === 'Mudaaf') {
+    const prevBody = bodyUnits.slice(0, -1);
+    const stemBase = prevBody.join('');
+    const penult = prevBody[prevBody.length - 1] || '';
+    const openMidVowel = clean.includes('يَسْتَ') || clean.includes('يُحِ') || penult.includes('ِ') ? 'ِ' : penult.includes('ُ') ? 'ُ' : 'َ';
+    const d = (p: string) => `${p}${stemBase}${lastPlain}ُّ`;
+    const dual = (p: string) => `${p}${stemBase}${lastPlain}َّانِ`;
+    const mPl = (p: string) => `${p}${stemBase}${lastPlain}ُّونَ`;
+    const fSg2 = (p: string) => `${p}${stemBase}${lastPlain}ِّينَ`;
+    const fPl = (p: string) => `${p}${prevBody.slice(0, -1).join('')}${stripHarakat(penult)}ْ${lastPlain}${openMidVowel}${lastPlain}ْنَ`.replace('َّ', 'َ');
+    return [
+      d(yPrefix), dual(yPrefix), mPl(yPrefix),
+      d(tPrefix), dual(tPrefix), fPl(yPrefix),
+      d(tPrefix), dual(tPrefix), mPl(tPrefix),
+      fSg2(tPrefix), dual(tPrefix), fPl(tPrefix),
+      d(aPrefix), d(nPrefix),
+    ];
+  }
+
+  // Generic Ajwaf mudari (penultimate letter is long vowel و / ي / ا)
+  const penultBody = bodyUnits[bodyUnits.length - 2];
+  const penultPlain = penultBody ? stripHarakat(penultBody) : '';
+  if (bodyUnits.length >= 3 && (penultPlain === 'و' || penultPlain === 'ي' || penultPlain === 'ا')) {
+    const beforeLong = bodyUnits.slice(0, -2).join('');
+    const d = (p: string) => `${p}${beforeLong}${penultPlain}${lastPlain}ُ`;
+    const dual = (p: string) => `${p}${beforeLong}${penultPlain}${lastPlain}َانِ`;
+    const mPl = (p: string) => `${p}${beforeLong}${penultPlain}${lastPlain}ُونَ`;
+    const fSg2 = (p: string) => `${p}${beforeLong}${penultPlain}${lastPlain}ِينَ`;
+    const fPl = (p: string) =>
+      lastPlain === 'ن'
+        ? `${p}${beforeLong}نَّ`
+        : `${p}${beforeLong}${lastPlain}ْنَ`;
+    return [
+      d(yPrefix), dual(yPrefix), mPl(yPrefix),
+      d(tPrefix), dual(tPrefix), fPl(yPrefix),
+      d(tPrefix), dual(tPrefix), mPl(tPrefix),
+      fSg2(tPrefix), dual(tPrefix), fPl(tPrefix),
+      d(aPrefix), d(nPrefix),
+    ];
+  }
+
+  const bodyWithoutLast = bodyUnits.slice(0, -1).join('');
 
   const d = (p: string) => `${p}${bodyWithoutLast}${lastPlain}ُ`;
   const dual = (p: string) => `${p}${bodyWithoutLast}${lastPlain}َانِ`;
@@ -416,8 +642,8 @@ function buildAmrAndNahi6(entry: MasdarEntry, mudari14: string[]): AmrRow[] {
 }
 
 export function buildFullSarfPackage(entry: MasdarEntry): FullSarfPackage {
-  const madiMaruf = conjugateRegularMadi(entry.madiAr);
-  const mudariMaruf = conjugateRegularMudari(entry.mudariAr);
+  const madiMaruf = conjugateRegularMadi(entry.madiAr, entry.mudariAr, entry.sarfType);
+  const mudariMaruf = conjugateRegularMudari(entry.mudariAr, entry.sarfType);
   const madiMajhul = buildMajhulMadi(entry);
   const mudariMajhul = buildMajhulMudari(entry, mudariMaruf);
   const amrRows6 = buildAmrAndNahi6(entry, mudariMaruf);

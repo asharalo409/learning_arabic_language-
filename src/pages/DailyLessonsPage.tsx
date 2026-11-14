@@ -15,8 +15,10 @@ import {
 import { AppShell } from '../components/AppShell';
 import { AudioButton } from '../components/AudioButton';
 import { LessonAiPracticePanel } from '../components/LessonAiPracticePanel';
+import { QuickNahwText } from '../components/QuickNahwText';
 import { useApp } from '../context/AppContext';
 import { DAILY_LESSON_GROUPS, DailySentence } from '../data/dailyLessonsData';
+import { getDeduplicatedDailyLessonVocab } from '../utils/lessonVocabDedupe';
 
 type LessonTab = 'dialogue' | 'vocab' | 'grammar' | 'ai-practice';
 
@@ -25,6 +27,7 @@ export const DailyLessonsPage: React.FC = () => {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedLessonNum, setSelectedLessonNum] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<LessonTab>('dialogue');
+  const [nahwTipsEnabled, setNahwTipsEnabled] = useState(true);
 
   // AI 20-line dialogue expansion
   const [aiExpandedSentences, setAiExpandedSentences] = useState<Record<number, DailySentence[]>>({});
@@ -57,9 +60,17 @@ export const DailyLessonsPage: React.FC = () => {
       ? allLessonsFlat[currentFlatIndex + 1]
       : null;
 
+  const dedupedVocab = useMemo(
+    () =>
+      selectedLesson
+        ? getDeduplicatedDailyLessonVocab(selectedLesson.lessonNumber)
+        : { words: [], skippedPreviouslyTaughtCount: 0 },
+    [selectedLesson]
+  );
+
   const lessonScopeContext = useMemo(() => {
     if (!selectedLesson) return '';
-    const vocabLines = selectedLesson.newVocabulary
+    const vocabLines = dedupedVocab.words
       .map((v) => `- ${v.arabic} (${v.pronunciationBn}): ${v.meaningBn}${v.masdarNote ? ` [${v.masdarNote}]` : ''}`)
       .join('\n');
     const dialogueLines = activeSentences
@@ -73,7 +84,7 @@ export const DailyLessonsPage: React.FC = () => {
       `নতুন শব্দ ও মাসদার:\n${vocabLines}`,
       `সংলাপের অংশ:\n${dialogueLines}`,
     ].join('\n\n');
-  }, [selectedLesson, activeSentences]);
+  }, [selectedLesson, activeSentences, dedupedVocab.words]);
 
   const handleApplyOfflineTwentyLines = () => {
     if (!selectedLesson) return;
@@ -234,29 +245,32 @@ export const DailyLessonsPage: React.FC = () => {
             </div>
 
             <div className="space-y-3">
-              {selectedGroup.lessons.map((lesson) => (
-                <button
-                  key={lesson.lessonNumber}
-                  type="button"
-                  onClick={() => {
-                    setSelectedLessonNum(lesson.lessonNumber);
-                    setActiveTab('dialogue');
-                    setAiError(null);
-                  }}
-                  className="w-full surface-card rounded-2xl p-5 text-left flex items-center justify-between gap-4 hover:border-[var(--border-strong)] transition-colors"
-                >
-                  <div className="space-y-1.5">
-                    <div className="text-base font-bold text-[var(--accent)]">{lesson.titleBn}</div>
-                    <div className="text-xs text-[var(--text-secondary)]">
-                      ব্যাকরণ: {lesson.grammarRule.titleBn} ({lesson.grammarRule.sourceBook})
+              {selectedGroup.lessons.map((lesson) => {
+                const lessonVocabCount = getDeduplicatedDailyLessonVocab(lesson.lessonNumber).words.length;
+                return (
+                  <button
+                    key={lesson.lessonNumber}
+                    type="button"
+                    onClick={() => {
+                      setSelectedLessonNum(lesson.lessonNumber);
+                      setActiveTab('dialogue');
+                      setAiError(null);
+                    }}
+                    className="w-full surface-card rounded-2xl p-5 text-left flex items-center justify-between gap-4 hover:border-[var(--border-strong)] transition-colors"
+                  >
+                    <div className="space-y-1.5">
+                      <div className="text-base font-bold text-[var(--accent)]">{lesson.titleBn}</div>
+                      <div className="text-xs text-[var(--text-secondary)]">
+                        ব্যাকরণ: {lesson.grammarRule.titleBn} ({lesson.grammarRule.sourceBook})
+                      </div>
+                      <div className="text-xs text-[var(--text-muted)]">
+                        {lesson.sentences.length} লাইন কথোপকথন · {lessonVocabCount}টি নতুন শব্দ ও মাসদার · পাঠভিত্তিক AI চর্চা
+                      </div>
                     </div>
-                    <div className="text-xs text-[var(--text-muted)]">
-                      {lesson.sentences.length} লাইন কথোপকথন · {lesson.newVocabulary.length}টি নতুন শব্দ ও মাসদার · পাঠভিত্তিক AI চর্চা
-                    </div>
-                  </div>
-                  <BookOpen className="w-5 h-5 text-[var(--accent)] shrink-0" />
-                </button>
-              ))}
+                    <BookOpen className="w-5 h-5 text-[var(--accent)] shrink-0" />
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -332,55 +346,55 @@ export const DailyLessonsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Clean Single-Row Horizontal Underline Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto border-b border-[var(--border-subtle)] pb-px">
+            {/* Non-Clipping Responsive 4-Column Segmented Tabs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 rounded-2xl surface-alt border border-[var(--border-subtle)]">
               <button
                 type="button"
                 onClick={() => setActiveTab('dialogue')}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0 ${
+                className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all ${
                   activeTab === 'dialogue'
-                    ? 'border-[var(--accent)] text-[var(--accent)]'
-                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    ? 'bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
                 }`}
               >
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span>সংলাপ ({activeSentences.length})</span>
+                <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">সংলাপ ({activeSentences.length})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('vocab')}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0 ${
+                className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all ${
                   activeTab === 'vocab'
-                    ? 'border-[var(--accent)] text-[var(--accent)]'
-                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    ? 'bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
                 }`}
               >
-                <Layers className="w-3.5 h-3.5" />
-                <span>শব্দভাণ্ডার ({selectedLesson.newVocabulary.length})</span>
+                <Layers className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">শব্দ ({dedupedVocab.words.length})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('grammar')}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0 ${
+                className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all ${
                   activeTab === 'grammar'
-                    ? 'border-[var(--accent)] text-[var(--accent)]'
-                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    ? 'bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
                 }`}
               >
-                <GraduationCap className="w-3.5 h-3.5" />
-                <span>ব্যাকরণ</span>
+                <GraduationCap className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">ব্যাকরণ</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('ai-practice')}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0 ${
+                className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-all ${
                   activeTab === 'ai-practice'
-                    ? 'border-[var(--accent)] text-[var(--accent)]'
-                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                    ? 'bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
                 }`}
               >
-                <Bot className="w-3.5 h-3.5" />
-                <span>AI চর্চা</span>
+                <Bot className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">AI চর্চা</span>
               </button>
             </div>
 
@@ -410,10 +424,29 @@ export const DailyLessonsPage: React.FC = () => {
             {activeTab === 'dialogue' && (
               <div className="space-y-3">
                 <div className="surface-alt rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-xs text-[var(--text-secondary)]">
-                    সম্পূর্ণ কথোপকথন একটানা শুনুন অথবা প্রতিটি লাইন আলাদাভাবে অনুশীলন করুন:
+                  <div className="space-y-0.5 text-xs text-[var(--text-secondary)]">
+                    <div>সম্পূর্ণ কথোপকথন একটানা শুনুন অথবা প্রতিটি লাইন আলাদাভাবে অনুশীলন করুন:</div>
+                    {nahwTipsEnabled && (
+                      <div className="text-[11px] text-[var(--accent)]">
+                        ডট-দাগযুক্ত আরবি শব্দে ক্লিক করে দ্রুত নাহু নিয়ম দেখুন
+                      </div>
+                    )}
                   </div>
-                  <AudioButton text={activeSentences.map((s) => s.arabic).join(' ')} showSlow />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNahwTipsEnabled((v) => !v)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+                        nahwTipsEnabled
+                          ? 'bg-[var(--emerald-highlight)] text-[var(--accent)] border border-[var(--accent)]/40'
+                          : 'btn-secondary text-[var(--text-muted)]'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>নাহু টিপস: {nahwTipsEnabled ? 'চালু' : 'বন্ধ'}</span>
+                    </button>
+                    <AudioButton text={activeSentences.map((s) => s.arabic).join(' ')} showSlow />
+                  </div>
                 </div>
 
                 {activeSentences.map((sent, idx) => (
@@ -431,9 +464,11 @@ export const DailyLessonsPage: React.FC = () => {
                       <AudioButton text={sent.arabic} showSlow compact />
                     </div>
 
-                    <p className="font-arabic text-2xl sm:text-3xl text-[var(--accent)] text-right leading-relaxed" dir="rtl">
-                      {sent.arabic}
-                    </p>
+                    <QuickNahwText
+                      text={sent.arabic}
+                      enabled={nahwTipsEnabled}
+                      className="font-arabic text-2xl sm:text-3xl text-[var(--accent)] text-right leading-relaxed"
+                    />
 
                     <div className="space-y-1.5 pt-2 border-t border-[var(--border-subtle)]">
                       <div className="text-xs text-[var(--text-muted)]">
@@ -448,64 +483,92 @@ export const DailyLessonsPage: React.FC = () => {
               </div>
             )}
 
-            {/* Tab 2: New Vocabulary & Safwatul Masadir */}
+            {/* Tab 2: New Vocabulary & Safwatul Masadir (Sequential Non-Duplicating) */}
             {activeTab === 'vocab' && (
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 surface-alt rounded-xl p-4 text-xs text-[var(--text-secondary)]">
-                  <span>এই পাঠের নতুন শব্দভাণ্ডার এবং সফওয়াতুল মাসাদির থেকে সংশ্লিষ্ট ক্রিয়া-মূল:</span>
+                  <span>
+                    এই পাঠে ব্যবহৃত <strong className="text-[var(--accent)] font-mono-num">{dedupedVocab.words.length}টি</strong> নতুন শব্দ ও মাসদার
+                    {dedupedVocab.skippedPreviouslyTaughtCount > 0 && (
+                      <span className="text-[var(--text-muted)]">
+                        {' '}· পূর্ববর্তী পাঠে শেখা {dedupedVocab.skippedPreviouslyTaughtCount}টি শব্দ পুনরাবৃত্তি এড়াতে বাদ দেওয়া হয়েছে
+                      </span>
+                    )}
+                  </span>
                   <Link to="/safwatul-masadir" className="font-semibold text-[var(--accent)] hover:underline">
                     সম্পূর্ণ সফওয়াতুল মাসাদির দেখুন →
                   </Link>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {selectedLesson.newVocabulary.map((w, i) => (
-                    <div key={i} className="surface-card rounded-xl p-4 sm:p-5 space-y-2.5">
-                      <div className="flex items-start justify-between gap-3 pb-2 border-b border-[var(--border-subtle)]">
-                        <div className="space-y-1">
-                          <p className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]" dir="rtl">
-                            {w.arabic}
-                          </p>
-                          <div className="text-xs text-[var(--text-muted)]">
-                            উচ্চারণ: <span className="font-semibold text-[var(--text-primary)]">{w.pronunciationBn}</span>
+                {dedupedVocab.words.length === 0 ? (
+                  <div className="surface-card rounded-2xl p-6 text-center text-sm text-[var(--text-secondary)]">
+                    এই পাঠের ব্যবহৃত সকল শব্দ পূর্ববর্তী পাঠসমূহে ইতোমধ্যে যুক্ত হয়েছে।
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {dedupedVocab.words.map((w, i) => (
+                      <div key={i} className="surface-card rounded-xl p-4 sm:p-5 space-y-2.5">
+                        <div className="flex items-start justify-between gap-3 pb-2 border-b border-[var(--border-subtle)]">
+                          <div className="space-y-1">
+                            <p className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]" dir="rtl">
+                              {w.arabic}
+                            </p>
+                            <div className="text-xs text-[var(--text-muted)]">
+                              উচ্চারণ: <span className="font-semibold text-[var(--text-primary)]">{w.pronunciationBn}</span>
+                            </div>
                           </div>
+                          <AudioButton text={w.arabic} compact />
                         </div>
-                        <AudioButton text={w.arabic} compact />
-                      </div>
 
-                      <div className="space-y-1 text-sm">
-                        <div>
-                          <span className="text-xs text-[var(--text-muted)]">বাংলা অর্থ: </span>
-                          <span className="font-bold text-[var(--text-primary)]">{w.meaningBn}</span>
-                        </div>
-                        <div>
-                          <span className="text-xs text-[var(--text-muted)]">ইংরেজি: </span>
-                          <span className="text-xs text-[var(--text-secondary)]">{w.meaningEn}</span>
-                        </div>
-                        {w.masdarNote && (
+                        <div className="space-y-1 text-sm">
                           <div>
-                            <span className="text-xs text-[var(--text-muted)]">মাসদার / ব্যাকরণ নোট: </span>
-                            <span className="text-xs font-medium text-[var(--accent)]">{w.masdarNote}</span>
+                            <span className="text-xs text-[var(--text-muted)]">বাংলা অর্থ: </span>
+                            <span className="font-bold text-[var(--text-primary)]">{w.meaningBn}</span>
                           </div>
-                        )}
+                          <div>
+                            <span className="text-xs text-[var(--text-muted)]">ইংরেজি: </span>
+                            <span className="text-xs text-[var(--text-secondary)]">{w.meaningEn}</span>
+                          </div>
+                          {w.masdarNote && (
+                            <div>
+                              <span className="text-xs text-[var(--text-muted)]">মাসদার / ব্যাকরণ নোট: </span>
+                              <span className="text-xs font-medium text-[var(--accent)]">{w.masdarNote}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             {/* Tab 3: Classical Grammar Rule & Explanation */}
             {activeTab === 'grammar' && (
               <div className="surface-card rounded-2xl p-6 space-y-5">
-                <div className="space-y-2 pb-4 border-b border-[var(--border-subtle)]">
-                  <div className="text-xs font-semibold text-[var(--accent)]">
-                    উৎস কিতাব: {selectedLesson.grammarRule.sourceBook}
+                <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-[var(--border-subtle)]">
+                  <div className="space-y-2">
+                    <div className="text-xs font-semibold text-[var(--accent)]">
+                      উৎস কিতাব: {selectedLesson.grammarRule.sourceBook}
+                    </div>
+                    <p className="font-arabic text-2xl text-[var(--accent)]" dir="rtl">
+                      {selectedLesson.grammarRule.titleAr}
+                    </p>
+                    <h3 className="text-lg font-bold">{selectedLesson.grammarRule.titleBn}</h3>
                   </div>
-                  <p className="font-arabic text-2xl text-[var(--accent)]" dir="rtl">
-                    {selectedLesson.grammarRule.titleAr}
-                  </p>
-                  <h3 className="text-lg font-bold">{selectedLesson.grammarRule.titleBn}</h3>
+
+                  <button
+                    type="button"
+                    onClick={() => setNahwTipsEnabled((v) => !v)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+                      nahwTipsEnabled
+                        ? 'bg-[var(--emerald-highlight)] text-[var(--accent)] border border-[var(--accent)]/40'
+                        : 'btn-secondary text-[var(--text-muted)]'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>নাহু টিপস: {nahwTipsEnabled ? 'চালু' : 'বন্ধ'}</span>
+                  </button>
                 </div>
 
                 <div className="text-sm sm:text-base text-[var(--text-secondary)] leading-relaxed">
@@ -514,12 +577,16 @@ export const DailyLessonsPage: React.FC = () => {
 
                 <div className="surface-alt rounded-xl p-4 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-[var(--accent)]">প্রয়োগ ও উদাহরণ:</span>
+                    <span className="text-xs font-semibold text-[var(--accent)]">
+                      প্রয়োগ ও উদাহরণ{nahwTipsEnabled ? ' (ক্লিকযোগ্য নাহু টিপস সহ)' : ''}:
+                    </span>
                     <AudioButton text={selectedLesson.grammarRule.exampleAr} compact />
                   </div>
-                  <p className="font-arabic text-2xl text-[var(--text-primary)]" dir="rtl">
-                    {selectedLesson.grammarRule.exampleAr}
-                  </p>
+                  <QuickNahwText
+                    text={selectedLesson.grammarRule.exampleAr}
+                    enabled={nahwTipsEnabled}
+                    className="font-arabic text-2xl text-[var(--text-primary)]"
+                  />
                   <p className="text-sm text-[var(--text-secondary)]">
                     <span className="text-xs text-[var(--text-muted)]">অর্থ ও ব্যাখ্যা: </span>
                     {selectedLesson.grammarRule.exampleBn}

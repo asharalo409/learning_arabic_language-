@@ -1,10 +1,53 @@
 import React, { useState } from 'react';
-import { Bell, Check, RotateCcw, Sparkles, Volume2, VolumeX } from 'lucide-react';
+import {
+  Award,
+  Bell,
+  BookOpen,
+  Check,
+  Compass,
+  Crown,
+  Flame,
+  GraduationCap,
+  Layers,
+  Lock,
+  Monitor,
+  Moon,
+  RotateCcw,
+  Sliders,
+  Sparkles,
+  Star,
+  Sun,
+  Trophy,
+  UserCheck,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import { AppShell } from '../components/AppShell';
 import { PWAInstallButton } from '../components/PWAInstallButton';
-import { useApp } from '../context/AppContext';
-import { InterfaceLang, LearningTrack, ThemeMode, VoiceGender } from '../types/academy';
-import { speakText } from '../utils/speech';
+import { BADGE_DEFINITIONS, BadgeIconName, useApp } from '../context/AppContext';
+import { ColorSchemeMode, InterfaceLang, LearningTrack, ThemeMode, VoiceGender } from '../types/academy';
+import {
+  getSpeechTuning,
+  setSpeechTuning,
+  speakBilingualText,
+  speakText,
+  SpeechTuning,
+  VOICE_EMOTION_PRESETS,
+  VoiceEmotion,
+} from '../utils/speech';
+
+const BADGE_ICONS: Record<BadgeIconName, React.ComponentType<{ className?: string }>> = {
+  sparkles: Sparkles,
+  book: BookOpen,
+  compass: Compass,
+  layers: Layers,
+  award: Award,
+  graduation: GraduationCap,
+  crown: Crown,
+  flame: Flame,
+  trophy: Trophy,
+  star: Star,
+};
 
 const ALL_THEMES: { id: ThemeMode; swatch: string; accent: string }[] = [
   { id: 'sky-cloud', swatch: '#bae6fd', accent: '#0284c7' },
@@ -24,9 +67,14 @@ export const ProfilePage: React.FC = () => {
     setLang,
     theme,
     setTheme,
+    colorScheme,
+    setColorScheme,
+    resolvedDarkMode,
+    osPrefersDark,
     backdropIntensity,
     setBackdropIntensity,
     progress,
+    currentLevelNumber,
     updateProfile,
     resetProgress,
     soundEnabled,
@@ -40,9 +88,15 @@ export const ProfilePage: React.FC = () => {
     openWelcome,
   } = useApp();
 
+  const earnedBadgeSet = new Set(progress.unlockedBadgeIds);
+  const earnedCount = BADGE_DEFINITIONS.filter((b) => earnedBadgeSet.has(b.id) || b.check(progress)).length;
+  const totalBadges = BADGE_DEFINITIONS.length;
+  const badgePct = Math.round((earnedCount / totalBadges) * 100);
+
   const [name, setName] = useState(progress.studentName);
   const [track, setTrack] = useState<LearningTrack>(progress.preferredTrack);
   const [voiceGender, setVoiceGender] = useState<VoiceGender>(progress.voiceGender || 'male');
+  const [speechTuning, setSpeechTuningState] = useState<SpeechTuning>(() => getSpeechTuning());
   const [dailyMins, setDailyMins] = useState(progress.dailyTargetMinutes);
   const [savedToast, setSavedToast] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -62,13 +116,17 @@ export const ProfilePage: React.FC = () => {
   const handleSelectVoiceGender = (gender: VoiceGender) => {
     setVoiceGender(gender);
     updateProfile({ voiceGender: gender });
-    speakText(
+    speakBilingualText(
       gender === 'male'
-        ? 'আসসালামু আলাইকুম, আমি এখন পুরুষ কণ্ঠে আরবি ও বাংলা পড়াব।'
-        : 'আসসালামু আলাইকুম, আমি এখন নারী কণ্ঠে আরবি ও বাংলা পড়াব।',
-      'bn-BD',
+        ? 'السَّلَامُ عَلَيْكُمْ، أَنَا أُسْتَاذُ اللُّغَةِ الْعَرَبِيَّةِ। আসসালামু আলাইকুম, আমি এখন পুরুষ (উস্তায) কণ্ঠে আরবি ও বাংলা পড়াব।'
+        : 'السَّلَامُ عَلَيْكُمْ، أَنَا أُسْتَاذَةُ اللُّغَةِ الْعَرَبِيَّةِ। আসসালামু আলাইকুম, আমি এখন নারী (উস্তাধা) কণ্ঠে আরবি ও বাংলা পড়াব।',
       { voiceGender: gender }
     );
+  };
+
+  const handleTuningChange = (updates: Partial<SpeechTuning>) => {
+    const next = setSpeechTuning(updates);
+    setSpeechTuningState(next);
   };
 
   return (
@@ -80,7 +138,98 @@ export const ProfilePage: React.FC = () => {
           : 'Manage your profile, 8 living themes, sound effects, notifications, and phone installation'
       }
     >
-      <div className="max-w-3xl space-y-6">
+      <div className="max-w-4xl space-y-6">
+        {/* User Achievements & Visual Badge Gallery */}
+        <section className="surface-card rounded-3xl p-6 space-y-5 border border-[var(--border-strong)]">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--accent)]">
+                <Trophy className="w-4 h-4" />
+                <span>অর্জন ও সম্মাননা (User Achievements)</span>
+              </div>
+              <h2 className="text-xl font-bold">
+                অর্জিত ব্যাজ: {earnedCount}/{totalBadges}টি · লেভেল {currentLevelNumber}
+              </h2>
+              <p className="text-xs text-[var(--text-secondary)]">
+                পাঠ, নাহু-ছরফ ব্যাকরণ ও শব্দভাণ্ডার (SRS) মাইলফলক পূর্ণ হলে স্বয়ংক্রিয়ভাবে ব্যাজ আনলক হয়
+              </p>
+            </div>
+
+            <div className="min-w-[160px] surface-alt rounded-2xl px-4 py-3 text-right space-y-1">
+              <div className="text-xs font-mono-num font-bold text-[var(--accent)]">
+                {progress.xp} XP · {badgePct}%
+              </div>
+              <div className="w-full h-2 rounded-full bg-[var(--bg-canvas)] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-amber-400 transition-all duration-500"
+                  style={{ width: `${Math.max(8, badgePct)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {BADGE_DEFINITIONS.map((badge) => {
+              const unlocked = earnedBadgeSet.has(badge.id) || badge.check(progress);
+              const { current, target } = badge.getProgress(progress);
+              const pct = Math.min(100, Math.round((current / Math.max(1, target)) * 100));
+              const Icon = BADGE_ICONS[badge.iconName];
+
+              return (
+                <div
+                  key={badge.id}
+                  className={`rounded-2xl p-4 border transition-all flex flex-col justify-between gap-3 ${
+                    unlocked
+                      ? 'surface-alt border-[var(--border-strong)] shadow-sm'
+                      : 'bg-[var(--bg-canvas)]/55 border-[var(--border-subtle)] opacity-75'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
+                        unlocked
+                          ? `bg-gradient-to-br ${badge.accentGrad} text-white`
+                          : 'bg-[var(--bg-surface-alt)] text-[var(--text-muted)] border border-[var(--border-subtle)]'
+                      }`}
+                    >
+                      {unlocked ? <Icon className="w-6 h-6" /> : <Lock className="w-5 h-5" />}
+                    </div>
+
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span
+                          className={`text-[10px] font-bold uppercase tracking-wider ${
+                            unlocked ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--text-muted)]'
+                          }`}
+                        >
+                          {unlocked ? '● অর্জিত' : 'লক করা'}
+                        </span>
+                        <span className="text-[11px] font-mono-num text-[var(--text-muted)]">
+                          {current}/{target}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-bold leading-snug text-[var(--text-primary)]">
+                        {lang === 'bn' ? badge.titleBn : badge.titleEn}
+                      </h3>
+                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                        {lang === 'bn' ? badge.criteriaBn : badge.criteriaEn}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="w-full h-1.5 rounded-full bg-[var(--bg-surface)] overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        unlocked ? `bg-gradient-to-r ${badge.accentGrad}` : 'bg-[var(--text-muted)]/40'
+                      }`}
+                      style={{ width: `${Math.max(unlocked ? 100 : 4, pct)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
         <form onSubmit={handleSave} className="surface-card rounded-2xl p-6 space-y-5">
           <h2 className="text-lg font-bold">শিক্ষার্থীর তথ্য</h2>
 
@@ -121,12 +270,17 @@ export const ProfilePage: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-4 rounded-xl surface-alt border border-[var(--border-subtle)] space-y-3">
+          <div className="p-4 sm:p-5 rounded-2xl surface-alt border border-[var(--border-strong)] space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-semibold">AI ও অডিও কণ্ঠস্বর (ছেলে / মেয়ে)</div>
-                <div className="text-xs text-[var(--text-muted)]">
-                  এখান থেকে ছেলে বা মেয়ে নির্বাচন করলে AI রোবট ও সব পাঠের অডিও সেই কণ্ঠে কথা বলবে
+              <div className="flex items-start gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[var(--emerald-highlight)] text-[var(--accent)] flex items-center justify-center shrink-0">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold">AI শিক্ষক ও কথোপকথন কণ্ঠ সেটিংস (Voice Synthesis)</div>
+                  <div className="text-xs text-[var(--text-muted)]">
+                    পুরুষ (উস্তায) বা নারী (উস্তাধা) কণ্ঠ নির্বাচন করলে স্পিকিং প্র্যাকটিস, পাঠ অডিও ও AI শিক্ষকের সিন্থেসিস স্বয়ংক্রিয়ভাবে পরিবর্তিত হবে
+                  </div>
                 </div>
               </div>
               <button
@@ -134,42 +288,147 @@ export const ProfilePage: React.FC = () => {
                 onClick={() =>
                   speakText(
                     voiceGender === 'male'
-                      ? 'السَّلَامُ عَلَيْكُمْ، أَنَا مُعَلِّمُ اللُّغَةِ الْعَرَبِيَّةِ'
-                      : 'السَّلَامُ عَلَيْكُمْ، أَنَا مُعَلِّمَةُ اللُّغَةِ الْعَرَبِيَّةِ',
+                      ? 'السَّلَامُ عَلَيْكُمْ، أَنَا أُسْتَاذُكَ فِي اللُّغَةِ الْعَرَبِيَّةِ'
+                      : 'السَّلَامُ عَلَيْكُمْ، أَنَا أُسْتَاذَتُكَ فِي اللُّغَةِ الْعَرَبِيَّةِ',
                     'ar-SA',
                     { voiceGender }
                   )
                 }
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs btn-secondary"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold btn-secondary"
               >
                 <Volume2 className="w-3.5 h-3.5 text-[var(--accent)]" />
-                <span>কণ্ঠ পরীক্ষা করুন</span>
+                <span>আরবি কণ্ঠ পরীক্ষা</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => handleSelectVoiceGender('male')}
-                className={`py-2.5 px-4 rounded-xl text-xs font-bold border transition-all ${
+                className={`py-3 px-4 rounded-xl text-left border transition-all ${
                   voiceGender === 'male'
                     ? 'btn-primary border-transparent shadow-sm'
                     : 'btn-secondary border-[var(--border-subtle)]'
                 }`}
               >
-                ছেলে কণ্ঠ (পুরুষ)
+                <div className="text-xs font-bold">পুরুষ কণ্ঠ — উস্তায (Male AI Teacher)</div>
+                <div className="text-[11px] opacity-85 mt-0.5">গভীর স্বর (Pitch ~0.88) · আরবি أُسْتَاذ রূপ</div>
               </button>
               <button
                 type="button"
                 onClick={() => handleSelectVoiceGender('female')}
-                className={`py-2.5 px-4 rounded-xl text-xs font-bold border transition-all ${
+                className={`py-3 px-4 rounded-xl text-left border transition-all ${
                   voiceGender === 'female'
                     ? 'btn-primary border-transparent shadow-sm'
                     : 'btn-secondary border-[var(--border-subtle)]'
                 }`}
               >
-                মেয়ে কণ্ঠ (নারী)
+                <div className="text-xs font-bold">নারী কণ্ঠ — উস্তাধা (Female AI Teacher)</div>
+                <div className="text-[11px] opacity-85 mt-0.5">স্পষ্ট উজ্জ্বল স্বর (Pitch ~1.12) · আরবি أُسْتَاذَة রূপ</div>
               </button>
+            </div>
+
+            {/* Dynamic Synthesis Speed, Pitch & Emotion Tuning */}
+            <div className="pt-3 border-t border-[var(--border-subtle)] space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="inline-flex items-center gap-1.5 font-semibold">
+                      <Sliders className="w-3.5 h-3.5 text-[var(--accent)]" />
+                      <span>উচ্চারণের গতি (Rate)</span>
+                    </span>
+                    <span className="font-mono-num font-bold text-[var(--accent)]">
+                      {speechTuning.rateMultiplier.toFixed(2)}x
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.7}
+                    max={1.35}
+                    step={0.05}
+                    value={speechTuning.rateMultiplier}
+                    onChange={(e) => handleTuningChange({ rateMultiplier: Number(e.target.value) })}
+                    className="w-full accent-[var(--accent)] cursor-pointer"
+                  />
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { label: 'ধীরে 0.8x', val: 0.8 },
+                      { label: 'স্বাভাবিক 1.0x', val: 1.0 },
+                      { label: 'দ্রুত 1.15x', val: 1.15 },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => handleTuningChange({ rateMultiplier: preset.val })}
+                        className={`flex-1 py-1 px-2 rounded-lg text-[11px] font-semibold border transition-colors ${
+                          Math.abs(speechTuning.rateMultiplier - preset.val) < 0.04
+                            ? 'btn-primary border-transparent'
+                            : 'bg-[var(--bg-canvas)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold">স্বরের পিচ (Pitch Fine-Tune)</span>
+                    <span className="font-mono-num font-bold text-[var(--accent)]">
+                      {speechTuning.pitchOffset >= 0 ? '+' : ''}
+                      {speechTuning.pitchOffset.toFixed(2)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={-0.3}
+                    max={0.3}
+                    step={0.03}
+                    value={speechTuning.pitchOffset}
+                    onChange={(e) => handleTuningChange({ pitchOffset: Number(e.target.value) })}
+                    className="w-full accent-[var(--accent)] cursor-pointer"
+                  />
+                  <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                    <span>গভীর (-0.30)</span>
+                    <button
+                      type="button"
+                      onClick={() => handleTuningChange({ pitchOffset: 0 })}
+                      className="text-[var(--accent)] hover:underline font-semibold"
+                    >
+                      রিসেট (0.00)
+                    </button>
+                    <span>তীক্ষ্ণ (+0.30)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="text-xs font-semibold text-[var(--text-primary)]">
+                  কণ্ঠের ভাব ও ভঙ্গি (Emotion / Speaking Style)
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {(['formal', 'friendly', 'encouraging'] as VoiceEmotion[]).map((em) => {
+                    const info = VOICE_EMOTION_PRESETS[em];
+                    const active = (speechTuning.emotion || 'formal') === em;
+                    return (
+                      <button
+                        key={em}
+                        type="button"
+                        onClick={() => handleTuningChange({ emotion: em })}
+                        className={`p-2.5 rounded-xl border text-left transition-all ${
+                          active
+                            ? 'btn-primary border-transparent shadow-sm'
+                            : 'bg-[var(--bg-canvas)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        <div className="text-xs font-bold">{info.labelBn}</div>
+                        <div className="text-[11px] opacity-85 mt-0.5">{info.descBn}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -185,9 +444,51 @@ export const ProfilePage: React.FC = () => {
           </div>
         </form>
 
-        {/* 8 Theme Switcher & Language Preferences */}
+        {/* Appearance Mode (System Auto + Manual Override) & 8 Theme Switcher */}
         <div className="surface-card rounded-2xl p-6 space-y-5">
-          <h2 className="text-lg font-bold">থিম (৮টি জীবন্ত থিম) ও ইন্টারফেস ভাষা</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-bold">ডার্ক মোড (OS + ম্যানুয়াল), থিম ও ভাষা</h2>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                আপনার ডিভাইসের OS মোড: <strong>{osPrefersDark ? 'ডার্ক' : 'লাইট'}</strong> · বর্তমানে সক্রিয়:{' '}
+                <strong>{resolvedDarkMode ? 'ডার্ক মোড' : 'লাইট মোড'}</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-[var(--text-muted)]">সিস্টেম-ব্যাপী মোড (Color Scheme)</div>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { id: 'system', label: 'সিস্টেম অটো', sub: osPrefersDark ? 'OS: ডার্ক' : 'OS: লাইট', icon: Monitor },
+                  { id: 'light', label: 'লাইট মোড', sub: 'উজ্জ্বল দিন', icon: Sun },
+                  { id: 'dark', label: 'ডার্ক মোড', sub: 'সন্ধ্যা/রাত', icon: Moon },
+                ] as { id: ColorSchemeMode; label: string; sub: string; icon: typeof Monitor }[]
+              ).map((opt) => {
+                const Icon = opt.icon;
+                const active = colorScheme === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setColorScheme(opt.id)}
+                    className={`p-3 rounded-xl border text-left transition-all flex items-center gap-2.5 ${
+                      active
+                        ? 'btn-primary border-transparent shadow-sm'
+                        : 'btn-secondary border-[var(--border-subtle)]'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold truncate">{opt.label}</div>
+                      <div className="text-[10px] opacity-80 truncate">{opt.sub}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div className="space-y-2">
             <div className="text-xs text-[var(--text-muted)]">{t.sidebar.theme}</div>

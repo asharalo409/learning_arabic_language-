@@ -4,6 +4,7 @@ import {
   AdminCustomContent,
   BackdropIntensity,
   ChapterInfo,
+  ColorSchemeMode,
   DetailedLesson,
   ExamHistoryEntry,
   ExamQuestion,
@@ -11,13 +12,22 @@ import {
   StudentProgress,
   ThemeMode,
   VocabItem,
+  WeeklyDayActivity,
 } from '../types/academy';
 import { I18N, Translations } from '../data/i18n';
 import { CURRICULUM_CHAPTERS } from '../data/curriculum';
 import { DETAILED_LESSONS } from '../data/detailedLessons';
-import { EXAM_QUESTION_BANK, VOCABULARY_BANK } from '../data/practiceAndVocabData';
+import { EXAM_QUESTION_BANK } from '../data/practiceAndVocabData';
+import { computeSm2Next, CURRICULUM_VOCAB_DECK, Sm2Quality } from '../data/curriculumVocabDeck';
 import { isSoundEnabled, playSound, setSoundEnabledPref, SoundEffectType } from '../utils/soundEffects';
 import { setPreferredVoiceGender } from '../utils/speech';
+import { normalizeArabicTokenKey } from '../utils/lessonVocabDedupe';
+import {
+  buildSegmentsFromDetailedLesson,
+  extractMissingWordsFromSegments,
+  ReadingSegmentInput,
+  scheduleBackgroundVocabWork,
+} from '../utils/vocabAutoSync';
 import {
   AcademyNotification,
   dispatchBrowserNotification,
@@ -33,23 +43,104 @@ import { useAuth } from './AuthContext';
 
 const STORAGE_KEYS = {
   theme: 'aaa_theme_v1',
+  colorScheme: 'aaa_color_scheme_v1',
+  preferredLightTheme: 'aaa_pref_light_theme_v1',
+  preferredDarkTheme: 'aaa_pref_dark_theme_v1',
   backdrop: 'aaa_backdrop_intensity_v1',
   lang: 'aaa_lang_v1',
   progress: 'aaa_progress_v1',
   admin: 'aaa_admin_content_v1',
-  welcomeSeen: 'aaa_welcome_session_v1',
+  welcomeSeen: 'aaa_welcome_seen_forever_v1',
+  dailyStudyLog: 'aaa_daily_study_log_v1',
+  weeklyActivity: 'aaa_weekly_activity_v1',
 };
 
-const VALID_THEMES: ThemeMode[] = [
-  'sky-cloud',
-  'emerald',
-  'midnight',
-  'light',
-  'madinah',
-  'kaaba',
-  'parchment',
-  'andalus',
-];
+type WeeklyActivityStore = Record<string, { minutesStudied: number; vocabLearned: number }>;
+
+function dateKeyDaysAgo(daysBack: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysBack);
+  return d.toISOString().slice(0, 10);
+}
+
+function readWeeklyActivityMap(initialTodayMinutes: number): WeeklyActivityStore {
+  const today = todayDateKey();
+  if (typeof window === 'undefined') {
+    return { [today]: { minutesStudied: initialTodayMinutes, vocabLearned: 0 } };
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.weeklyActivity);
+    if (!raw) {
+      return { [today]: { minutesStudied: initialTodayMinutes, vocabLearned: 0 } };
+    }
+    const parsed = JSON.parse(raw) as WeeklyActivityStore;
+    const todayEntry = parsed[today] || { minutesStudied: 0, vocabLearned: 0 };
+    return {
+      ...parsed,
+      [today]: {
+        minutesStudied: Math.max(todayEntry.minutesStudied || 0, initialTodayMinutes),
+        vocabLearned: todayEntry.vocabLearned || 0,
+      },
+    };
+  } catch {
+    return { [today]: { minutesStudied: initialTodayMinutes, vocabLearned: 0 } };
+  }
+}
+
+function saveWeeklyActivityMap(map: WeeklyActivityStore): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const cutoff = dateKeyDaysAgo(30);
+    const pruned: WeeklyActivityStore = {};
+    Object.entries(map).forEach(([date, val]) => {
+      if (date >= cutoff) {
+        pruned[date] = {
+          minutesStudied: Math.max(0, Math.round(val.minutesStudied || 0)),
+          vocabLearned: Math.max(0, Math.round(val.vocabLearned || 0)),
+        };
+      }
+    });
+    localStorage.setItem(STORAGE_KEYS.weeklyActivity, JSON.stringify(pruned));
+  } catch {
+    // ignore
+  }
+}
+
+function readTodayMinutes(): number {
+  if (typeof window === 'undefined') return 5;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.dailyStudyLog);
+    if (!raw) return 5;
+    const parsed = JSON.parse(raw) as { date?: string; minutes?: number };
+    if (parsed.date === todayDateKey() && typeof parsed.minutes === 'number') {
+      return Math.max(0, parsed.minutes);
+    }
+    return 0;
+  } catch {
+    return 5;
+  }
+}
+
+function saveTodayMinutes(minutes: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(
+      STORAGE_KEYS.dailyStudyLog,
+      JSON.stringify({ date: todayDateKey(), minutes: Math.max(0, minutes) })
+    );
+  } catch {
+    // ignore
+  }
+}
+
+const LIGHT_THEMES: ThemeMode[] = ['sky-cloud', 'light', 'parchment'];
+const DARK_THEMES: ThemeMode[] = ['emerald', 'midnight', 'madinah', 'kaaba', 'andalus'];
+
+export function isLightThemeMode(mode: ThemeMode): boolean {
+  return LIGHT_THEMES.includes(mode);
+}
+
+const VALID_THEMES: ThemeMode[] = [...LIGHT_THEMES, ...DARK_THEMES];
 
 const THEME_BAR_COLORS: Record<ThemeMode, string> = {
   'sky-cloud': '#dff2ff',
@@ -92,6 +183,7 @@ export function getDefaultProgress(name = 'প্রিয় শিক্ষার
       },
     ],
     unlockedBadgeIds: ['starter-niyyah'],
+    personalVocab: [],
   };
 }
 
@@ -104,13 +196,28 @@ function getDefaultAdminContent(): AdminCustomContent {
   };
 }
 
+export type BadgeIconName =
+  | 'sparkles'
+  | 'book'
+  | 'compass'
+  | 'layers'
+  | 'award'
+  | 'graduation'
+  | 'crown'
+  | 'flame'
+  | 'trophy'
+  | 'star';
+
 export interface BadgeDefinition {
   id: string;
   titleBn: string;
   titleEn: string;
   criteriaBn: string;
   criteriaEn: string;
+  iconName: BadgeIconName;
+  accentGrad: string;
   check: (p: StudentProgress) => boolean;
+  getProgress: (p: StudentProgress) => { current: number; target: number };
 }
 
 export const BADGE_DEFINITIONS: BadgeDefinition[] = [
@@ -118,9 +225,12 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     id: 'starter-niyyah',
     titleBn: 'বিশুদ্ধ নিয়ত (প্রথম পদক্ষেপ)',
     titleEn: 'First Step Scholar',
-    criteriaBn: 'একাডেমিতে যাত্রা শুরু করা',
+    criteriaBn: 'একাডেমিতে আরবি শেখার যাত্রা শুরু করা',
     criteriaEn: 'Started learning at AI Arabic Academy',
+    iconName: 'sparkles',
+    accentGrad: 'from-emerald-500 to-teal-600',
     check: () => true,
+    getProgress: () => ({ current: 1, target: 1 }),
   },
   {
     id: 'first-lesson',
@@ -128,7 +238,21 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     titleEn: 'Lesson Pioneer',
     criteriaBn: 'কমপক্ষে ১টি পূর্ণাঙ্গ পাঠ সম্পন্ন করা',
     criteriaEn: 'Complete at least 1 lesson',
+    iconName: 'book',
+    accentGrad: 'from-sky-500 to-blue-600',
     check: (p) => p.completedLessonIds.length >= 1,
+    getProgress: (p) => ({ current: Math.min(1, p.completedLessonIds.length), target: 1 }),
+  },
+  {
+    id: 'curriculum-explorer',
+    titleBn: 'পাঠ্যক্রম অভিযাত্রী',
+    titleEn: 'Curriculum Explorer',
+    criteriaBn: '১০০ অধ্যায়ের সিলেবাস থেকে ৫টি পাঠ সম্পন্ন করা',
+    criteriaEn: 'Complete 5 lessons from the 100-chapter curriculum',
+    iconName: 'compass',
+    accentGrad: 'from-cyan-500 to-indigo-600',
+    check: (p) => p.completedLessonIds.length >= 5,
+    getProgress: (p) => ({ current: Math.min(5, p.completedLessonIds.length), target: 5 }),
   },
   {
     id: 'vocab-keeper',
@@ -136,7 +260,25 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     titleEn: 'Lexicon Keeper',
     criteriaBn: '৫টি আরবি শব্দ অনুশীলন বা প্রিয় তালিকায় যোগ করা',
     criteriaEn: 'Practice or favorite 5+ vocabulary words',
+    iconName: 'layers',
+    accentGrad: 'from-teal-500 to-emerald-600',
     check: (p) => Object.keys(p.vocabProgress).length >= 5,
+    getProgress: (p) => ({ current: Math.min(5, Object.keys(p.vocabProgress).length), target: 5 }),
+  },
+  {
+    id: 'vocab-expert',
+    titleBn: 'শব্দভাণ্ডার বিশেষজ্ঞ (Vocabulary Expert)',
+    titleEn: 'Vocabulary Expert',
+    criteriaBn: '২০টি শব্দ অনুশীলন বা ৮টি শব্দ SRS-এ আয়ত্ত করা',
+    criteriaEn: 'Practice 20+ words or master 8+ SM-2 flashcards',
+    iconName: 'award',
+    accentGrad: 'from-amber-500 to-orange-600',
+    check: (p) => {
+      const entries = Object.values(p.vocabProgress);
+      const mastered = entries.filter((v) => v.repetitions >= 2).length;
+      return entries.length >= 20 || mastered >= 8;
+    },
+    getProgress: (p) => ({ current: Math.min(20, Object.keys(p.vocabProgress).length), target: 20 }),
   },
   {
     id: 'nahw-explorer',
@@ -144,7 +286,34 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     titleEn: 'Grammar Explorer',
     criteriaBn: '৩টি ব্যাকরণ অধ্যায় সম্পন্ন করা',
     criteriaEn: 'Complete 3 grammar topics',
+    iconName: 'graduation',
+    accentGrad: 'from-indigo-500 to-violet-600',
     check: (p) => p.completedGrammarIds.length >= 3,
+    getProgress: (p) => ({ current: Math.min(3, p.completedGrammarIds.length), target: 3 }),
+  },
+  {
+    id: 'grammar-master',
+    titleBn: 'ব্যাকরণ মাস্টার (Grammar Master)',
+    titleEn: 'Grammar Master',
+    criteriaBn: '৬টি নাহু-ছরফ মডিউল বা ৫+ ব্যাকরণ ও পাঠ সমন্বয়ে আয়ত্ত করা',
+    criteriaEn: 'Complete 6+ grammar modules (Nahw & Sarf mastery)',
+    iconName: 'crown',
+    accentGrad: 'from-purple-600 to-fuchsia-600',
+    check: (p) =>
+      p.completedGrammarIds.length >= 6 ||
+      (p.completedGrammarIds.length >= 4 && p.completedLessonIds.length >= 5),
+    getProgress: (p) => ({ current: Math.min(6, p.completedGrammarIds.length), target: 6 }),
+  },
+  {
+    id: 'streak-keeper',
+    titleBn: 'ধারাবাহিকতা রক্ষক (৩+ দিন)',
+    titleEn: '3-Day Streak Keeper',
+    criteriaBn: 'টানা ৩ দিন বা তার বেশি আরবি অনুশীলন বজায় রাখা',
+    criteriaEn: 'Maintain a 3+ day daily learning streak',
+    iconName: 'flame',
+    accentGrad: 'from-orange-500 to-rose-600',
+    check: (p) => p.streakDays >= 3,
+    getProgress: (p) => ({ current: Math.min(3, p.streakDays), target: 3 }),
   },
   {
     id: 'exam-achiever',
@@ -152,7 +321,13 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     titleEn: 'Quiz Achiever',
     criteriaBn: 'যেকোনো পরীক্ষায় ৭৫% বা তার বেশি নম্বর অর্জন',
     criteriaEn: 'Score 75%+ on any examination',
+    iconName: 'trophy',
+    accentGrad: 'from-yellow-500 to-amber-600',
     check: (p) => p.examHistory.some((e) => e.percentage >= 75),
+    getProgress: (p) => {
+      const best = p.examHistory.reduce((mx, e) => Math.max(mx, e.percentage), 0);
+      return { current: Math.min(75, Math.round(best)), target: 75 };
+    },
   },
   {
     id: 'daily-challenger',
@@ -160,13 +335,31 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     titleEn: 'Daily Challenger',
     criteriaBn: 'দৈনিক চ্যালেঞ্জ সম্পন্ন করা',
     criteriaEn: 'Complete a Daily Challenge',
+    iconName: 'star',
+    accentGrad: 'from-rose-500 to-pink-600',
     check: (p) => p.dailyChallengeCompletedDates.length >= 1,
+    getProgress: (p) => ({ current: Math.min(1, p.dailyChallengeCompletedDates.length), target: 1 }),
+  },
+  {
+    id: 'xp-champion',
+    titleBn: 'ইলম চ্যাম্পিয়ন (১,০০০ XP)',
+    titleEn: 'Knowledge Champion',
+    criteriaBn: 'সর্বমোট ১,০০০ XP পয়েন্ট অর্জন করা',
+    criteriaEn: 'Earn 1,000+ total XP across all academy activities',
+    iconName: 'crown',
+    accentGrad: 'from-emerald-600 to-cyan-600',
+    check: (p) => p.xp >= 1000,
+    getProgress: (p) => ({ current: Math.min(1000, p.xp), target: 1000 }),
   },
 ];
 
 interface AppContextValue {
   theme: ThemeMode;
   setTheme: (t: ThemeMode) => void;
+  colorScheme: ColorSchemeMode;
+  setColorScheme: (mode: ColorSchemeMode) => void;
+  resolvedDarkMode: boolean;
+  osPrefersDark: boolean;
   backdropIntensity: BackdropIntensity;
   setBackdropIntensity: (b: BackdropIntensity) => void;
   lang: InterfaceLang;
@@ -194,6 +387,9 @@ interface AppContextValue {
   openWelcome: () => void;
   dismissWelcome: () => void;
   progress: StudentProgress;
+  todayMinutesLearned: number;
+  weeklyActivity: WeeklyDayActivity[];
+  logStudyMinutes: (minutes: number) => void;
   currentLevelNumber: number;
   allChapters: ChapterInfo[];
   allDetailedLessons: Record<string, DetailedLesson>;
@@ -203,7 +399,7 @@ interface AppContextValue {
   awardXp: (amount: number, activity: Omit<ActivityLogEntry, 'id' | 'timestampIso' | 'xpEarned'>) => void;
   completeLesson: (lessonId: string, lessonTitleBn: string, lessonTitleEn: string) => void;
   completeGrammarTopic: (topicId: string, titleBn: string, titleEn: string) => void;
-  reviewVocabWord: (wordId: string, quality: 'again' | 'good' | 'easy') => void;
+  reviewVocabWord: (wordId: string, quality: Sm2Quality) => void;
   toggleFavoriteVocab: (wordId: string) => void;
   recordExamResult: (entry: Omit<ExamHistoryEntry, 'id' | 'dateIso'>) => void;
   completeDailyChallenge: (score: number, total: number) => void;
@@ -215,6 +411,9 @@ interface AppContextValue {
   saveCustomLesson: (lesson: DetailedLesson) => void;
   addCustomVocab: (item: VocabItem) => void;
   addCustomQuestion: (q: ExamQuestion) => void;
+  syncMissingVocabFromSegments: (segments: ReadingSegmentInput[]) => void;
+  globalGrammarEnabled: boolean;
+  setGlobalGrammarEnabled: (enabled: boolean) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -232,6 +431,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return saved && VALID_THEMES.includes(saved) ? saved : 'sky-cloud';
   });
 
+  const [colorScheme, setColorSchemeState] = useState<ColorSchemeMode>(() => {
+    if (typeof window === 'undefined') return 'system';
+    const savedScheme = localStorage.getItem(STORAGE_KEYS.colorScheme) as ColorSchemeMode | null;
+    if (savedScheme === 'system' || savedScheme === 'light' || savedScheme === 'dark') {
+      return savedScheme;
+    }
+    const legacyTheme = localStorage.getItem(STORAGE_KEYS.theme) as ThemeMode | null;
+    if (legacyTheme && VALID_THEMES.includes(legacyTheme)) {
+      return isLightThemeMode(legacyTheme) ? 'light' : 'dark';
+    }
+    return 'system';
+  });
+
+  const [preferredLightTheme, setPreferredLightTheme] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') return 'sky-cloud';
+    const saved = localStorage.getItem(STORAGE_KEYS.preferredLightTheme) as ThemeMode | null;
+    return saved && isLightThemeMode(saved) ? saved : 'sky-cloud';
+  });
+
+  const [preferredDarkTheme, setPreferredDarkTheme] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') return 'andalus';
+    const saved = localStorage.getItem(STORAGE_KEYS.preferredDarkTheme) as ThemeMode | null;
+    return saved && VALID_THEMES.includes(saved) && !isLightThemeMode(saved) ? saved : 'andalus';
+  });
+
+  const [osPrefersDark, setOsPrefersDark] = useState<boolean>(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => setOsPrefersDark(e.matches);
+    setOsPrefersDark(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  const resolvedDarkMode = useMemo(() => {
+    if (colorScheme === 'dark') return true;
+    if (colorScheme === 'light') return false;
+    return osPrefersDark;
+  }, [colorScheme, osPrefersDark]);
+
+  const effectiveTheme = useMemo<ThemeMode>(() => {
+    if (resolvedDarkMode) {
+      return isLightThemeMode(theme) ? preferredDarkTheme : theme;
+    }
+    return isLightThemeMode(theme) ? theme : preferredLightTheme;
+  }, [resolvedDarkMode, theme, preferredDarkTheme, preferredLightTheme]);
+
   const [backdropIntensity, setBackdropIntensityState] = useState<BackdropIntensity>(() => {
     if (typeof window === 'undefined') return 'vivid';
     const saved = localStorage.getItem(STORAGE_KEYS.backdrop) as BackdropIntensity | null;
@@ -244,6 +495,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return saved === 'en' || saved === 'ar' || saved === 'bn' ? saved : 'bn';
   });
 
+  const [globalGrammarEnabled, setGlobalGrammarEnabledState] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem('aaa_global_grammar_enabled_v1');
+    return saved === null ? true : saved === '1';
+  });
+
+  const setGlobalGrammarEnabled = useCallback((enabled: boolean) => {
+    setGlobalGrammarEnabledState(enabled);
+    try {
+      localStorage.setItem('aaa_global_grammar_enabled_v1', enabled ? '1' : '0');
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const [soundEnabled, setSoundEnabledState] = useState<boolean>(() => isSoundEnabled());
   const [notifications, setNotifications] = useState<AcademyNotification[]>(() => getStoredNotifications());
   const [activeToast, setActiveToast] = useState<AcademyNotification | null>(null);
@@ -254,7 +520,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [welcomeOpen, setWelcomeOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return !sessionStorage.getItem(STORAGE_KEYS.welcomeSeen);
+    const hasSession = Boolean(localStorage.getItem('aaa_local_session_email_v1'));
+    const alreadySeen = Boolean(localStorage.getItem(STORAGE_KEYS.welcomeSeen));
+    return !hasSession && !alreadySeen;
   });
 
   const [progress, setProgress] = useState<StudentProgress>(() => {
@@ -267,12 +535,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         parsed.studentName = 'প্রিয় শিক্ষার্থী';
       }
       const hydrated = { ...getDefaultProgress(), ...parsed };
+      hydrated.unlockedBadgeIds = Array.from(
+        new Set([...(hydrated.unlockedBadgeIds || []), ...computeBadges(hydrated)])
+      );
       setPreferredVoiceGender(hydrated.voiceGender || 'male');
       return hydrated;
     } catch {
       return getDefaultProgress();
     }
   });
+
+  const [todayMinutesLearned, setTodayMinutesLearned] = useState<number>(() => readTodayMinutes());
+  const [weeklyActivityMap, setWeeklyActivityMap] = useState<WeeklyActivityStore>(() =>
+    readWeeklyActivityMap(readTodayMinutes())
+  );
+
+  const recordWeeklyDelta = useCallback((deltaMinutes: number, deltaVocab: number) => {
+    const today = todayDateKey();
+    setWeeklyActivityMap((prev) => {
+      const existing = prev[today] || { minutesStudied: 0, vocabLearned: 0 };
+      const nextMap: WeeklyActivityStore = {
+        ...prev,
+        [today]: {
+          minutesStudied: Math.max(0, existing.minutesStudied + deltaMinutes),
+          vocabLearned: Math.max(0, existing.vocabLearned + deltaVocab),
+        },
+      };
+      saveWeeklyActivityMap(nextMap);
+      return nextMap;
+    });
+  }, []);
 
   const [adminContent, setAdminContent] = useState<AdminCustomContent>(() => {
     if (typeof window === 'undefined') return getDefaultAdminContent();
@@ -289,22 +581,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const hydratedUserRef = useRef<string | null>(null);
   const syncTimeoutRef = useRef<number | null>(null);
 
-  // Hydrate progress when an authenticated user logs in
+  // Hydrate progress when an authenticated user logs in and skip welcome modal
   useEffect(() => {
     if (!user) {
       hydratedUserRef.current = null;
       return;
     }
+    setWelcomeOpen(false);
+    try {
+      localStorage.setItem(STORAGE_KEYS.welcomeSeen, '1');
+    } catch {
+      // ignore
+    }
     if (hydratedUserRef.current === user.id) return;
     hydratedUserRef.current = user.id;
 
     if (user.progressSnapshot) {
-      setProgress((prev) => ({
-        ...getDefaultProgress(user.fullName),
-        ...prev,
-        ...user.progressSnapshot,
-        studentName: user.progressSnapshot?.studentName || user.fullName || prev.studentName,
-      }));
+      if (user.progressSnapshot.voiceGender) {
+        setPreferredVoiceGender(user.progressSnapshot.voiceGender);
+      }
+      setProgress((prev) => {
+        const merged: StudentProgress = {
+          ...getDefaultProgress(user.fullName),
+          ...prev,
+          ...user.progressSnapshot,
+          studentName: user.progressSnapshot?.studentName || user.fullName || prev.studentName,
+        };
+        merged.unlockedBadgeIds = Array.from(
+          new Set([...(merged.unlockedBadgeIds || []), ...computeBadges(merged)])
+        );
+        return merged;
+      });
     } else {
       setProgress((prev) => ({
         ...prev,
@@ -444,16 +751,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const dismissWelcome = useCallback(() => {
     setWelcomeOpen(false);
-    sessionStorage.setItem(STORAGE_KEYS.welcomeSeen, '1');
+    try {
+      localStorage.setItem(STORAGE_KEYS.welcomeSeen, '1');
+    } catch {
+      // ignore
+    }
   }, []);
 
   const setTheme = useCallback(
     (next: ThemeMode) => {
       setThemeState(next);
       localStorage.setItem(STORAGE_KEYS.theme, next);
+      const nextScheme: ColorSchemeMode = isLightThemeMode(next) ? 'light' : 'dark';
+      setColorSchemeState(nextScheme);
+      localStorage.setItem(STORAGE_KEYS.colorScheme, nextScheme);
+      if (isLightThemeMode(next)) {
+        setPreferredLightTheme(next);
+        localStorage.setItem(STORAGE_KEYS.preferredLightTheme, next);
+      } else {
+        setPreferredDarkTheme(next);
+        localStorage.setItem(STORAGE_KEYS.preferredDarkTheme, next);
+      }
       triggerSound('theme');
     },
     [triggerSound]
+  );
+
+  const setColorScheme = useCallback(
+    (mode: ColorSchemeMode) => {
+      setColorSchemeState(mode);
+      localStorage.setItem(STORAGE_KEYS.colorScheme, mode);
+      const targetDark = mode === 'dark' ? true : mode === 'light' ? false : osPrefersDark;
+      const targetTheme = targetDark ? preferredDarkTheme : preferredLightTheme;
+      setThemeState(targetTheme);
+      localStorage.setItem(STORAGE_KEYS.theme, targetTheme);
+      triggerSound('theme');
+    },
+    [osPrefersDark, preferredDarkTheme, preferredLightTheme, triggerSound]
   );
 
   const setBackdropIntensity = useCallback(
@@ -474,20 +808,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [triggerSound]
   );
 
-  // Apply theme, light/dark class, and PWA theme-color meta tag
+  // Apply resolved theme, light/dark class, and PWA theme-color meta tag
   useEffect(() => {
     const root = document.documentElement;
-    root.setAttribute('data-theme', theme);
-    if (theme === 'light' || theme === 'parchment' || theme === 'sky-cloud') {
+    root.setAttribute('data-theme', effectiveTheme);
+    if (!resolvedDarkMode) {
       root.classList.remove('dark');
     } else {
       root.classList.add('dark');
     }
     const metaTheme = document.querySelector('meta[name="theme-color"]');
     if (metaTheme) {
-      metaTheme.setAttribute('content', THEME_BAR_COLORS[theme]);
+      metaTheme.setAttribute('content', THEME_BAR_COLORS[effectiveTheme]);
     }
-  }, [theme]);
+  }, [effectiveTheme, resolvedDarkMode]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -551,12 +885,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           totalMinutesLearned: prev.totalMinutesLearned + 1,
         }));
+        setTodayMinutesLearned((prev) => {
+          const next = prev + 1;
+          saveTodayMinutes(next);
+          return next;
+        });
+        recordWeeklyDelta(1, 0);
       }
     }, 60000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [recordWeeklyDelta]);
 
-  // Daily streak check
+  const logStudyMinutes = useCallback(
+    (minutes: number) => {
+      const safeMins = Math.max(1, Math.min(120, Math.round(minutes)));
+      setTodayMinutesLearned((prev) => {
+        const next = prev + safeMins;
+        saveTodayMinutes(next);
+        if (prev < progress.dailyTargetMinutes && next >= progress.dailyTargetMinutes) {
+          pushNotification(
+            {
+              titleBn: 'আজকের দৈনিক অধ্যয়ন লক্ষ্য সম্পন্ন হয়েছে!',
+              titleEn: 'Daily Study Target Completed!',
+              bodyBn: `মাশাআল্লাহ! আপনি আজ ${next} মিনিট অধ্যয়ন পূর্ণ করেছেন।`,
+              bodyEn: `MashaAllah! You completed ${next} minutes of study today.`,
+              category: 'achievement',
+            },
+            false
+          );
+        }
+        return next;
+      });
+      recordWeeklyDelta(safeMins, 0);
+      setProgress((prev) => ({
+        ...prev,
+        xp: prev.xp + safeMins * 2,
+        totalMinutesLearned: prev.totalMinutesLearned + safeMins,
+        lastActiveDate: todayDateKey(),
+      }));
+      triggerSound('success');
+    },
+    [progress.dailyTargetMinutes, pushNotification, recordWeeklyDelta, triggerSound]
+  );
+
+  // Daily streak check (+ badge evaluation)
   useEffect(() => {
     const today = todayDateKey();
     setProgress((prev) => {
@@ -565,10 +937,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const now = new Date(today);
       const diffDays = Math.round((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
       const nextStreak = diffDays === 1 ? prev.streakDays + 1 : diffDays > 1 ? 1 : prev.streakDays;
-      return {
+      const updated: StudentProgress = {
         ...prev,
         streakDays: nextStreak,
         lastActiveDate: today,
+      };
+      return {
+        ...updated,
+        unlockedBadgeIds: Array.from(new Set([...prev.unlockedBadgeIds, ...computeBadges(updated)])),
       };
     });
   }, []);
@@ -629,20 +1005,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const completeLesson = useCallback(
     (lessonId: string, lessonTitleBn: string, lessonTitleEn: string) => {
       triggerSound('success');
+      const alreadyDone = progress.completedLessonIds.includes(lessonId);
+      recordWeeklyDelta(0, alreadyDone ? 1 : 5);
       updateWithBadges((prev) => {
-        const alreadyDone = prev.completedLessonIds.includes(lessonId);
-        const xpGain = alreadyDone ? 10 : 50;
+        const done = prev.completedLessonIds.includes(lessonId);
+        const xpGain = done ? 10 : 50;
         return {
           ...prev,
           xp: prev.xp + xpGain,
           lastActiveDate: todayDateKey(),
-          completedLessonIds: alreadyDone ? prev.completedLessonIds : [...prev.completedLessonIds, lessonId],
+          completedLessonIds: done ? prev.completedLessonIds : [...prev.completedLessonIds, lessonId],
           recentActivities: [
             {
               id: `act-${Date.now()}`,
               timestampIso: new Date().toISOString(),
-              titleBn: `${alreadyDone ? 'পুনরালোচনা সম্পন্ন' : 'পাঠ সম্পন্ন'}: ${lessonTitleBn}`,
-              titleEn: `${alreadyDone ? 'Reviewed' : 'Completed'}: ${lessonTitleEn}`,
+              titleBn: `${done ? 'পুনরালোচনা সম্পন্ন' : 'পাঠ সম্পন্ন'}: ${lessonTitleBn}`,
+              titleEn: `${done ? 'Reviewed' : 'Completed'}: ${lessonTitleEn}`,
               xpEarned: xpGain,
               type: 'lesson' as const,
             },
@@ -651,7 +1029,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [triggerSound, updateWithBadges]
+    [progress.completedLessonIds, recordWeeklyDelta, triggerSound, updateWithBadges]
   );
 
   const completeGrammarTopic = useCallback(
@@ -682,8 +1060,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const reviewVocabWord = useCallback(
-    (wordId: string, quality: 'again' | 'good' | 'easy') => {
+    (wordId: string, quality: Sm2Quality) => {
       triggerSound(quality === 'again' ? 'click' : 'success');
+      recordWeeklyDelta(0, 1);
       updateWithBadges((prev) => {
         const existing = prev.vocabProgress[wordId] || {
           wordId,
@@ -693,43 +1072,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           repetitions: 0,
           favorite: false,
         };
-        let nextInterval = 1;
-        let nextEase = existing.ease;
-        let nextReps = existing.repetitions;
-
-        if (quality === 'again') {
-          nextInterval = 0;
-          nextReps = 0;
-          nextEase = Math.max(1.3, existing.ease - 0.2);
-        } else if (quality === 'good') {
-          nextReps += 1;
-          nextInterval = nextReps === 1 ? 1 : nextReps === 2 ? 3 : Math.round(existing.intervalDays * existing.ease);
-        } else {
-          nextReps += 1;
-          nextEase = Math.min(3.0, existing.ease + 0.15);
-          nextInterval = nextReps === 1 ? 3 : Math.round(Math.max(2, existing.intervalDays) * nextEase * 1.2);
-        }
+        const sm2 = computeSm2Next(existing, quality);
 
         const nextDate = new Date();
-        nextDate.setDate(nextDate.getDate() + nextInterval);
+        nextDate.setDate(nextDate.getDate() + sm2.intervalDays);
+
+        const xpMap: Record<Sm2Quality, number> = {
+          again: 3,
+          hard: 7,
+          good: 10,
+          easy: 15,
+        };
 
         return {
           ...prev,
-          xp: prev.xp + (quality === 'again' ? 3 : 10),
+          xp: prev.xp + xpMap[quality],
           vocabProgress: {
             ...prev.vocabProgress,
             [wordId]: {
               ...existing,
-              ease: nextEase,
-              intervalDays: nextInterval,
-              repetitions: nextReps,
+              ease: sm2.ease,
+              intervalDays: sm2.intervalDays,
+              repetitions: sm2.repetitions,
               nextReviewIso: nextDate.toISOString(),
             },
           },
         };
       });
     },
-    [triggerSound, updateWithBadges]
+    [recordWeeklyDelta, triggerSound, updateWithBadges]
   );
 
   const toggleFavoriteVocab = useCallback(
@@ -834,19 +1205,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = getDefaultProgress(user?.fullName || 'নতুন শিক্ষার্থী');
     setProgress(fresh);
     localStorage.setItem(STORAGE_KEYS.progress, JSON.stringify(fresh));
+    setTodayMinutesLearned(0);
+    saveTodayMinutes(0);
+    const freshWeekly: WeeklyActivityStore = { [todayDateKey()]: { minutesStudied: 0, vocabLearned: 0 } };
+    setWeeklyActivityMap(freshWeekly);
+    saveWeeklyActivityMap(freshWeekly);
   }, [user?.fullName]);
 
   const addCustomChapter = useCallback((chapter: ChapterInfo) => {
     setAdminContent((prev) => ({
       ...prev,
       customChapters: [...prev.customChapters.filter((c) => c.chapterNumber !== chapter.chapterNumber), chapter],
-    }));
-  }, []);
-
-  const saveCustomLesson = useCallback((lesson: DetailedLesson) => {
-    setAdminContent((prev) => ({
-      ...prev,
-      customLessons: { ...prev.customLessons, [lesson.id]: lesson },
     }));
   }, []);
 
@@ -876,8 +1245,72 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [adminContent.customLessons]);
 
   const allVocabulary = useMemo(() => {
-    return [...adminContent.customVocab, ...VOCABULARY_BANK];
-  }, [adminContent.customVocab]);
+    const merged: VocabItem[] = [];
+    const seen = new Set<string>();
+    const combined = [
+      ...(progress.personalVocab || []),
+      ...adminContent.customVocab,
+      ...CURRICULUM_VOCAB_DECK,
+    ];
+    for (const item of combined) {
+      const key = normalizeArabicTokenKey(item.arabic);
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      merged.push(item);
+    }
+    return merged;
+  }, [progress.personalVocab, adminContent.customVocab]);
+
+  const allVocabRef = useRef<VocabItem[]>(allVocabulary);
+  allVocabRef.current = allVocabulary;
+
+  const syncMissingVocabFromSegments = useCallback((segments: ReadingSegmentInput[]) => {
+    if (!segments || segments.length === 0) return;
+    scheduleBackgroundVocabWork(() => {
+      setProgress((prev) => {
+        const existingPool = [
+          ...(prev.personalVocab || []),
+          ...allVocabRef.current,
+        ];
+        const missing = extractMissingWordsFromSegments(
+          segments,
+          existingPool,
+          prev.vocabProgress,
+          30
+        );
+        if (missing.length === 0) return prev;
+        const currentPersonal = prev.personalVocab || [];
+        return {
+          ...prev,
+          personalVocab: [...missing, ...currentPersonal].slice(0, 600),
+        };
+      });
+    });
+  }, []);
+
+  const saveCustomLesson = useCallback(
+    (lesson: DetailedLesson) => {
+      setAdminContent((prev) => ({
+        ...prev,
+        customLessons: { ...prev.customLessons, [lesson.id]: lesson },
+      }));
+      syncMissingVocabFromSegments(buildSegmentsFromDetailedLesson(lesson));
+    },
+    [syncMissingVocabFromSegments]
+  );
+
+  // Background idle pass: scan any newly added admin custom lessons automatically
+  useEffect(() => {
+    const customList = Object.values(adminContent.customLessons);
+    if (customList.length === 0) return;
+    const cancel = scheduleBackgroundVocabWork(() => {
+      const segments = customList.flatMap((ls) => buildSegmentsFromDetailedLesson(ls));
+      if (segments.length > 0) {
+        syncMissingVocabFromSegments(segments);
+      }
+    });
+    return cancel;
+  }, [adminContent.customLessons, syncMissingVocabFromSegments]);
 
   const allExamQuestions = useMemo(() => {
     return [...adminContent.customQuestions, ...EXAM_QUESTION_BANK];
@@ -897,9 +1330,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [notifications]
   );
 
+  const weeklyActivity = useMemo<WeeklyDayActivity[]>(() => {
+    const today = todayDateKey();
+    return Array.from({ length: 7 }, (_, i) => {
+      const daysBack = 6 - i;
+      const date = dateKeyDaysAgo(daysBack);
+      const entry = weeklyActivityMap[date];
+      const minutes =
+        date === today
+          ? Math.max(entry?.minutesStudied ?? 0, todayMinutesLearned)
+          : entry?.minutesStudied ?? 0;
+      const vocab = entry?.vocabLearned ?? 0;
+      return {
+        date,
+        minutesStudied: minutes,
+        vocabLearned: vocab,
+      };
+    });
+  }, [todayMinutesLearned, weeklyActivityMap]);
+
   const value: AppContextValue = {
-    theme,
+    theme: effectiveTheme,
     setTheme,
+    colorScheme,
+    setColorScheme,
+    resolvedDarkMode,
+    osPrefersDark,
     backdropIntensity,
     setBackdropIntensity,
     lang,
@@ -924,6 +1380,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     openWelcome,
     dismissWelcome,
     progress,
+    todayMinutesLearned,
+    weeklyActivity,
+    logStudyMinutes,
     currentLevelNumber,
     allChapters,
     allDetailedLessons,
@@ -943,6 +1402,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     saveCustomLesson,
     addCustomVocab,
     addCustomQuestion,
+    syncMissingVocabFromSegments,
+    globalGrammarEnabled,
+    setGlobalGrammarEnabled,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

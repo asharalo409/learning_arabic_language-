@@ -1,0 +1,358 @@
+export interface QuranVerseEntry {
+  ayahNumber: number;
+  arabic: string;
+  pronunciationBn: string;
+  translationBn: string;
+  translationEn: string;
+}
+
+export interface QuranSurahWord {
+  arabic: string;
+  pronunciationBn: string;
+  meaningBn: string;
+  meaningEn: string;
+  root: string;
+  posBn: string;
+  grammarNoteBn: string;
+}
+
+export interface QuranSurahComplete {
+  surahNumber: number;
+  nameAr: string;
+  nameBn: string;
+  nameEn: string;
+  revelationTypeBn: string;
+  ayahCount: number;
+  accentGradient: string;
+  summaryBn: string;
+  verses: QuranVerseEntry[];
+  keyWords: QuranSurahWord[];
+}
+
+export const QURAN_SURAHS_PART_1: QuranSurahComplete[] = [
+  {
+    surahNumber: 1,
+    nameAr: 'سُورَةُ الْفَاتِحَةِ',
+    nameBn: 'সূরা আল-ফাতিহা',
+    nameEn: 'Al-Fatihah',
+    revelationTypeBn: 'মক্কী',
+    ayahCount: 7,
+    accentGradient: 'linear-gradient(135deg, #065f46 0%, #059669 100%)',
+    summaryBn: 'কুরআনের সূচনা ও সারসংক্ষেপ; আল্লাহর প্রশংসা, একত্ববাদ ও সঠিক পথের প্রার্থনা।',
+    verses: [
+      {
+        ayahNumber: 1,
+        arabic: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
+        pronunciationBn: 'বিসমিল্লা-হির রাহমা-নির রাহীম',
+        translationBn: 'পরম করুণাময় ও অসীম দয়ালু আল্লাহর নামে শুরু করছি।',
+        translationEn: 'In the name of Allah, the Entirely Merciful, the Especially Merciful.',
+      },
+      {
+        ayahNumber: 2,
+        arabic: 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
+        pronunciationBn: 'আলহামদু লিল্লা-হি রাব্বিল আ-লামীন',
+        translationBn: 'সমস্ত প্রশংসা জগতসমূহের প্রতিপালক আল্লাহর জন্য।',
+        translationEn: 'All praise is due to Allah, Lord of the worlds.',
+      },
+      {
+        ayahNumber: 3,
+        arabic: 'الرَّحْمَٰنِ الرَّحِيمِ',
+        pronunciationBn: 'আর-রাহমা-নির রাহীম',
+        translationBn: 'যিনি পরম করুণাময়, অসীম দয়ালু।',
+        translationEn: 'The Entirely Merciful, the Especially Merciful.',
+      },
+      {
+        ayahNumber: 4,
+        arabic: 'مَالِكِ يَوْمِ الدِّينِ',
+        pronunciationBn: 'মা-লিকি ইয়াওমিদ্দীন',
+        translationBn: 'যিনি প্রতিদান দিবসের (বিচার দিনের) মালিক।',
+        translationEn: 'Sovereign of the Day of Recompense.',
+      },
+      {
+        ayahNumber: 5,
+        arabic: 'إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ',
+        pronunciationBn: 'ইয়্যা-কা না‘বুদু ওয়া ইয়্যা-কা নাসতা‘ঈন',
+        translationBn: 'আমরা কেবল আপনারই ইবাদত করি এবং কেবল আপনারই সাহায্য প্রার্থনা করি।',
+        translationEn: 'It is You we worship and You we ask for help.',
+      },
+      {
+        ayahNumber: 6,
+        arabic: 'اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ',
+        pronunciationBn: 'ইহদিনাস সিরা-তাল মুস্তাক্বীম',
+        translationBn: 'আমাদেরকে সরল-সঠিক পথ প্রদর্শন করুন।',
+        translationEn: 'Guide us to the straight path.',
+      },
+      {
+        ayahNumber: 7,
+        arabic: 'صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ',
+        pronunciationBn: 'সিরা-তাল্লাযীনা আন‘আমতা ‘আলাইহিম, গাইরিল মাগদূবি ‘আলাইহিম ওয়ালাদ দা-ল্লীন',
+        translationBn: 'তাদের পথ, যাদেরকে আপনি নেয়ামত দান করেছেন; তাদের পথ নয় যারা অভিশপ্ত এবং যারা পথভ্রষ্ট।',
+        translationEn: 'The path of those upon whom You have bestowed favor, not of those who have evoked anger or of those who are astray.',
+      },
+    ],
+    keyWords: [
+      { arabic: 'الْحَمْدُ', pronunciationBn: 'আল-হামদু', meaningBn: 'সমস্ত প্রশংসা', meaningEn: 'All praise', root: 'ح م د', posBn: 'ইসম (মুবতাদা)', grammarNoteBn: 'মারেফা হওয়ায় মারফু হয়েছে' },
+      { arabic: 'نَعْبُدُ', pronunciationBn: 'না‘বুদু', meaningBn: 'আমরা ইবাদত করি', meaningEn: 'We worship', root: 'ع ب د', posBn: 'ফেয়েল মুদারি', grammarNoteBn: 'জময়ে মুতাকাল্লিম (আমরা)' },
+      { arabic: 'نَسْتَعِينُ', pronunciationBn: 'নাসতা‘ঈনু', meaningBn: 'আমরা সাহায্য চাই', meaningEn: 'We seek help', root: 'ع و ن', posBn: 'ফেয়েল মুদারি (ইস্তিফআল)', grammarNoteBn: 'বাবে ইস্তিফআল থেকে এসেছে' },
+    ],
+  },
+  {
+    surahNumber: 90,
+    nameAr: 'سُورَةُ الْبَلَدِ',
+    nameBn: 'সূরা আল-বালাদ',
+    nameEn: 'Al-Balad',
+    revelationTypeBn: 'মক্কী',
+    ayahCount: 20,
+    accentGradient: 'linear-gradient(135deg, #b45309 0%, #d97706 100%)',
+    summaryBn: 'মক্কা নগরীর শপথ, মানুষের পরিশ্রমশীল সৃষ্টি এবং সৎকাজের কঠিন গিরিপথ অতিক্রমের আহ্বান।',
+    verses: [
+      { ayahNumber: 1, arabic: 'لَا أُقْسِمُ بِهَٰذَا الْبَلَدِ', pronunciationBn: 'লা উক্বসিমু বিহা-যাল বালাদ', translationBn: 'আমি এই নগরীর (মক্কার) শপথ করছি।', translationEn: 'I swear by this city, Makkah.' },
+      { ayahNumber: 2, arabic: 'وَأَنتَ حِلٌّ بِهَٰذَا الْبَلَدِ', pronunciationBn: 'ওয়া আনতা হিল্লুম বিহা-যাল বালাদ', translationBn: 'আর আপনি এই নগরীতে অবস্থানকারী (বৈধ অধিকারী)।', translationEn: 'And you, [O Muhammad], are free of restriction in this city.' },
+      { ayahNumber: 3, arabic: 'وَوَالِدٍ وَمَا وَلَدَ', pronunciationBn: 'ওয়া ওয়া-লিদিওঁ ওয়ামা ওয়ালাদ', translationBn: 'এবং শপথ পিতার ও তার সন্তানের।', translationEn: 'And [by] the father and that which was born [of him].' },
+      { ayahNumber: 4, arabic: 'لَقَدْ خَلَقْنَا الْإِنسَانَ فِي كَبَدٍ', pronunciationBn: 'লাক্বাদ খালাক্বনাল ইনসা-না ফী কাবাদ', translationBn: 'নিশ্চয় আমি মানুষকে সৃষ্টি করেছি কষ্ট-ক্লেশের মাঝে।', translationEn: 'We have certainly created man into hardship.' },
+      { ayahNumber: 5, arabic: 'أَيَحْسَبُ أَن لَّن يَقْدِرَ عَلَيْهِ أَحَدٌ', pronunciationBn: 'আ-ইয়াহসাবু আল্লাইঁ ইয়াক্বদিরা ‘আলাইহি আহাদ', translationBn: 'সে কি মনে করে যে, তার ওপর কেউ ক্ষমতা রাখে না?', translationEn: 'Does he think that never will anyone overcome him?' },
+      { ayahNumber: 6, arabic: 'يَقُولُ أَهْلَكْتُ مَالًا لُّبَدًا', pronunciationBn: 'ইয়াক্বূলু আহলাকতু মা-লাল্লুবাদা', translationBn: 'সে বলে, আমি তো অঢেল ধন-সম্পদ ব্যয় করেছি।', translationEn: 'He says, "I have spent wealth in abundance."' },
+      { ayahNumber: 7, arabic: 'أَيَحْسَبُ أَن لَّمْ يَرَهُ أَحَدٌ', pronunciationBn: 'আ-ইয়াহসাবু আল্লাম ইয়ারাহু আহাদ', translationBn: 'সে কি মনে করে যে, তাকে কেউ দেখেনি?', translationEn: 'Does he think that no one has seen him?' },
+      { ayahNumber: 8, arabic: 'أَلَمْ نَجْعَل لَّهُ عَيْنَيْنِ', pronunciationBn: 'আলাম নাজ‘আল লাহু ‘আইনাইন', translationBn: 'আমি কি তার জন্য দুটি চোখ বানাইনি?', translationEn: 'Have We not made for him two eyes?' },
+      { ayahNumber: 9, arabic: 'وَلِسَانًا وَشَفَتَيْنِ', pronunciationBn: 'ওয়া লিসা-নাওঁ ওয়া শাফাতাইন', translationBn: 'এবং একটি জিহ্বা ও দুটি ঠোঁট?', translationEn: 'And a tongue and two lips?' },
+      { ayahNumber: 10, arabic: 'وَهَدَيْنَاهُ النَّجْدَيْنِ', pronunciationBn: 'ওয়া হাদাইনা-হুন নাজদাইন', translationBn: 'আর আমি তাকে ভালো-মন্দ দুটি পথ দেখিয়েছি।', translationEn: 'And have shown him the two ways?' },
+      { ayahNumber: 11, arabic: 'فَلَا اقْتَحَمَ الْعَقَبَةَ', pronunciationBn: 'ফালাক্বতাহামাল ‘আক্বাবাহ', translationBn: 'অতঃপর সে দুর্গম গিরিপথে প্রবেশ করেনি।', translationEn: 'But he has not broken through the difficult pass.' },
+      { ayahNumber: 12, arabic: 'وَمَا أَدْرَاكَ مَا الْعَقَبَةُ', pronunciationBn: 'ওয়ামা আদরা-কা মাল ‘আক্বাবাহ', translationBn: 'আপনি কি জানেন সেই দুর্গম গিরিপথ কী?', translationEn: 'And what can make you know what is [breaking through] the difficult pass?' },
+      { ayahNumber: 13, arabic: 'فَكُّ رَقَبَةٍ', pronunciationBn: 'ফাক্কু রাক্বাবাহ', translationBn: 'তা হলো দাসমুক্তি করা।', translationEn: 'It is the freeing of a slave.' },
+      { ayahNumber: 14, arabic: 'أَوْ إِطْعَامٌ فِي يَوْمٍ ذِي مَسْغَبَةٍ', pronunciationBn: 'আও ইত‘আ-মুন ফী ইয়াওমিন যী মাসগাবাহ', translationBn: 'অথবা দুর্ভিক্ষের দিনে আহার দান করা,', translationEn: 'Or feeding on a day of severe hunger' },
+      { ayahNumber: 15, arabic: 'يَتِيمًا ذَا مَقْرَبَةٍ', pronunciationBn: 'ইয়াতীমান যা মাক্বরাবাহ', translationBn: 'নিকটাত্মীয় এতীমকে,', translationEn: 'An orphan of near relationship' },
+      { ayahNumber: 16, arabic: 'أَوْ مِسْكِينًا ذَا مَتْرَبَةٍ', pronunciationBn: 'আও মিসকীনান যা মাত্রাবাহ', translationBn: 'অথবা ধূলা-মলিন দরিদ্র-মিসকীনকে।', translationEn: 'Or a needy person in misery.' },
+      { ayahNumber: 17, arabic: 'ثُمَّ كَانَ مِنَ الَّذِينَ آمَنُوا وَتَوَاصَوْا بِالصَّبْرِ وَتَوَاصَوْا بِالْمَرْحَمَةِ', pronunciationBn: 'ছুম্মা কা-না মিনাল্লাযীনা আ-মানূ ওয়া তাওয়া-সাও বিস-সাবরি ওয়া তাওয়া-সাও বিল-মারহামাহ', translationBn: 'অতঃপর সে তাদের অন্তর্ভুক্ত হয় যারা ঈমান এনেছে এবং পরস্পরকে ধৈর্য ও দয়ার উপদেশ দিয়েছে।', translationEn: 'And then being among those who believed and advised one another to patience and advised one another to compassion.' },
+      { ayahNumber: 18, arabic: 'أُولَٰئِكَ أَصْحَابُ الْمَيْمَنَةِ', pronunciationBn: 'উলা-ইকা আসহা-বুল মাইমানাহ', translationBn: 'তারাই ডান দিকের সৌভাগ্যবান দলের অন্তর্ভুক্ত।', translationEn: 'Those are the companions of the right.' },
+      { ayahNumber: 19, arabic: 'وَالَّذِينَ كَفَرُوا بِآيَاتِنَا هُمْ أَصْحَابُ الْمَشْأَمَةِ', pronunciationBn: 'ওয়াল্লাযীনা কাফারূ বিআ-য়া-তিনা হুম আসহা-বুল মাশআমাহ', translationBn: 'আর যারা আমার আয়াতসমূহকে অস্বীকার করে, তারাই বাম দিকের হতভাগা দল।', translationEn: 'But they who disbelieved in Our signs - those are the companions of the left.' },
+      { ayahNumber: 20, arabic: 'عَلَيْهِمْ نَارٌ مُّؤْصَدَةٌ', pronunciationBn: '‘আলাইহিম না-রুম মু’সাদাহ', translationBn: 'তাদের ওপর থাকবে চারদিক থেকে আবদ্ধ আগুন।', translationEn: 'Over them will be fire closed in.' },
+    ],
+    keyWords: [
+      { arabic: 'الْبَلَدِ', pronunciationBn: 'আল-বালাদি', meaningBn: 'নগরী (মক্কা)', meaningEn: 'City', root: 'ب ل د', posBn: 'ইসম (মাজরূর)', grammarNoteBn: 'بِ হরফে জরের কারণে কাসরা হয়েছে' },
+      { arabic: 'الْعَقَبَةَ', pronunciationBn: 'আল-আক্বাবাহ', meaningBn: 'দুর্গম গিরিপথ', meaningEn: 'Difficult pass', root: 'ع ق ب', posBn: 'ইসম (মাফউল বিহি)', grammarNoteBn: 'সৎকাজের উচ্চ সোপান অর্থে ব্যবহৃত' },
+    ],
+  },
+  {
+    surahNumber: 91,
+    nameAr: 'سُورَةُ الشَّمْسِ',
+    nameBn: 'সূরা আশ-শামস',
+    nameEn: 'Ash-Shams',
+    revelationTypeBn: 'মক্কী',
+    ayahCount: 15,
+    accentGradient: 'linear-gradient(135deg, #ea580c 0%, #f59e0b 100%)',
+    summaryBn: 'সূর্য, চন্দ্র ও আত্মার শপথ করে আত্মশুদ্ধির সাফল্য এবং সামূদ জাতির অবাধ্যতার পরিণতি বর্ণনা।',
+    verses: [
+      { ayahNumber: 1, arabic: 'وَالشَّمْسِ وَضُحَاهَا', pronunciationBn: 'ওয়াশ-শামসি ওয়া দুহা-হা', translationBn: 'শপথ সূর্যের ও তার কিরণের,', translationEn: 'By the sun and its brightness' },
+      { ayahNumber: 2, arabic: 'وَالْقَمَرِ إِذَا تَلَاهَا', pronunciationBn: 'ওয়াল ক্বামারি ইযা তালা-হা', translationBn: 'শপথ চন্দ্রের যখন তা সূর্যের অনুসরণ করে,', translationEn: 'And [by] the moon when it follows it' },
+      { ayahNumber: 3, arabic: 'وَالنَّهَارِ إِذَا جَلَّاهَا', pronunciationBn: 'ওয়ান-নাহা-রি ইযা জাল্লা-হা', translationBn: 'শপথ দিনের যখন তা সূর্যকে প্রস্ফুটিত করে,', translationEn: 'And [by] the day when it displays it' },
+      { ayahNumber: 4, arabic: 'وَاللَّيْلِ إِذَا يَغْشَاهَا', pronunciationBn: 'ওয়াল-লাইলি ইযা ইয়াগশা-হা', translationBn: 'শপথ রাতের যখন তা তাকে আচ্ছাদিত করে,', translationEn: 'And [by] the night when it covers it' },
+      { ayahNumber: 5, arabic: 'وَالسَّمَاءِ وَمَا بَنَاهَا', pronunciationBn: 'ওয়াস-সামা-ই ওয়ামা বানা-হা', translationBn: 'শপথ আকাশের এবং যিনি তা নির্মাণ করেছেন,', translationEn: 'And [by] the sky and He who constructed it' },
+      { ayahNumber: 6, arabic: 'وَالْأَرْضِ وَمَا طَحَاهَا', pronunciationBn: 'ওয়াল আরদি ওয়ামা তাহা-হা', translationBn: 'শপথ পৃথিবীর এবং যিনি তা বিস্তৃত করেছেন,', translationEn: 'And [by] the earth and He who spread it' },
+      { ayahNumber: 7, arabic: 'وَنَفْسٍ وَمَا سَوَّاهَا', pronunciationBn: 'ওয়া নাফসিওঁ ওয়ামা সাওওয়া-হা', translationBn: 'শপথ আত্মার এবং যিনি তা সুবিন্যস্ত করেছেন,', translationEn: 'And [by] the soul and He who proportioned it' },
+      { ayahNumber: 8, arabic: 'فَأَلْهَمَهَا فُجُورَهَا وَتَقْوَاهَا', pronunciationBn: 'ফা-আলহামাহা ফুজূরাহা ওয়া তাক্বওয়া-হা', translationBn: 'অতঃপর তাকে পাপ ও তাকওয়ার জ্ঞান দান করেছেন।', translationEn: 'And inspired it [with discernment of] its wickedness and its righteousness,' },
+      { ayahNumber: 9, arabic: 'قَدْ أَفْلَحَ مَن زَكَّاهَا', pronunciationBn: 'ক্বাদ আফলাহা মান যাক্কা-হা', translationBn: 'সে-ই সফলকাম হয়েছে যে নিজেকে পরিশুদ্ধ করেছে।', translationEn: 'He has succeeded who purifies it,' },
+      { ayahNumber: 10, arabic: 'وَقَدْ خَابَ مَن دَسَّاهَا', pronunciationBn: 'ওয়া ক্বাদ খা-বা মান দাস্সা-হা', translationBn: 'আর সে-ই ব্যর্থ হয়েছে যে তাকে কলুষিত করেছে।', translationEn: 'And he has failed who instills it [with corruption].' },
+      { ayahNumber: 11, arabic: 'كَذَّبَتْ ثَمُودُ بِطَغْوَاهَا', pronunciationBn: 'কাযযাবাত ছামূদু বিত্বাগওয়া-হা', translationBn: 'সামূদ জাতি অবাধ্যতার কারণে (সত্য) অস্বীকার করেছিল।', translationEn: 'Thamud denied [their prophet] by reason of their transgression,' },
+      { ayahNumber: 12, arabic: 'إِذِ انبَعَثَ أَشْقَاهَا', pronunciationBn: 'ইযিম বা‘আছা আশক্বা-হা', translationBn: 'যখন তাদের সর্বাধিক হতভাগ্য ব্যক্তি তৎপর হয়ে উঠেছিল।', translationEn: 'When the most wretched of them was sent forth.' },
+      { ayahNumber: 13, arabic: 'فَقَالَ لَهُمْ رَسُولُ اللَّهِ نَاقَةَ اللَّهِ وَسُقْيَاهَا', pronunciationBn: 'ফাক্বা-লা লাহুম রাসূলুল্লা-হি না-ক্বাতাল্লা-হি ওয়া সুক্বইয়া-হা', translationBn: 'তখন আল্লাহর রাসূল (সালেহ আ.) তাদেরকে বলেছিলেন: আল্লাহর উষ্ট্রী ও তার পানির পালা সম্পর্কে সাবধান হও।', translationEn: 'And the messenger of Allah [Salih] said to them, "[Do not harm] the she-camel of Allah or [prevent her from] her drink."' },
+      { ayahNumber: 14, arabic: 'فَكَذَّبُوهُ فَعَقَرُوهَا فَدَمْدَمَ عَلَيْهِمْ رَبُّهُم بِذَنبِهِمْ فَسَوَّاهَا', pronunciationBn: 'ফাকাযযাবূহু ফা‘আক্বারূহা ফাদামদামা ‘আলাইহিম রাব্বুহুম বিযাম্বিহিম ফাসাওওয়া-হা', translationBn: 'অতঃপর তারা তাঁকে মিথ্যাবাদী বলল এবং উষ্ট্রীটিকে হত্যা করল; ফলে তাদের পাপের কারণে তাদের প্রতিপালক তাদের ওপর ধ্বংস নামিয়ে দিলেন এবং সকলকে সমানভাবে নিশ্চিহ্ন করলেন।', translationEn: 'But they denied him and hamstrung her. So their Lord brought down upon them destruction for their sin and made it equal [upon all of them].' },
+      { ayahNumber: 15, arabic: 'وَلَا يَخَافُ عُقْبَاهَا', pronunciationBn: 'ওয়ালা ইয়াখা-ফু ‘উক্ববা-হা', translationBn: 'আর তিনি এর কোনো পরিণামের ভয় করেন না।', translationEn: 'And He does not fear the consequence thereof.' },
+    ],
+    keyWords: [
+      { arabic: 'زَكَّاهَا', pronunciationBn: 'যাক্কা-হা', meaningBn: 'তাকে পবিত্র করেছে', meaningEn: 'Purifies it', root: 'ز ك و', posBn: 'ফেয়েল মাদী (তাফঈল)', grammarNoteBn: 'আত্মশুদ্ধি অর্থে বাবে তাফঈল' },
+      { arabic: 'تَقْوَاهَا', pronunciationBn: 'তাক্বওয়া-হা', meaningBn: 'তার পরহেজগারি', meaningEn: 'Its righteousness', root: 'و ق ي', posBn: 'ইসম (মাসদার)', grammarNoteBn: 'মূলধাতু ওয়াও-ক্বাফ-ইয়া' },
+    ],
+  },
+  {
+    surahNumber: 92,
+    nameAr: 'سُورَةُ اللَّيْلِ',
+    nameBn: 'সূরা আল-লাইল',
+    nameEn: 'Al-Layl',
+    revelationTypeBn: 'মক্কী',
+    ayahCount: 21,
+    accentGradient: 'linear-gradient(135deg, #1e293b 0%, #4f46e5 100%)',
+    summaryBn: 'দানশীল ও মুত্তাকী বান্দার সহজ পথ এবং কৃপণ ও অবিশ্বাসীর কঠিন পরিণতি।',
+    verses: [
+      { ayahNumber: 1, arabic: 'وَاللَّيْلِ إِذَا يَغْشَىٰ', pronunciationBn: 'ওয়াল-লাইলি ইযা ইয়াগশা', translationBn: 'শপথ রাতের যখন তা আচ্ছন্ন করে,', translationEn: 'By the night when it covers' },
+      { ayahNumber: 2, arabic: 'وَالنَّهَارِ إِذَا تَجَلَّىٰ', pronunciationBn: 'ওয়ান-নাহা-রি ইযা তাজাল্লা', translationBn: 'এবং দিনের যখন তা আলোকিত হয়,', translationEn: 'And [by] the day when it appears' },
+      { ayahNumber: 3, arabic: 'وَمَا خَلَقَ الذَّكَرَ وَالْأُنثَىٰ', pronunciationBn: 'ওয়ামা খালাক্বায-যাকারা ওয়াল উনছা', translationBn: 'এবং তাঁর, যিনি নর ও নারী সৃষ্টি করেছেন—', translationEn: 'And [by] He who created the male and female,' },
+      { ayahNumber: 4, arabic: 'إِنَّ سَعْيَكُمْ لَشَتَّىٰ', pronunciationBn: 'ইন্না সা‘ইয়াকুম লাশাত্তা', translationBn: 'নিশ্চয় তোমাদের কর্মপ্রচেষ্টা বিভিন্ন প্রকার।', translationEn: 'Indeed, your efforts are diverse.' },
+      { ayahNumber: 5, arabic: 'فَأَمَّا مَنْ أَعْطَىٰ وَاتَّقَىٰ', pronunciationBn: 'ফা-আম্মা মান আ‘ত্বা ওয়াত্তাক্বা', translationBn: 'অতএব যে দান করে ও তাকওয়া অবলম্বন করে,', translationEn: 'As for he who gives and fears Allah' },
+      { ayahNumber: 6, arabic: 'وَصَدَّقَ بِالْحُسْنَىٰ', pronunciationBn: 'ওয়া সাদ্দাক্বা বিল হুসনা', translationBn: 'এবং উত্তম বিষয়কে (তাওহীদ ও পুরস্কার) সত্য বলে বিশ্বাস করে,', translationEn: 'And believes in the best [reward],' },
+      { ayahNumber: 7, arabic: 'فَسَنُيَسِّرُهُ لِلْيُسْرَىٰ', pronunciationBn: 'ফাসানুয়াসসিরুহু লিল ইউসরা', translationBn: 'আমি তার জন্য সুগম পথ সহজ করে দেব।', translationEn: 'We will ease him toward ease.' },
+      { ayahNumber: 8, arabic: 'وَأَمَّا مَن بَخِلَ وَاسْتَغْنَىٰ', pronunciationBn: 'ওয়া আম্মা মাম বাখিলা ওয়াসতাগনা', translationBn: 'আর যে কার্পণ্য করে ও নিজেকে অমুখাপেক্ষী মনে করে,', translationEn: 'But as for he who withholds and considers himself free of need' },
+      { ayahNumber: 9, arabic: 'وَكَذَّبَ بِالْحُسْنَىٰ', pronunciationBn: 'ওয়া কাযযাবা বিল হুসনা', translationBn: 'এবং উত্তম বিষয়কে মিথ্যা প্রতিপন্ন করে,', translationEn: 'And denies the best [reward],' },
+      { ayahNumber: 10, arabic: 'فَسَنُيَسِّرُهُ لِلْعُسْرَىٰ', pronunciationBn: 'ফাসানুয়াসসিরুহু লিল ‘উসরা', translationBn: 'আমি তার জন্য কঠিন পথই সহজ (উন্মুক্ত) করে দেব।', translationEn: 'We will ease him toward difficulty.' },
+      { ayahNumber: 11, arabic: 'وَمَا يُغْنِي عَنْهُ مَالُهُ إِذَا تَرَدَّىٰ', pronunciationBn: 'ওয়ামা ইয়ুগনী ‘আনহু মা-লুহু ইযা তারাদ্দা', translationBn: 'যখন সে ধ্বংসে পতিত হবে তখন তার সম্পদ কোনো কাজে আসবে না।', translationEn: 'And what will his wealth avail him when he falls?' },
+      { ayahNumber: 12, arabic: 'إِنَّ عَلَيْنَا لَلْهُدَىٰ', pronunciationBn: 'ইন্না ‘আলাইনা লাল হুদা', translationBn: 'নিশ্চয় সঠিক পথ দেখানো আমারই দায়িত্ব।', translationEn: 'Indeed, [incumbent] upon Us is guidance.' },
+      { ayahNumber: 13, arabic: 'وَإِنَّ لَنَا لَلْآخِرَةَ وَالْأُولَىٰ', pronunciationBn: 'ওয়া ইন্না লানা লাল আ-খিরাতা ওয়াল উলা', translationBn: 'আর নিশ্চয় পরকাল ও ইহকাল আমারই মালিকানাধীন।', translationEn: 'And indeed, to Us belongs the Hereafter and the first [life].' },
+      { ayahNumber: 14, arabic: 'فَأَنذَرْتُكُمْ نَارًا تَلَظَّىٰ', pronunciationBn: 'ফা-আনযারতুকুম না-রান তালায্যা', translationBn: 'অতএব আমি তোমাদেরকে প্রজ্বলিত অগ্নি সম্পর্কে সতর্ক করছি।', translationEn: 'So I have warned you of a Fire which is blazing.' },
+      { ayahNumber: 15, arabic: 'لَا يَصْلَاهَا إِلَّا الْأَشْقَى', pronunciationBn: 'লা ইয়াসলা-হা ইল্লাল আশক্বা', translationBn: 'তাতে কেবল নিতান্ত হতভাগা ব্যক্তিই প্রবেশ করবে,', translationEn: 'None will [enter to] burn therein except the most wretched one.' },
+      { ayahNumber: 16, arabic: 'الَّذِي كَذَّبَ وَتَوَلَّىٰ', pronunciationBn: 'আল্লাযী কাযযাবা ওয়া তাওয়াল্লা', translationBn: 'যে সত্যকে মিথ্যা বলেছে ও মুখ ফিরিয়ে নিয়েছে।', translationEn: 'Who had denied and turned away.' },
+      { ayahNumber: 17, arabic: 'وَسَيُجَنَّبُهَا الْأَتْقَى', pronunciationBn: 'ওয়া সাইয়ুজান্নাবুহাল আতক্বা', translationBn: 'আর তা থেকে দূরে রাখা হবে পরম মুত্তাকী ব্যক্তিকে,', translationEn: 'But the righteous one will avoid it -' },
+      { ayahNumber: 18, arabic: 'الَّذِي يُؤْتِي مَالَهُ يَتَزَكَّىٰ', pronunciationBn: 'আল্লাযী ইয়ু’তী মা-লাহু ইয়াতাযাক্কা', translationBn: 'যে পবিত্রতা অর্জনের জন্য নিজের সম্পদ দান করে।', translationEn: '[He] who gives [from] his wealth to purify himself' },
+      { ayahNumber: 19, arabic: 'وَمَا لِأَحَدٍ عِندَهُ مِن نِّعْمَةٍ تُجْزَىٰ', pronunciationBn: 'ওয়ামা লি-আহাদিন ‘ইনদাহু মিন নি‘মাতিন তুজযা', translationBn: 'এবং তার কাছে কারও এমন কোনো অনুগ্রহ নেই যার প্রতিদান দিতে হবে,', translationEn: 'And not [giving] for anyone who has [done him] a favor to be rewarded' },
+      { ayahNumber: 20, arabic: 'إِلَّا ابْتِغَاءَ وَجْهِ رَبِّهِ الْأَعْلَىٰ', pronunciationBn: 'ইল্লাবতিগা-আ ওয়াজহি রাব্বিহিল আ‘লা', translationBn: 'বরং কেবল তার মহান প্রতিপালকের সন্তুষ্টি লাভের উদ্দেশ্যেই সে দান করে।', translationEn: 'But only seeking the countenance of his Lord, Most High.' },
+      { ayahNumber: 21, arabic: 'وَلَسَوْفَ يَرْضَىٰ', pronunciationBn: 'ওয়া লাসাওফা ইয়ারদা', translationBn: 'আর অচিরেই সে (পূর্ণ) সন্তুষ্ট হবে।', translationEn: 'And he is going to be satisfied.' },
+    ],
+    keyWords: [
+      { arabic: 'اتَّقَىٰ', pronunciationBn: 'ইত্তাক্বা', meaningBn: 'তাকওয়া অবলম্বন করেছে', meaningEn: 'Feared Allah', root: 'و ق ي', posBn: 'ফেয়েল মাদী (ইফতিআল)', grammarNoteBn: 'পরহেজগারি ও আল্লাহভীতি অর্থে' },
+      { arabic: 'لِلْيُسْرَىٰ', pronunciationBn: 'লিল-ইউসরা', meaningBn: 'সহজ পথের জন্য', meaningEn: 'Toward ease', root: 'ي س ر', posBn: 'ইসম (ইসমু তাফদিল)', grammarNoteBn: 'যুসর-এর মুয়ান্নাছ রূপ ইউসরা' },
+    ],
+  },
+  {
+    surahNumber: 93,
+    nameAr: 'سُورَةُ الضُّحَىٰ',
+    nameBn: 'সূরা আদ-দুহা',
+    nameEn: 'Ad-Duha',
+    revelationTypeBn: 'মক্কী',
+    ayahCount: 11,
+    accentGradient: 'linear-gradient(135deg, #0284c7 0%, #3b82f6 100%)',
+    summaryBn: 'রাসূল ﷺ-কে সান্ত্বনা, পরকালের শ্রেষ্ঠত্বের সুসংবাদ এবং এতীম ও সাহায্যপ্রার্থীর প্রতি সদয় হওয়ার নির্দেশ।',
+    verses: [
+      { ayahNumber: 1, arabic: 'وَالضُّحَىٰ', pronunciationBn: 'ওয়াদ-দুহা', translationBn: 'শপথ পূর্বাহ্ণের (উজ্জ্বল দিনের),', translationEn: 'By the morning brightness' },
+      { ayahNumber: 2, arabic: 'وَاللَّيْلِ إِذَا سَجَىٰ', pronunciationBn: 'ওয়াল-লাইলি ইযা সাজা', translationBn: 'এবং রাতের যখন তা নিস্তব্ধ হয়,', translationEn: 'And [by] the night when it covers with darkness,' },
+      { ayahNumber: 3, arabic: 'مَا وَدَّعَكَ رَبُّكَ وَمَا قَلَىٰ', pronunciationBn: 'মা ওয়াদ্দা‘আকা রাব্বুকা ওয়ামা ক্বালা', translationBn: 'আপনার প্রতিপালক আপনাকে পরিত্যাগ করেননি এবং অসন্তুষ্টও হননি।', translationEn: 'Your Lord has not taken leave of you, [O Muhammad], nor has He detested [you].' },
+      { ayahNumber: 4, arabic: 'وَلَلْآخِرَةُ خَيْرٌ لَّكَ مِنَ الْأُولَىٰ', pronunciationBn: 'ওয়ালাল আ-খিরাতু খাইরুল্লাকা মিনাল উলা', translationBn: 'আর নিশ্চয় আপনার জন্য পরবর্তী সময় (আখিরাত) পূর্ববর্তী সময় (দুনিয়া) অপেক্ষা উত্তম।', translationEn: 'And the Hereafter is better for you than the first [life].' },
+      { ayahNumber: 5, arabic: 'وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ', pronunciationBn: 'ওয়া লাসাওফা ইয়ু‘ত্বীকা রাব্বুকা ফাতারদা', translationBn: 'অচিরেই আপনার প্রতিপালক আপনাকে এত দেবেন যে আপনি সন্তুষ্ট হবেন।', translationEn: 'And your Lord is going to give you, and you will be satisfied.' },
+      { ayahNumber: 6, arabic: 'أَلَمْ يَجِدْكَ يَتِيمًا فَآوَىٰ', pronunciationBn: 'আলাম ইয়াজিদকা ইয়াতীমান ফাআ-ওয়া', translationBn: 'তিনি কি আপনাকে এতীম পাননি, অতঃপর আশ্রয় দিয়েছেন?', translationEn: 'Did He not find you an orphan and give [you] refuge?' },
+      { ayahNumber: 7, arabic: 'وَوَجَدَكَ ضَالًّا فَهَدَىٰ', pronunciationBn: 'ওয়া ওয়াজাদাকা দা-ল্লান ফাহাদা', translationBn: 'এবং আপনাকে পথহারা (অজ্ঞাত) পেয়ে পথ দেখিয়েছেন?', translationEn: 'And He found you lost and guided [you],' },
+      { ayahNumber: 8, arabic: 'وَوَجَدَكَ عَائِلًا فَأَغْنَىٰ', pronunciationBn: 'ওয়া ওয়াজাদাকা ‘আ-ইলান ফাআগনা', translationBn: 'এবং আপনাকে নিঃস্ব পেয়ে অভাবমুক্ত করেছেন?', translationEn: 'And He found you poor and made [you] self-sufficient.' },
+      { ayahNumber: 9, arabic: 'فَأَمَّا الْيَتِيمَ فَلَا تَقْهَرْ', pronunciationBn: 'ফা-আম্মাল ইয়াতীমা ফালা তাক্বহার', translationBn: 'সুতরাং আপনি এতীমের প্রতি কঠোর হবেন না,', translationEn: 'So as for the orphan, do not oppress [him].' },
+      { ayahNumber: 10, arabic: 'وَأَمَّا السَّائِلَ فَلَا تَنْهَرْ', pronunciationBn: 'ওয়া আম্মাস-সা-ইলা ফালা তানহার', translationBn: 'এবং সাহায্যপ্রার্থীকে ধমক দেবেন না।', translationEn: 'And as for the petitioner, do not repel [him].' },
+      { ayahNumber: 11, arabic: 'وَأَمَّا بِنِعْمَةِ رَبِّكَ فَحَدِّثْ', pronunciationBn: 'ওয়া আম্মা বিনি‘মাতি রাব্বিকা ফাহাদ্দিছ', translationBn: 'আর আপনার প্রতিপালকের অনুগ্রহের কথা (কৃতজ্ঞতার সাথে) বর্ণনা করুন।', translationEn: 'But as for the favor of your Lord, report [it].' },
+    ],
+    keyWords: [
+      { arabic: 'الضُّحَىٰ', pronunciationBn: 'আদ-দুহা', meaningBn: 'পূর্বাহ্ণ / সকালের রোদ', meaningEn: 'Morning brightness', root: 'ض ح و', posBn: 'ইসম (মাজরূর)', grammarNoteBn: 'কসমের ওয়াও-এর কারণে মাজরূর' },
+      { arabic: 'نِعْمَةِ', pronunciationBn: 'নি‘মাতি', meaningBn: 'অনুগ্রহ / নেয়ামত', meaningEn: 'Favor', root: 'ن ع م', posBn: 'ইসম (মুদাফ)', grammarNoteBn: 'রাব্বিকা-র দিকে ইদাফাত হয়েছে' },
+    ],
+  },
+  {
+    surahNumber: 94,
+    nameAr: 'سُورَةُ الشَّرْحِ',
+    nameBn: 'সূরা আল-ইনশিরাহ (আশ-শারহ)',
+    nameEn: 'Ash-Sharh',
+    revelationTypeBn: 'মক্কী',
+    ayahCount: 8,
+    accentGradient: 'linear-gradient(135deg, #0d9488 0%, #10b981 100%)',
+    summaryBn: 'নবী ﷺ-এর বক্ষ প্রসারিত করা, মর্যাদা সমুন্নত করা এবং প্রতিটি কষ্টের সাথে দুটি স্বস্তির প্রতিশ্রুতি।',
+    verses: [
+      { ayahNumber: 1, arabic: 'أَلَمْ نَشْرَحْ لَكَ صَدْرَكَ', pronunciationBn: 'আলাম নাশরাহ লাকা সাদরাক', translationBn: 'আমি কি আপনার বক্ষ আপনার জন্য উন্মুক্ত করে দিইনি?', translationEn: 'Did We not expand for you, [O Muhammad], your breast?' },
+      { ayahNumber: 2, arabic: 'وَوَضَعْنَا عَنكَ وِزْرَكَ', pronunciationBn: 'ওয়া ওয়াদা‘না ‘আনকা উইযরাক', translationBn: 'এবং আপনার থেকে আপনার বোঝা নামিয়ে দিইনি?', translationEn: 'And We removed from you your burden' },
+      { ayahNumber: 3, arabic: 'الَّذِي أَنقَضَ ظَهْرَكَ', pronunciationBn: 'আল্লাযী আনক্বাদা যাহরাক', translationBn: 'যা আপনার পিঠকে নুইয়ে দিচ্ছিল?', translationEn: 'Which had weighed upon your back' },
+      { ayahNumber: 4, arabic: 'وَرَفَعْنَا لَكَ ذِكْرَكَ', pronunciationBn: 'ওয়া রাফা‘না লাকা যিকরাক', translationBn: 'আর আমি আপনার স্মরণকে (খ্যাতি ও মর্যাদা) সমুন্নত করেছি।', translationEn: 'And raised high for you your repute.' },
+      { ayahNumber: 5, arabic: 'فَإِنَّ مَعَ الْعُسْرِ يُسْرًا', pronunciationBn: 'ফা-ইন্না মা‘আল ‘উসরি ইয়ুসরা', translationBn: 'নিশ্চয়ই কষ্টের সাথেই স্বস্তি রয়েছে।', translationEn: 'For indeed, with hardship [will be] ease.' },
+      { ayahNumber: 6, arabic: 'إِنَّ مَعَ الْعُسْرِ يُسْرًا', pronunciationBn: 'ইন্না মা‘আল ‘উসরি ইয়ুসরা', translationBn: 'অবশ্যই কষ্টের সাথেই স্বস্তি রয়েছে।', translationEn: 'Indeed, with hardship [will be] ease.' },
+      { ayahNumber: 7, arabic: 'فَإِذَا فَرَغْتَ فَانصَبْ', pronunciationBn: 'ফা-ইযা ফারাগতা ফানসাব', translationBn: 'অতএব যখন আপনি (এক কাজ থেকে) অবসর হন, তখন (ইবাদতে) পরিশ্রম করুন।', translationEn: 'So when you have finished [your duties], then stand up [for worship].' },
+      { ayahNumber: 8, arabic: 'وَإِلَىٰ رَبِّكَ فَارْغَب', pronunciationBn: 'ওয়া ইলা রাব্বিকা ফারগাব', translationBn: 'এবং আপনার প্রতিপালকের প্রতিই মনোনিবেশ করুন।', translationEn: 'And to your Lord direct [your] longing.' },
+    ],
+    keyWords: [
+      { arabic: 'الْعُسْرِ', pronunciationBn: 'আল-‘উসরি', meaningBn: 'কষ্ট / সংকট', meaningEn: 'Hardship', root: 'ع س ر', posBn: 'ইসম (মারেফা)', grammarNoteBn: 'নির্দিষ্ট এক কষ্টকে বোঝাতে আলিফ-লাম যুক্ত হয়েছে' },
+      { arabic: 'يُسْرًا', pronunciationBn: 'ইয়ুসরান', meaningBn: 'স্বস্তি / সহজতা', meaningEn: 'Ease', root: 'ي س ر', posBn: 'ইসম (নাকিরা, ইসমে ইন্না)', grammarNoteBn: 'নাকিরা রূপে দুটি স্বতন্ত্র স্বস্তির ইঙ্গিত' },
+    ],
+  },
+  {
+    surahNumber: 95,
+    nameAr: 'سُورَةُ التِّينِ',
+    nameBn: 'সূরা আত-তীন',
+    nameEn: 'At-Tin',
+    revelationTypeBn: 'মক্কী',
+    ayahCount: 8,
+    accentGradient: 'linear-gradient(135deg, #65a30d 0%, #16a34a 100%)',
+    summaryBn: 'মানুষকে সর্বোত্তম গঠনে সৃষ্টি এবং ঈমান ও সৎকর্মশীলদের অফুরন্ত পুরস্কার।',
+    verses: [
+      { ayahNumber: 1, arabic: 'وَالتِّينِ وَالزَّيْتُونِ', pronunciationBn: 'ওয়াত-তীনি ওয়ায-যাইতূন', translationBn: 'শপথ ডুমুরের ও জলপাইয়ের,', translationEn: 'By the fig and the olive' },
+      { ayahNumber: 2, arabic: 'وَطُورِ سِينِينَ', pronunciationBn: 'ওয়া ত্বূরি সীনীন', translationBn: 'এবং সিনাই পর্বতের,', translationEn: 'And [by] Mount Sinai' },
+      { ayahNumber: 3, arabic: 'وَهَٰذَا الْبَلَدِ الْأَمِينِ', pronunciationBn: 'ওয়া হা-যাল বালাদিল আমীন', translationBn: 'এবং এই নিরাপদ নগরী (মক্কা)-র,', translationEn: 'And [by] this secure city [Makkah],' },
+      { ayahNumber: 4, arabic: 'لَقَدْ خَلَقْنَا الْإِنسَانَ فِي أَحْسَنِ تَقْوِيمٍ', pronunciationBn: 'লাক্বাদ খালাক্বনাল ইনসা-না ফী আহসানি তাক্বওয়ীম', translationBn: 'নিশ্চয় আমি মানুষকে সৃষ্টি করেছি সর্বোত্তম গঠনে।', translationEn: 'We have certainly created man in the best of stature;' },
+      { ayahNumber: 5, arabic: 'ثُمَّ رَدَدْنَاهُ أَسْفَلَ سَافِلِينَ', pronunciationBn: 'ছুম্মা রাদাদনা-হু আসফালা সা-ফিলীন', translationBn: 'অতঃপর তাকে হীন থেকে হীনতম অবস্থায় ফিরিয়ে দিই,', translationEn: 'Then We return him to the lowest of the low,' },
+      { ayahNumber: 6, arabic: 'إِلَّا الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ فَلَهُمْ أَجْرٌ غَيْرُ مَمْنُونٍ', pronunciationBn: 'ইল্লাল্লাযীনা আ-মানূ ওয়া ‘আমিলুস সা-লিহা-তি ফালাহুম আজরুন গাইরু মামনূন', translationBn: 'তবে তারা ব্যতীত যারা ঈমান এনেছে ও সৎকর্ম করেছে; তাদের জন্য রয়েছে নিরবচ্ছিন্ন পুরস্কার।', translationEn: 'Except for those who believe and do righteous deeds, for they will have a reward uninterrupted.' },
+      { ayahNumber: 7, arabic: 'فَمَا يُكَذِّبُكَ بَعْدُ بِالدِّينِ', pronunciationBn: 'ফামা ইয়ুকাযযিবুকা বা‘দু বিদ্দীন', translationBn: 'অতএব এরপর কিসে তোমাকে প্রতিদান দিবসকে মিথ্যা ভাবতে প্ররোচিত করে?', translationEn: 'So what yet causes you to deny the Recompense?' },
+      { ayahNumber: 8, arabic: 'أَلَيْسَ اللَّهُ بِأَحْكَمِ الْحَاكِمِينَ', pronunciationBn: 'আলাইসাল্লা-হু বি-আহকামিল হা-কিমীন', translationBn: 'আল্লাহ কি বিচারকদের মধ্যে সর্বশ্রেষ্ঠ বিচারক নন?', translationEn: 'Is not Allah the most just of judges?' },
+    ],
+    keyWords: [
+      { arabic: 'أَحْسَنِ تَقْوِيمٍ', pronunciationBn: 'আহসানি তাক্বওয়ীম', meaningBn: 'সর্বোত্তম গঠন', meaningEn: 'Best of stature', root: 'ح س ن / ق و م', posBn: 'ইদাফাত', grammarNoteBn: 'মুদাফ-মুদাফ ইলাইহি' },
+      { arabic: 'أَحْكَمِ الْحَاكِمِينَ', pronunciationBn: 'আহকামিল হা-কিমীন', meaningBn: 'সর্বশ্রেষ্ঠ বিচারক', meaningEn: 'Most just of judges', root: 'ح ك م', posBn: 'ইসমু তাফদিল + জাময়ে মুযাক্কার সালিম', grammarNoteBn: 'সর্বোচ্চ প্রজ্ঞাময় বিচারক' },
+    ],
+  },
+  {
+    surahNumber: 96,
+    nameAr: 'سُورَةُ الْعَلَقِ',
+    nameBn: 'সূরা আল-আলাক',
+    nameEn: 'Al-Alaq',
+    revelationTypeBn: 'মক্কী',
+    ayahCount: 19,
+    accentGradient: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
+    summaryBn: 'কুরআনের প্রথম নাযিলকৃত ওহী: পড়ো তোমার রবের নামে, কলমের মাধ্যমে জ্ঞান শিক্ষা এবং সিজদায় আল্লাহর নৈকট্য।',
+    verses: [
+      { ayahNumber: 1, arabic: 'اقْرَأْ بِاسْمِ رَبِّكَ الَّذِي خَلَقَ', pronunciationBn: 'ইক্বরা’ বিসমি রাব্বিকাল্লাযী খালাক্ব', translationBn: 'পড়ুন আপনার প্রতিপালকের নামে, যিনি সৃষ্টি করেছেন।', translationEn: 'Recite in the name of your Lord who created -' },
+      { ayahNumber: 2, arabic: 'خَلَقَ الْإِنسَانَ مِنْ عَلَقٍ', pronunciationBn: 'খালাক্বাল ইনসা-না মিন ‘আলাক্ব', translationBn: 'তিনি মানুষকে সৃষ্টি করেছেন জমাট রক্তপিণ্ড থেকে।', translationEn: 'Created man from a clinging substance.' },
+      { ayahNumber: 3, arabic: 'اقْرَأْ وَرَبُّكَ الْأَكْرَمُ', pronunciationBn: 'ইক্বরা’ ওয়া রাব্বুকাল আকরাম', translationBn: 'পড়ুন, আর আপনার প্রতিপালক মহিমান্বিত।', translationEn: 'Recite, and your Lord is the most Generous -' },
+      { ayahNumber: 4, arabic: 'الَّذِي عَلَّمَ بِالْقَلَمِ', pronunciationBn: 'আল্লাযী ‘আল্লামা বিল ক্বালাম', translationBn: 'যিনি কলমের মাধ্যমে শিক্ষা দিয়েছেন।', translationEn: 'Who taught by the pen -' },
+      { ayahNumber: 5, arabic: 'عَلَّمَ الْإِنسَانَ مَا لَمْ يَعْلَمْ', pronunciationBn: '‘আল্লামাল ইনসা-না মা লাম ইয়া‘লাম', translationBn: 'তিনি মানুষকে শিক্ষা দিয়েছেন যা সে জানত না।', translationEn: 'Taught man that which he knew not.' },
+      { ayahNumber: 6, arabic: 'كَلَّا إِنَّ الْإِنسَانَ لَيَطْغَىٰ', pronunciationBn: 'কাল্লা ইন্নাল ইনসা-না লাইয়াত্বগা', translationBn: 'কখনোই না, নিশ্চয় মানুষ সীমালঙ্ঘন করে,', translationEn: 'No! [But] indeed, man transgresses' },
+      { ayahNumber: 7, arabic: 'أَن رَّآهُ اسْتَغْنَىٰ', pronunciationBn: 'আর রা-আহুস তাগনা', translationBn: 'কারণ সে নিজেকে অভাবমুক্ত মনে করে।', translationEn: 'Because he sees himself self-sufficient.' },
+      { ayahNumber: 8, arabic: 'إِنَّ إِلَىٰ رَبِّكَ الرُّجْعَىٰ', pronunciationBn: 'ইন্না ইলা রাব্বিকার রুজ‘আ', translationBn: 'নিশ্চয় আপনার প্রতিপালকের কাছেই প্রত্যাবর্তন।', translationEn: 'Indeed, to your Lord is the return.' },
+      { ayahNumber: 9, arabic: 'أَرَأَيْتَ الَّذِي يَنْهَىٰ', pronunciationBn: 'আরা-আইতাল্লাযী ইয়ানহা', translationBn: 'আপনি কি তাকে দেখেছেন যে বাধা দেয়,', translationEn: 'Have you seen the one who forbids' },
+      { ayahNumber: 10, arabic: 'عَبْدًا إِذَا صَلَّىٰ', pronunciationBn: '‘আবদান ইযা সাল্লা', translationBn: 'এক বান্দাকে যখন সে নামাজ পড়ে?', translationEn: 'A servant when he prays?' },
+      { ayahNumber: 11, arabic: 'أَرَأَيْتَ إِن كَانَ عَلَى الْهُدَىٰ', pronunciationBn: 'আরা-আইতা ইন কা-না ‘আলাল হুদা', translationBn: 'আপনি কি ভেবে দেখেছেন, যদি সে সৎপথে থাকে,', translationEn: 'Have you seen if he is upon guidance' },
+      { ayahNumber: 12, arabic: 'أَوْ أَمَرَ بِالتَّقْوَىٰ', pronunciationBn: 'আও আমারা বিত-তাক্বওয়া', translationBn: 'অথবা তাকওয়ার নির্দেশ দেয়?', translationEn: 'Or enjoins righteousness?' },
+      { ayahNumber: 13, arabic: 'أَرَأَيْتَ إِن كَذَّبَ وَتَوَلَّىٰ', pronunciationBn: 'আরা-আইতা ইন কাযযাবা ওয়া তাওয়াল্লা', translationBn: 'আপনি কি দেখেছেন, যদি সে মিথ্যারোপ করে এবং মুখ ফিরিয়ে নেয়?', translationEn: 'Have you seen if he denies and turns away -' },
+      { ayahNumber: 14, arabic: 'أَلَمْ يَعْلَم بِأَنَّ اللَّهَ يَرَىٰ', pronunciationBn: 'আলাম ইয়া‘লাম বিআন্নাল্লা-হা ইয়ারা', translationBn: 'সে কি জানে না যে নিশ্চয় আল্লাহ দেখেন?', translationEn: 'Does he not know that Allah sees?' },
+      { ayahNumber: 15, arabic: 'كَلَّا لَئِن لَّمْ يَنتَهِ لَنَسْفَعًا بِالنَّاصِيَةِ', pronunciationBn: 'কাল্লা লা-ইল্লাম ইয়ানতাহি লানাসফা‘আম বিন-না-সিয়াহ', translationBn: 'কখনো নয়, যদি সে বিরত না হয় তবে অবশ্যই আমি তার সামনের ঝুঁটি ধরে টেনে নেব,', translationEn: 'No! If he does not desist, We will surely drag him by the forelock -' },
+      { ayahNumber: 16, arabic: 'نَاصِيَةٍ كَاذِبَةٍ خَاطِئَةٍ', pronunciationBn: 'না-সিয়াতিন কা-যিবাতিন খা-ত্বিআহ', translationBn: 'মিথ্যাবাদী, পাপিষ্ঠ ঝুঁটি।', translationEn: 'A lying, sinning forelock.' },
+      { ayahNumber: 17, arabic: 'فَلْيَدْعُ نَادِيَهُ', pronunciationBn: 'ফাল-ইয়াদ‘উ না-দিয়াহ', translationBn: 'অতএব সে তার সভাষদদের ডাকুক,', translationEn: 'Then let him call his associates;' },
+      { ayahNumber: 18, arabic: 'سَنَدْعُ الزَّبَانِيَةَ', pronunciationBn: 'সানাদ‘উয-যাবা-নিয়াহ', translationBn: 'আমিও জাহান্নামের প্রহরীদের ডাকব।', translationEn: 'We will call the angels of Hell.' },
+      { ayahNumber: 19, arabic: 'كَلَّا لَا تُطِعْهُ وَاسْجُدْ وَاقْتَرِب', pronunciationBn: 'কাল্লা লা তুতি‘হু ওয়াসজুদ ওয়াক্বতারিব', translationBn: 'কখনোই তার অনুসরণ করবেন না; বরং সিজদা করুন এবং (আল্লাহর) নিকটবর্তী হোন।', translationEn: 'No! Do not obey him. But prostrate and draw near [to Allah].' },
+    ],
+    keyWords: [
+      { arabic: 'اقْرَأْ', pronunciationBn: 'ইক্বরা’', meaningBn: 'পড়ো', meaningEn: 'Read / Recite', root: 'ق ر أ', posBn: 'ফেয়েল আমর', grammarNoteBn: 'একবচন পুংলিঙ্গ আদেশসূচক ক্রিয়া' },
+      { arabic: 'عَلَّمَ', pronunciationBn: 'আল্লামা', meaningBn: 'তিনি শিক্ষা দিয়েছেন', meaningEn: 'He taught', root: 'ع ل م', posBn: 'ফেয়েল মাদী (তাফঈল)', grammarNoteBn: 'শিক্ষা দান করা অর্থে বাবে তাফঈল' },
+    ],
+  },
+  {
+    surahNumber: 97,
+    nameAr: 'سُورَةُ الْقَدْرِ',
+    nameBn: 'সূরা আল-কদর',
+    nameEn: 'Al-Qadr',
+    revelationTypeBn: 'মক্কী',
+    ayahCount: 5,
+    accentGradient: 'linear-gradient(135deg, #4338ca 0%, #7c3aed 100%)',
+    summaryBn: 'মহিমান্বিত কদরের রাতে কুরআন অবতরণ, যার মর্যাদা হাজার মাসের চেয়েও উত্তম।',
+    verses: [
+      { ayahNumber: 1, arabic: 'إِنَّا أَنزَلْنَاهُ فِي لَيْلَةِ الْقَدْرِ', pronunciationBn: 'ইন্না আনযালনা-হু ফী লাইলাতিল ক্বাদর', translationBn: 'নিশ্চয় আমি এই (কুরআন) অবতীর্ণ করেছি কদরের রাতে।', translationEn: 'Indeed, We sent the Qur’an down during the Night of Decree.' },
+      { ayahNumber: 2, arabic: 'وَمَا أَدْرَاكَ مَا لَيْلَةُ الْقَدْرِ', pronunciationBn: 'ওয়ামা আদরা-কা মা লাইলাতুল ক্বাদর', translationBn: 'আর আপনি কি জানেন কদরের রাত কী?', translationEn: 'And what can make you know what is the Night of Decree?' },
+      { ayahNumber: 3, arabic: 'لَيْلَةُ الْقَدْرِ خَيْرٌ مِّنْ أَلْفِ شَهْرٍ', pronunciationBn: 'লাইলাতুল ক্বাদরি খাইরুম মিন আলফি শাহর', translationBn: 'কদরের রাত হাজার মাসের চেয়েও উত্তম।', translationEn: 'The Night of Decree is better than a thousand months.' },
+      { ayahNumber: 4, arabic: 'تَنَزَّلُ الْمَلَائِكَةُ وَالرُّوحُ فِيهَا بِإِذْنِ رَبِّهِم مِّن كُلِّ أَمْرٍ', pronunciationBn: 'তানাযযালুল মালা-ইকাতু ওয়ার-রূহু ফীহা বি-ইযনি রাব্বিহিম মিন কুল্লি আমর', translationBn: 'সে রাতে ফেরেশতাগণ ও রূহ (জিবরীল আ.) তাদের প্রতিপালকের অনুমতিক্রমে প্রত্যেক কাজে অবতীর্ণ হন।', translationEn: 'The angels and the Spirit descend therein by permission of their Lord for every matter.' },
+      { ayahNumber: 5, arabic: 'سَلَامٌ هِيَ حَتَّىٰ مَطْلَعِ الْفَجْرِ', pronunciationBn: 'সালা-মুন হিয়া হাত্তা মাত্বলা‘ইল ফাজর', translationBn: 'সে রাত সম্পূর্ণ শান্তিময় ফজরের উদয় পর্যন্ত।', translationEn: 'Peace it is until the emergence of dawn.' },
+    ],
+    keyWords: [
+      { arabic: 'أَنزَلْنَاهُ', pronunciationBn: 'আনযালনা-হু', meaningBn: 'আমি তা অবতীর্ণ করেছি', meaningEn: 'We sent it down', root: 'ن ز ل', posBn: 'ফেয়েল মাদী (ইফআল)', grammarNoteBn: 'نا কর্তা ও هُ কুরআনের প্রতি ইঙ্গিতবাহী মাফউল' },
+      { arabic: 'سَلَامٌ', pronunciationBn: 'সালা-মুন', meaningBn: 'শান্তি ও নিরাপত্তা', meaningEn: 'Peace', root: 'س ل م', posBn: 'ইসম (খবর মুকাদ্দাম)', grammarNoteBn: 'সারা রাতের শান্তিময়তা বোঝাতে ব্যবহৃত' },
+    ],
+  },
+  {
+    surahNumber: 98,
+    nameAr: 'سُورَةُ الْبَيِّنَةِ',
+    nameBn: 'সূরা আল-বাইয়্যিনাহ',
+    nameEn: 'Al-Bayyinah',
+    revelationTypeBn: 'মাদানী',
+    ayahCount: 8,
+    accentGradient: 'linear-gradient(135deg, #047857 0%, #0f766e 100%)',
+    summaryBn: 'সুস্পষ্ট প্রমাণসহ রাসূল ﷺ-এর আগমন, একনিষ্ঠ ইবাদতের নির্দেশ এবং মুমিন ও কাফিরদের চূড়ান্ত পরিণতি।',
+    verses: [
+      { ayahNumber: 1, arabic: 'لَمْ يَكُنِ الَّذِينَ كَفَرُوا مِنْ أَهْلِ الْكِتَابِ وَالْمُشْرِكِينَ مُنفَكِّينَ حَتَّىٰ تَأْتِيَهُمُ الْبَيِّنَةُ', pronunciationBn: 'লাম ইয়াকুনিল্লাযীনা কাফারূ মিন আহলিল কিতা-বি ওয়াল মুশরিকীনা মুনফাক্কীনা হাত্তা তা’তিয়াহুমুল বাইয়্যিনাহ', translationBn: 'আহলে কিতাব ও মুশরিকদের মধ্যে যারা কুফরী করেছে, তারা তাদের কাছে সুস্পষ্ট প্রমাণ আসা পর্যন্ত বিরত ছিল না;', translationEn: 'Those who disbelieved among the People of the Scripture and the polytheists were not to be parted [from misbelief] until there came to them clear evidence -' },
+      { ayahNumber: 2, arabic: 'رَسُولٌ مِّنَ اللَّهِ يَتْلُو صُحُفًا مُّطَهَّرَةً', pronunciationBn: 'রাসূলুম মিনাল্লা-হি ইয়াতলূ সুহুফাম মুতাহহারাহ', translationBn: 'আল্লাহর পক্ষ থেকে একজন রাসূল, যিনি পবিত্র গ্রন্থসমূহ পাঠ করেন,', translationEn: 'A Messenger from Allah, reciting purified scriptures' },
+      { ayahNumber: 3, arabic: 'فِيهَا كُتُبٌ قَيِّمَةٌ', pronunciationBn: 'ফীহা কুতুবুন ক্বাইয়্যিমাহ', translationBn: 'যাতে রয়েছে সঠিক ও সুপ্রতিষ্ঠিত বিধি-বিধান।', translationEn: 'Within which are correct writings.' },
+      { ayahNumber: 4, arabic: 'وَمَا تَفَرَّقَ الَّذِينَ أُوتُوا الْكِتَابَ إِلَّا مِن بَعْدِ مَا جَاءَتْهُمُ الْبَيِّنَةُ', pronunciationBn: 'ওয়ামা তাফাররাক্বাল্লাযীনা উতুল কিতা-বা ইল্লা মিম বা‘দি মা জা-আতহুমুল বাইয়্যিনাহ', translationBn: 'আর যাদেরকে কিতাব দেওয়া হয়েছিল তারা তো কেবল সুস্পষ্ট প্রমাণ আসার পরই বিভক্ত হয়ে পড়েছিল।', translationEn: 'Nor did those who were given the Scripture become divided until after there had come to them clear evidence.' },
+      { ayahNumber: 5, arabic: 'وَمَا أُمِرُوا إِلَّا لِيَعْبُدُوا اللَّهَ مُخْلِصِينَ لَهُ الدِّينَ حُنَفَاءَ وَيُقِيمُوا الصَّلَاةَ وَيُؤْتُوا الزَّكَاةَ ۚ وَذَٰلِكَ دِينُ الْقَيِّمَةِ', pronunciationBn: 'ওয়ামা উমিরূ ইল্লা লি-ইয়া‘বুদুল্লা-হা মুখলিসীনা লাহুদ-দীনা হুনাফা-আ ওয়া ইয়ুক্বীমুস-সালা-তা ওয়া ইয়ু’তুয-যাকা-হ; ওয়া যা-লিকা দীনুল ক্বাইয়্যিমাহ', translationBn: 'আর তাদেরকে তো কেবল এ আদেশই দেওয়া হয়েছিল যে, তারা একনিষ্ঠভাবে আল্লাহর ইবাদত করবে, নামাজ কায়েম করবে এবং যাকাত প্রদান করবে; এটাই সঠিক ও সুপ্রতিষ্ঠিত দ্বীন।', translationEn: 'And they were not commanded except to worship Allah, [being] sincere to Him in religion, inclining to truth, and to establish prayer and to give zakah. And that is the correct religion.' },
+      { ayahNumber: 6, arabic: 'إِنَّ الَّذِينَ كَفَرُوا مِنْ أَهْلِ الْكِتَابِ وَالْمُشْرِكِينَ فِي نَارِ جَهَنَّمَ خَالِدِينَ فِيهَا ۚ أُولَٰئِكَ هُمْ شَرُّ الْبَرِيَّةِ', pronunciationBn: 'ইন্নাল্লাযীনা কাফারূ মিন আহলিল কিতা-বি ওয়াল মুশরিকীনা ফী না-রি জাহান্নামা খা-লিদীনা ফীহা; উলা-ইকা হুম শাররুল বারিয়্যাহ', translationBn: 'নিশ্চয় আহলে কিতাব ও মুশরিকদের মধ্যে যারা কুফরী করে, তারা জাহান্নামের আগুনে চিরকাল থাকবে; তারাই সৃষ্টির অধম।', translationEn: 'Indeed, they who disbelieved among the People of the Scripture and the polytheists will be in the fire of Hell, abiding eternally therein. Those are the worst of creatures.' },
+      { ayahNumber: 7, arabic: 'إِنَّ الَّذِينَ آمَنُوا وَعَمِلُوا الصَّالِحَاتِ أُولَٰئِكَ هُمْ خَيْرُ الْبَرِيَّةِ', pronunciationBn: 'ইন্নাল্লাযীনা আ-মানূ ওয়া ‘আমিলুস সা-লিহা-তি উলা-ইকা হুম খাইরুল বারিয়্যাহ', translationBn: 'নিশ্চয় যারা ঈমান এনেছে ও সৎকর্ম করেছে, তারাই সৃষ্টির শ্রেষ্ঠ।', translationEn: 'Indeed, they who have believed and done righteous deeds - those are the best of creatures.' },
+      { ayahNumber: 8, arabic: 'جَزَاؤُهُمْ عِندَ رَبِّهِمْ جَنَّاتُ عَدْنٍ تَجْرِي مِن تَحْتِهَا الْأَنْهَارُ خَالِدِينَ فِيهَا أَبَدًا ۖ رَّضِيَ اللَّهُ عَنْهُمْ وَرَضُوا عَنْهُ ۚ ذَٰلِكَ لِمَنْ خَشِيَ رَبَّهُ', pronunciationBn: 'জাযা-উহুম ‘ইনদা রাব্বিহিম জান্না-তু ‘আদনিন তাজরী মিন তাহতিহাল আনহা-রু খা-লিদীনা ফীহা আবাদা; রাদিয়াল্লা-হু ‘আনহুম ওয়া রাদূ ‘আনহু; যা-লিকা লিমান খাশিয়া রাব্বাহ', translationBn: 'তাদের প্রতিদান তাদের প্রতিপালকের কাছে চিরস্থায়ী জান্নাত, যার নিচ দিয়ে ঝর্ণাধারা প্রবাহিত; সেখানে তারা চিরকাল থাকবে। আল্লাহ তাদের প্রতি সন্তুষ্ট এবং তারাও তাঁর প্রতি সন্তুষ্ট; এটা তার জন্য যে তার প্রতিপালককে ভয় করে।', translationEn: 'Their reward with Allah will be gardens of perpetual residence beneath which rivers flow, wherein they will abide forever, Allah being pleased with them and they with Him. That is for whoever has feared his Lord.' },
+    ],
+    keyWords: [
+      { arabic: 'مُخْلِصِينَ', pronunciationBn: 'মুখলিসীনা', meaningBn: 'একনিষ্ঠ হয়ে', meaningEn: 'Sincere', root: 'خ ل ص', posBn: 'ইসমুল ফাঈল (হাল)', grammarNoteBn: 'বাবে ইফআল থেকে জাময়ে মুযাক্কার মানসুব' },
+      { arabic: 'خَيْرُ الْبَرِيَّةِ', pronunciationBn: 'খাইরুল বারিয়্যাহ', meaningBn: 'সৃষ্টির শ্রেষ্ঠ', meaningEn: 'Best of creatures', root: 'خ ي ر / ب ر أ', posBn: 'ইদাফাত', grammarNoteBn: 'খবর হিসেবে মারফু' },
+    ],
+  },
+];

@@ -16,11 +16,14 @@ import {
   Wind,
 } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
+import { IslamicClockDial } from '../components/IslamicClockDial';
 import {
   calculatePrayerTimes,
   calculateQiblaBearing,
   fetchLiveWeather,
   formatCountdown,
+  getBanglaDateString,
+  getBanglaDayPeriod,
   getHijriDateString,
   getNextPrayer,
   ISLAMIC_CITIES,
@@ -137,14 +140,8 @@ export const PrayerWeatherPage: React.FC = () => {
     [locationMeta.lat, locationMeta.lon]
   );
   const hijriDate = useMemo(() => getHijriDateString(now), [now]);
-
-  // Analog clock hand angles
-  const seconds = now.getSeconds();
-  const minutes = now.getMinutes() + seconds / 60;
-  const hours = (now.getHours() % 12) + minutes / 60;
-  const secDeg = seconds * 6;
-  const minDeg = minutes * 6;
-  const hourDeg = hours * 30;
+  const banglaDate = useMemo(() => getBanglaDateString(now), [now]);
+  const banglaPeriod = useMemo(() => getBanglaDayPeriod(now), [now]);
 
   const toggleAdhan = (key: WaqtKey) => {
     triggerSound('click');
@@ -244,111 +241,98 @@ export const PrayerWeatherPage: React.FC = () => {
 
         {/* Top Row: Live Analog/Digital Clock + Next Prayer Hero | Live Weather Card */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Clock & Next Prayer Hero */}
-          <div className="lg:col-span-7 surface-card rounded-3xl p-6 flex flex-col sm:flex-row items-center gap-6 justify-between">
-            {/* Analog Clock Dial */}
-            <div className="relative w-40 h-40 shrink-0">
-              <svg viewBox="0 0 120 120" className="w-full h-full drop-shadow-sm">
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="54"
-                  fill="var(--bg-surface-alt)"
-                  stroke="var(--border-strong)"
-                  strokeWidth="2.5"
-                />
-                {Array.from({ length: 12 }, (_, idx) => {
-                  const angle = (idx * 30 * Math.PI) / 180;
-                  const x1 = 60 + Math.sin(angle) * 44;
-                  const y1 = 60 - Math.cos(angle) * 44;
-                  const x2 = 60 + Math.sin(angle) * 49;
-                  const y2 = 60 - Math.cos(angle) * 49;
-                  return (
-                    <line
-                      key={idx}
-                      x1={x1}
-                      y1={y1}
-                      x2={x2}
-                      y2={y2}
-                      stroke="var(--text-muted)"
-                      strokeWidth={idx % 3 === 0 ? '2.2' : '1.1'}
-                      strokeLinecap="round"
-                    />
-                  );
-                })}
-                {/* Hour Hand */}
-                <line
-                  x1="60"
-                  y1="60"
-                  x2={60 + Math.sin((hourDeg * Math.PI) / 180) * 28}
-                  y2={60 - Math.cos((hourDeg * Math.PI) / 180) * 28}
-                  stroke="var(--text-primary)"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                />
-                {/* Minute Hand */}
-                <line
-                  x1="60"
-                  y1="60"
-                  x2={60 + Math.sin((minDeg * Math.PI) / 180) * 38}
-                  y2={60 - Math.cos((minDeg * Math.PI) / 180) * 38}
-                  stroke="var(--accent)"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                />
-                {/* Second Hand */}
-                <line
-                  x1="60"
-                  y1="60"
-                  x2={60 + Math.sin((secDeg * Math.PI) / 180) * 43}
-                  y2={60 - Math.cos((secDeg * Math.PI) / 180) * 43}
-                  stroke="#ef4444"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                />
-                <circle cx="60" cy="60" r="3.5" fill="var(--accent)" />
-              </svg>
-            </div>
-
-            {/* Digital Clock & Next Waqt Countdown */}
-            <div className="flex-1 text-center sm:text-left space-y-3 min-w-0">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--emerald-highlight)] text-[var(--accent)] text-xs font-semibold">
-                <Clock className="w-3.5 h-3.5" />
+          {/* Clock & Next Prayer Hero (Vibrant Sky / Calligraphy Switchable) */}
+          <div
+            className="lg:col-span-7 rounded-3xl p-6 text-white shadow-xl flex flex-col gap-5 justify-between relative overflow-hidden"
+            style={{
+              background:
+                prefs.dialVariant === 'calligraphy'
+                  ? 'linear-gradient(145deg, #0f172a 0%, #1e293b 55%, #0c1938 100%)'
+                  : 'linear-gradient(145deg, #0284c7 0%, #2563eb 52%, #1d4ed8 100%)',
+            }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-xs font-semibold">
+                <Clock className="w-3.5 h-3.5 text-amber-300" />
                 <span>{hijriDate}</span>
               </div>
 
-              <div>
-                <div className="text-3xl sm:text-4xl font-bold font-mono-num tracking-tight">
-                  {now.toLocaleTimeString('en-US', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: true,
-                  })}
-                </div>
-                <div className="text-xs text-[var(--text-muted)] mt-1">
-                  {now.toLocaleDateString('bn-BD', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })}
-                </div>
+              <div className="inline-flex p-0.5 rounded-full bg-black/25 border border-white/15 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerSound('click');
+                    updatePrefs((prev) => ({ ...prev, dialVariant: 'sky' }));
+                  }}
+                  className={`px-3 py-1 rounded-full font-semibold transition-all ${
+                    prefs.dialVariant === 'sky' ? 'bg-white text-sky-900 shadow' : 'text-white/80 hover:text-white'
+                  }`}
+                >
+                  নীল আকাশ ঘড়ি
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerSound('click');
+                    updatePrefs((prev) => ({ ...prev, dialVariant: 'calligraphy' }));
+                  }}
+                  className={`px-3 py-1 rounded-full font-semibold transition-all ${
+                    prefs.dialVariant === 'calligraphy' ? 'bg-white text-slate-950 shadow' : 'text-white/80 hover:text-white'
+                  }`}
+                >
+                  ক্যালিগ্রাফি ঘড়ি
+                </button>
               </div>
+            </div>
 
-              <div className="p-3.5 rounded-2xl surface-alt border border-[var(--border-strong)] flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row items-center gap-6 justify-between">
+              <IslamicClockDial
+                now={now}
+                variant={prefs.dialVariant}
+                sizeClass="w-40 h-40 sm:w-44 sm:h-44"
+              />
+
+              <div className="flex-1 text-center sm:text-left space-y-3 min-w-0">
                 <div>
-                  <div className="text-[11px] text-[var(--text-muted)]">পরবর্তী ওয়াক্ত</div>
-                  <div className="text-base font-bold flex items-center gap-2">
-                    <span>{next.nameBn}</span>
-                    <span className="font-arabic text-lg text-[var(--accent)]">{next.nameAr}</span>
-                    <span className="font-mono-num text-sm">({next.formattedTime})</span>
+                  <div className="flex items-baseline justify-center sm:justify-start gap-2">
+                    <span className="text-4xl sm:text-5xl font-extrabold font-mono-num tracking-tight">
+                      {String(now.getHours() % 12 === 0 ? 12 : now.getHours() % 12).padStart(2, '0')}:
+                      {String(now.getMinutes()).padStart(2, '0')}
+                    </span>
+                    <div className="flex flex-col leading-none text-left">
+                      <span className="text-base font-bold font-mono-num text-amber-300">
+                        :{String(now.getSeconds()).padStart(2, '0')}
+                      </span>
+                      <span className="text-xs font-bold text-white/90 mt-0.5">{banglaPeriod}</span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-white/85 mt-1">
+                    {now.toLocaleDateString('bn-BD', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })}
+                  </div>
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/30 border border-emerald-300/35 text-xs font-bold">
+                    <span>বঙ্গাব্দ: {banglaDate}</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-[10px] text-[var(--text-muted)]">বাকি সময়</div>
-                  <div className="text-lg font-bold font-mono-num text-[var(--accent)]">
-                    {formatCountdown(remainingSeconds)}
+
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] text-amber-50/90 font-semibold">পরবর্তী ওয়াক্ত</div>
+                    <div className="text-base font-extrabold flex items-center gap-2">
+                      <span>{next.nameBn}</span>
+                      <span className="font-arabic text-lg">{next.nameAr}</span>
+                      <span className="font-mono-num text-sm">({next.formattedTime})</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-amber-50/90">বাকি সময়</div>
+                    <div className="text-lg font-extrabold font-mono-num">
+                      {formatCountdown(remainingSeconds)}
+                    </div>
                   </div>
                 </div>
               </div>

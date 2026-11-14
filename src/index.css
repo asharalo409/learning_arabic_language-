@@ -185,6 +185,7 @@
     color: var(--text-primary);
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 220ms ease, color 180ms ease;
   }
 
   body {
@@ -194,6 +195,7 @@
     color: var(--text-primary);
     min-height: 100vh;
     overflow-x: hidden;
+    transition: background-color 240ms ease, color 180ms ease;
   }
 
   h1, h2, h3, h4 {
@@ -227,6 +229,7 @@
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--card-shadow);
+  transition: background-color 220ms ease, border-color 200ms ease, color 180ms ease;
 }
 
 .surface-alt {
@@ -234,6 +237,7 @@
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--border-subtle);
+  transition: background-color 220ms ease, border-color 200ms ease, color 180ms ease;
 }
 
 .glass-panel {
@@ -241,6 +245,7 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-subtle);
+  transition: background-color 220ms ease, border-color 200ms ease, color 180ms ease;
 }
 
 .btn-primary {
@@ -281,6 +286,20 @@
 
 .animate-float-slow {
   animation: floatSlow 4.5s ease-in-out infinite;
+}
+
+[data-global-arabic="true"] {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  text-underline-offset: 6px;
+  text-decoration-thickness: 1.5px;
+  cursor: pointer;
+  transition: text-decoration-color 150ms ease, background-color 150ms ease;
+}
+
+[data-global-arabic="true"]:hover {
+  text-decoration-color: var(--accent);
 }
 
 @media (prefers-reduced-motion: reduce) {

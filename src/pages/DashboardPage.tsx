@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   Award,
+  BarChart3,
   BookOpen,
   Calendar,
   CheckCircle2,
@@ -13,11 +14,25 @@ import {
   Layers,
   Lock,
   LogIn,
+  Minus,
+  Plus,
   Sparkles,
   Target,
   Trophy,
 } from 'lucide-react';
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { AppShell } from '../components/AppShell';
+import { CurriculumProgressGauge } from '../components/CurriculumProgressGauge';
 import { MuslimCompanionStrip } from '../components/MuslimCompanionStrip';
 import { BADGE_DEFINITIONS, useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -26,12 +41,29 @@ import { CURRICULUM_LEVELS } from '../data/curriculum';
 const WEEKDAYS_BN = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
 
 export const DashboardPage: React.FC = () => {
-  const { t, lang, progress, currentLevelNumber, allChapters, updateProfile, triggerSound } = useApp();
+  const {
+    t,
+    lang,
+    progress,
+    todayMinutesLearned,
+    weeklyActivity,
+    logStudyMinutes,
+    currentLevelNumber,
+    allChapters,
+    updateProfile,
+    triggerSound,
+  } = useApp();
   const { user, supabaseConnected } = useAuth();
   const [editingTarget, setEditingTarget] = useState(false);
   const [targetInput, setTargetInput] = useState(progress.dailyTargetMinutes);
   const [chartTab, setChartTab] = useState<'levels' | 'skills'>('levels');
   const [activeBarIdx, setActiveBarIdx] = useState<number>(0);
+
+  const dailyGoalPct = Math.min(
+    100,
+    Math.round((todayMinutesLearned / Math.max(1, progress.dailyTargetMinutes)) * 100)
+  );
+  const dailyGoalReached = todayMinutesLearned >= progress.dailyTargetMinutes;
 
   const avgQuizScore =
     progress.examHistory.length > 0
@@ -190,6 +222,36 @@ export const DashboardPage: React.FC = () => {
     });
   }, [progress.streakDays]);
 
+  const weeklyChartData = useMemo(() => {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    return weeklyActivity.map((entry) => {
+      const parsed = new Date(`${entry.date}T00:00:00`);
+      const isToday = entry.date === todayKey;
+      const weekdayBn = Number.isNaN(parsed.getTime()) ? entry.date : WEEKDAYS_BN[parsed.getDay()];
+      const shortDate = Number.isNaN(parsed.getTime())
+        ? entry.date.slice(5)
+        : `${parsed.getDate()}/${parsed.getMonth() + 1}`;
+      return {
+        date: entry.date,
+        label: isToday ? (lang === 'bn' ? 'আজ' : 'Today') : weekdayBn,
+        shortDate,
+        hoursStudied: Number((entry.minutesStudied / 60).toFixed(2)),
+        minutesStudied: entry.minutesStudied,
+        vocabLearned: entry.vocabLearned,
+      };
+    });
+  }, [lang, weeklyActivity]);
+
+  const weeklyTotals = useMemo(() => {
+    const totalMins = weeklyChartData.reduce((acc, d) => acc + d.minutesStudied, 0);
+    const totalVocab = weeklyChartData.reduce((acc, d) => acc + d.vocabLearned, 0);
+    return {
+      totalMinutes: totalMins,
+      totalHours: (totalMins / 60).toFixed(2),
+      totalVocab,
+    };
+  }, [weeklyChartData]);
+
   const handleSaveTarget = (e: React.FormEvent) => {
     e.preventDefault();
     const clamped = Math.max(5, Math.min(180, Number(targetInput) || 20));
@@ -253,7 +315,7 @@ export const DashboardPage: React.FC = () => {
               <span>Gmail দিয়ে লগইন / অ্যাকাউন্ট</span>
             </Link>
             <Link
-              to="/courses/beginners"
+              to="/courses"
               className="inline-flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold btn-secondary"
             >
               <BookOpen className="w-4 h-4 text-[var(--accent)]" />
@@ -287,7 +349,7 @@ export const DashboardPage: React.FC = () => {
             </h2>
             <div className="flex flex-wrap items-center gap-2.5 pt-1">
               <Link
-                to="/courses/beginners"
+                to="/courses"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold btn-primary shadow-sm"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -325,6 +387,148 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Top Habit Builder: Daily Study Streak + Daily Target Counter alongside 100-Chapter Gauge */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Daily Study Streak Counter */}
+          <div className="surface-card rounded-3xl p-5 border border-amber-500/35 bg-gradient-to-br from-amber-500/12 via-transparent to-orange-500/5 flex flex-col justify-between gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shrink-0">
+                  <Flame className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-300">
+                    {lang === 'bn' ? 'দৈনিক অধ্যয়ন স্ট্রিক (Daily Study Streak)' : 'Daily Study Streak'}
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-3xl font-extrabold font-mono-num">{progress.streakDays}</span>
+                    <span className="text-sm font-semibold text-[var(--text-secondary)]">
+                      {lang === 'bn' ? 'দিন একটানা সক্রিয়' : 'days running'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[11px] font-bold shrink-0">
+                {progress.streakDays >= 7 ? 'ধারাবাহিক সাধক' : 'নিয়মিত চর্চা'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1.5">
+              {weekStrip.map((d, i) => (
+                <div
+                  key={`streak-${d.dayNum}-${i}`}
+                  className={`py-2 rounded-xl text-center border text-[11px] transition-all ${
+                    d.isToday
+                      ? 'bg-amber-500 text-white border-transparent font-bold shadow'
+                      : d.active
+                      ? 'bg-amber-500/15 border-amber-500/35 text-amber-700 dark:text-amber-300 font-semibold'
+                      : 'surface-alt border-[var(--border-subtle)] text-[var(--text-muted)]'
+                  }`}
+                >
+                  <div>{d.dayName}</div>
+                  <div className="font-mono-num mt-0.5">{d.active ? '●' : '○'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Daily Target Counter */}
+          <div className="surface-card rounded-3xl p-5 border border-emerald-500/35 bg-gradient-to-br from-emerald-500/12 via-transparent to-teal-500/5 flex flex-col justify-between gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3.5">
+                <div className="relative w-12 h-12 shrink-0 flex items-center justify-center">
+                  <svg viewBox="0 0 48 48" className="w-full h-full -rotate-90">
+                    <circle cx="24" cy="24" r="20" fill="none" stroke="var(--bg-surface-alt)" strokeWidth="5" />
+                    <circle
+                      cx="24"
+                      cy="24"
+                      r="20"
+                      fill="none"
+                      stroke={dailyGoalReached ? '#10b981' : '#0ea5e9'}
+                      strokeWidth="5"
+                      strokeLinecap="round"
+                      strokeDasharray={2 * Math.PI * 20}
+                      strokeDashoffset={2 * Math.PI * 20 * (1 - dailyGoalPct / 100)}
+                      className="transition-all duration-500"
+                    />
+                  </svg>
+                  <span className="absolute text-[10px] font-bold font-mono-num">{dailyGoalPct}%</span>
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-300">
+                    {lang === 'bn' ? 'দৈনিক লক্ষ্য কাউন্টার (Daily Target)' : 'Daily Target Counter'}
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="text-3xl font-extrabold font-mono-num">{todayMinutesLearned}</span>
+                    <span className="text-sm font-semibold text-[var(--text-secondary)] font-mono-num">
+                      / {progress.dailyTargetMinutes} মি.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateProfile({ dailyTargetMinutes: Math.max(5, progress.dailyTargetMinutes - 5) })
+                  }
+                  className="p-1.5 rounded-lg btn-secondary"
+                  title="দৈনিক লক্ষ্য ৫ মিনিট কমান"
+                  aria-label="Decrease daily target"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateProfile({ dailyTargetMinutes: Math.min(180, progress.dailyTargetMinutes + 5) })
+                  }
+                  className="p-1.5 rounded-lg btn-secondary"
+                  title="দৈনিক লক্ষ্য ৫ মিনিট বাড়ান"
+                  aria-label="Increase daily target"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="h-2.5 rounded-full bg-[var(--bg-surface-alt)] overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    dailyGoalReached ? 'bg-emerald-500' : 'bg-gradient-to-r from-sky-500 to-emerald-500'
+                  }`}
+                  style={{ width: `${dailyGoalPct}%` }}
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="text-[var(--text-secondary)] font-medium">
+                  {dailyGoalReached
+                    ? 'মাশাআল্লাহ! আজকের লক্ষ্য পূর্ণ হয়েছে'
+                    : `আজকের লক্ষ্য পূরণে আরও ${Math.max(0, progress.dailyTargetMinutes - todayMinutesLearned)} মি. বাকি`}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => logStudyMinutes(5)}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold btn-secondary"
+                  >
+                    +৫ মি. চর্চা
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => logStudyMinutes(10)}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold btn-primary"
+                  >
+                    +১০ মি. চর্চা
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* 4-Column Prodex KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {kpis.map((item) => {
@@ -349,8 +553,133 @@ export const DashboardPage: React.FC = () => {
           })}
         </div>
 
+        {/* 100-Chapter Curriculum Circular Gauge & Chapter Matrix */}
+        <CurriculumProgressGauge
+          allChapters={allChapters}
+          completedLessonIds={progress.completedLessonIds}
+          lang={lang}
+          onCelebrateSound={triggerSound}
+        />
+
         {/* Live Muslim Companion Strip */}
         <MuslimCompanionStrip compact />
+
+        {/* Weekly Activity Chart (Recharts: Hours Studied + Vocabulary Learned over last 7 days) */}
+        <div className="surface-card rounded-3xl p-5 sm:p-6 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base sm:text-lg font-bold flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
+                <span>
+                  {lang === 'bn'
+                    ? 'সাপ্তাহিক অধ্যয়ন চার্ট (Weekly Activity Chart)'
+                    : 'Weekly Activity Chart'}
+                </span>
+              </h3>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                {lang === 'bn'
+                  ? 'গত ৭ দিনে দৈনিক অধ্যয়ন সময় (ঘণ্টা) এবং শেখা/অনুশীলিত শব্দের সংখ্যা'
+                  : 'Hours studied and vocabulary words learned over the last 7 days'}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm font-mono-num">
+              <div>
+                <span className="text-[var(--text-muted)]">মোট সময়: </span>
+                <span className="font-bold text-[var(--accent)]">
+                  {weeklyTotals.totalHours} ঘ. ({weeklyTotals.totalMinutes} মি.)
+                </span>
+              </div>
+              <span className="text-[var(--border-strong)]">·</span>
+              <div>
+                <span className="text-[var(--text-muted)]">শেখা শব্দ: </span>
+                <span className="font-bold text-emerald-500">{weeklyTotals.totalVocab} টি</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full h-[290px]" dir="ltr">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <ComposedChart data={weeklyChartData} margin={{ top: 10, right: 12, left: -10, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
+                  axisLine={{ stroke: 'var(--border-subtle)' }}
+                  tickLine={false}
+                />
+                <YAxis
+                  yAxisId="hours"
+                  orientation="left"
+                  allowDecimals
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={42}
+                  unit="h"
+                />
+                <YAxis
+                  yAxisId="vocab"
+                  orientation="right"
+                  allowDecimals={false}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                />
+                <Tooltip
+                  cursor={{ fill: 'var(--bg-surface-alt)', opacity: 0.45 }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload || payload.length === 0) return null;
+                    const row = payload[0]?.payload as (typeof weeklyChartData)[number] | undefined;
+                    if (!row) return null;
+                    return (
+                      <div className="surface-card border border-[var(--border-strong)] rounded-2xl px-3.5 py-2.5 shadow-lg text-xs space-y-1">
+                        <div className="font-bold text-[var(--text-primary)]">
+                          {row.label} ({row.shortDate})
+                        </div>
+                        <div className="flex items-center justify-between gap-4 font-mono-num">
+                          <span className="text-[var(--text-secondary)]">অধ্যয়ন সময়:</span>
+                          <span className="font-bold text-indigo-500">
+                            {row.hoursStudied} ঘ. ({row.minutesStudied} মি.)
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-4 font-mono-num">
+                          <span className="text-[var(--text-secondary)]">শেখা শব্দ:</span>
+                          <span className="font-bold text-emerald-500">{row.vocabLearned} টি</span>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                  formatter={(value) => (
+                    <span className="text-[var(--text-secondary)] font-medium">{value}</span>
+                  )}
+                />
+                <Bar
+                  yAxisId="hours"
+                  dataKey="hoursStudied"
+                  name={lang === 'bn' ? 'অধ্যয়ন (ঘণ্টা)' : 'Hours Studied'}
+                  fill="#6366f1"
+                  radius={[8, 8, 0, 0]}
+                  maxBarSize={36}
+                />
+                <Line
+                  yAxisId="vocab"
+                  type="monotone"
+                  dataKey="vocabLearned"
+                  name={lang === 'bn' ? 'শেখা শব্দ (সংখ্যা)' : 'Vocabulary Learned'}
+                  stroke="#10b981"
+                  strokeWidth={2.5}
+                  dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: 'var(--bg-surface)' }}
+                  activeDot={{ r: 6 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
 
         {/* Middle 2-Column Analytics: Bar Chart + Donut Ring (Image 1 Prodex style) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -630,7 +959,7 @@ export const DashboardPage: React.FC = () => {
                       </td>
                       <td className="py-3 text-right">
                         <Link
-                          to={lvl.level === 1 ? '/courses/beginners' : `/courses?level=${lvl.level}`}
+                          to={`/courses?level=${lvl.level}`}
                           className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:underline whitespace-nowrap"
                         >
                           <span>পড়ুন</span>

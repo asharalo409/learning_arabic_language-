@@ -1,5 +1,11 @@
 import { MasdarEntry } from '../types/academy';
 import { SAFWATUL_MASADIR_EXTRA } from './safwatulMasadirExtra';
+import { MASADIR_THULATHI_PART1 } from './masadirBankThulathiPart1';
+import { MASADIR_THULATHI_PART2 } from './masadirBankThulathiPart2';
+import { MASADIR_THULATHI_PART3 } from './masadirBankThulathiPart3';
+import { MASADIR_THULATHI_PART4 } from './masadirBankThulathiPart4';
+import { MASADIR_MAZID_BANK } from './masadirBankMazid';
+import { MASADIR_EXTENDED_BANK } from './masadirBankExtended';
 
 export const SAFWATUL_MASADIR_BABS = [
   { id: 'all', labelAr: 'جَمِيعُ الأَبْوَابِ', labelBn: 'সকল বাব' },
@@ -1376,7 +1382,69 @@ const SAFWATUL_MASADIR_BASE: MasdarEntry[] = [
   },
 ];
 
-export const SAFWATUL_MASADIR_LIST: MasdarEntry[] = [
-  ...SAFWATUL_MASADIR_BASE,
-  ...SAFWATUL_MASADIR_EXTRA,
-];
+function normalizeArabicKey(text: string): string {
+  return text
+    .replace(/[\u064B-\u065F\u0670\u0640\s]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه');
+}
+
+function cleanMasdarLabel(masdarAr: string, rootLetters: string): string {
+  if (!masdarAr.includes('/')) return masdarAr.trim();
+  const parts = masdarAr
+    .split('/')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return masdarAr.trim();
+
+  const rootChars = rootLetters
+    .split(/\s+/)
+    .map((r) => normalizeArabicKey(r))
+    .filter(Boolean);
+
+  // Filter out accidental stray variants that do not share at least 2 consonants of the root
+  const matched = parts.filter((part) => {
+    const cleanPart = normalizeArabicKey(part).replace(/^ال/, '');
+    let hits = 0;
+    for (const rc of rootChars) {
+      if (rc && cleanPart.includes(rc)) hits += 1;
+    }
+    return hits >= Math.min(2, rootChars.length);
+  });
+
+  if (matched.length > 0) return matched.slice(0, 2).join(' / ');
+  return parts[parts.length - 1];
+}
+
+function buildUnifiedMasadirList(): MasdarEntry[] {
+  const combined: MasdarEntry[] = [
+    ...SAFWATUL_MASADIR_BASE,
+    ...SAFWATUL_MASADIR_EXTRA,
+    ...MASADIR_THULATHI_PART1,
+    ...MASADIR_THULATHI_PART2,
+    ...MASADIR_THULATHI_PART3,
+    ...MASADIR_THULATHI_PART4,
+    ...MASADIR_MAZID_BANK,
+    ...MASADIR_EXTENDED_BANK,
+  ];
+
+  const seen = new Set<string>();
+  const result: MasdarEntry[] = [];
+
+  for (const item of combined) {
+    const babFamily = item.babNameBn.split('(')[0].trim();
+    const key = `${normalizeArabicKey(item.madiAr)}|${babFamily}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({
+      ...item,
+      masdarAr: cleanMasdarLabel(item.masdarAr, item.rootLetters),
+    });
+  }
+
+  return result;
+}
+
+export const SAFWATUL_MASADIR_LIST: MasdarEntry[] = buildUnifiedMasadirList();
+

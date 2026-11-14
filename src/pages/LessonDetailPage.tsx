@@ -1,27 +1,52 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
   Bot,
   CheckCircle2,
+  Download,
   Home,
   Mic,
   MicOff,
+  Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
 import { AudioButton } from '../components/AudioButton';
+import { GeminiRichText } from '../components/GeminiRichText';
 import { LessonAiPracticePanel } from '../components/LessonAiPracticePanel';
+import { QuickNahwText } from '../components/QuickNahwText';
 import { useApp } from '../context/AppContext';
 import { buildDetailedLessonForSlot } from '../data/lessonGenerator';
 import { DetailedLesson } from '../types/academy';
-import { startVoiceRecognition } from '../utils/speech';
+import { getDeduplicatedCurriculumLessonVocab } from '../utils/lessonVocabDedupe';
+import { buildSegmentsFromDetailedLesson } from '../utils/vocabAutoSync';
+import {
+  getOfflineLesson,
+  removeLessonOffline,
+  saveLessonOffline,
+  useOfflineManifest,
+} from '../utils/offlineCache';
+import { RecognitionHandle, startContinuousSpeechRecognition } from '../utils/speech';
 
 type LessonTab = 'overview' | 'vocab' | 'grammar' | 'dialogue' | 'practice' | 'quiz' | 'ai-practice';
 
 export const LessonDetailPage: React.FC = () => {
   const { chapterNumber, lessonNumber } = useParams<{ chapterNumber: string; lessonNumber: string }>();
-  const { t, lang, progress, allChapters, allDetailedLessons, completeLesson, awardXp, triggerSound } = useApp();
+  const {
+    t,
+    lang,
+    progress,
+    allChapters,
+    allDetailedLessons,
+    completeLesson,
+    awardXp,
+    triggerSound,
+    syncMissingVocabFromSegments,
+  } = useApp();
+  const offlineManifest = useOfflineManifest();
+  const syncedLessonsRef = useRef<Set<string>>(new Set());
 
   const chNum = Math.max(1, Math.min(100, Number(chapterNumber) || 1));
   const lsNum = Math.max(1, Math.min(10, Number(lessonNumber) || 1));
@@ -30,29 +55,70 @@ export const LessonDetailPage: React.FC = () => {
   const lessonId = `ch${chapter.chapterNumber}-l${lsNum}`;
 
   const activeLesson: DetailedLesson = useMemo(() => {
-    return allDetailedLessons[lessonId] || buildDetailedLessonForSlot(chapter, lsNum);
+    return (
+      allDetailedLessons[lessonId] ||
+      getOfflineLesson(lessonId) ||
+      buildDetailedLessonForSlot(chapter, lsNum)
+    );
   }, [allDetailedLessons, lessonId, chapter, lsNum]);
 
+  const isSavedOffline = offlineManifest.downloadedLessonIds.includes(activeLesson.id);
+
   const [activeTab, setActiveTab] = useState<LessonTab>('overview');
+  const [nahwTipsEnabled, setNahwTipsEnabled] = useState(true);
   const [writingAnswer, setWritingAnswer] = useState('');
   const [aiWritingFeedback, setAiWritingFeedback] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [revealedTransIdx, setRevealedTransIdx] = useState<number[]>([]);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [listeningMic, setListeningMic] = useState(false);
+  const [savingOffline, setSavingOffline] = useState(false);
+  const micRecRef = useRef<RecognitionHandle | null>(null);
 
-  // Reset per-lesson state & scroll to top when navigating between lessons
   useEffect(() => {
     setActiveTab('overview');
     setWritingAnswer('');
     setAiWritingFeedback(null);
     setRevealedTransIdx([]);
     setQuizAnswers({});
+    micRecRef.current?.stop();
+    setListeningMic(false);
     window.scrollTo({ top: 0 });
   }, [chNum, lsNum]);
 
+  useEffect(() => {
+    return () => {
+      micRecRef.current?.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (syncedLessonsRef.current.has(activeLesson.id)) return;
+    syncedLessonsRef.current.add(activeLesson.id);
+    syncMissingVocabFromSegments(buildSegmentsFromDetailedLesson(activeLesson));
+  }, [activeLesson, syncMissingVocabFromSegments]);
+
+  const handleToggleOfflineSave = async () => {
+    setSavingOffline(true);
+    try {
+      if (isSavedOffline) {
+        await removeLessonOffline(activeLesson.id);
+      } else {
+        await saveLessonOffline(activeLesson);
+        triggerSound('success');
+      }
+    } finally {
+      setSavingOffline(false);
+    }
+  };
+
+  const dedupedVocab = useMemo(
+    () => getDeduplicatedCurriculumLessonVocab(chNum, lsNum, allChapters, allDetailedLessons),
+    [chNum, lsNum, allChapters, allDetailedLessons]
+  );
+
   const lessonScopeContext = useMemo(() => {
-    const vocabLines = activeLesson.newVocabulary
+    const vocabLines = dedupedVocab.words
       .map((v) => `- ${v.arabic} (${v.pronunciationBn}): ${v.meaningBn}${v.root ? ` [মূলধাতু/নোট: ${v.root}]` : ''}`)
       .join('\n');
     const dialogueSample = activeLesson.conversation
@@ -67,7 +133,7 @@ export const LessonDetailPage: React.FC = () => {
       `এই পাঠের নতুন শব্দভাণ্ডার:\n${vocabLines}`,
       `সংলাপের নমুনা:\n${dialogueSample}`,
     ].join('\n\n');
-  }, [activeLesson]);
+  }, [activeLesson, dedupedVocab.words]);
 
   const starterQuestions = useMemo(
     () => [
@@ -108,6 +174,30 @@ export const LessonDetailPage: React.FC = () => {
     }
   };
 
+  const handleTogglePracticeMic = () => {
+    if (listeningMic) {
+      micRecRef.current?.stop();
+      setListeningMic(false);
+      return;
+    }
+    setListeningMic(true);
+    const handle = startContinuousSpeechRecognition('ar-SA', {
+      onTranscript: ({ fullText }) => {
+        setWritingAnswer(fullText);
+      },
+      onError: (msg) => {
+        setListeningMic(false);
+        setAiWritingFeedback(msg);
+      },
+      onEnd: () => setListeningMic(false),
+    });
+    if (!handle) {
+      setListeningMic(false);
+    } else {
+      micRecRef.current = handle;
+    }
+  };
+
   const prevLink =
     lsNum > 1
       ? `/courses/lesson/${chNum}/${lsNum - 1}`
@@ -129,78 +219,108 @@ export const LessonDetailPage: React.FC = () => {
       title={`অধ্যায় ${activeLesson.chapterNumber} · পাঠ ${activeLesson.lessonNumber}`}
       subtitle={lang === 'bn' ? activeLesson.titleBn : activeLesson.titleEn}
     >
-      <div className="space-y-6">
-        {/* Top Exit & Breadcrumb Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Flat Top Navigation, Offline Save & Completion Row */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-subtle)]">
           <div className="flex flex-wrap items-center gap-2">
             <Link
               to={`/courses/chapter/${activeLesson.chapterNumber}`}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold btn-secondary"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold btn-secondary"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>অধ্যায় {activeLesson.chapterNumber}-এ ফিরুন</span>
+              <span>অধ্যায় {activeLesson.chapterNumber}</span>
             </Link>
             <Link
               to="/courses"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium btn-secondary"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium btn-secondary"
             >
               <span>১০০ অধ্যায়</span>
             </Link>
             <Link
               to="/"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium btn-secondary"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium btn-secondary"
             >
               <Home className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>হোম</span>
+              <span className="hidden sm:inline">হোম</span>
             </Link>
           </div>
 
-          {isDone ? (
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[var(--emerald-highlight)] text-[var(--success)]">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{t.common.completed}</span>
-            </span>
-          ) : (
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => completeLesson(activeLesson.id, activeLesson.titleBn, activeLesson.titleEn)}
-              className="px-4 py-2 rounded-xl text-xs btn-primary font-bold"
+              onClick={() => void handleToggleOfflineSave()}
+              disabled={savingOffline}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                isSavedOffline
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/35'
+                  : 'btn-secondary'
+              }`}
+              title={isSavedOffline ? 'অফলাইন ক্যাশ থেকে সরান' : 'ইন্টারনেট ছাড়া পড়তে সেভ করুন'}
             >
-              {t.common.markComplete} (+50 XP)
+              {isSavedOffline ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>অফলাইনে সংরক্ষিত</span>
+                  <Trash2 className="w-3 h-3 opacity-60 ms-0.5" />
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
+                  <span>অফলাইনে সেভ</span>
+                </>
+              )}
             </button>
-          )}
+
+            {isDone ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[var(--emerald-highlight)] text-[var(--success)]">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{t.common.completed}</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => completeLesson(activeLesson.id, activeLesson.titleBn, activeLesson.titleEn)}
+                className="px-4 py-1.5 rounded-full text-xs btn-primary font-bold"
+              >
+                {t.common.markComplete} (+50 XP)
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Dedicated Top-of-Page Lesson Reader Card */}
-        <div className="surface-card rounded-2xl p-5 sm:p-6 space-y-6 border border-[var(--border-strong)]">
-          {/* Header */}
-          <div className="pb-4 border-b border-[var(--border-subtle)] space-y-2 pt-1">
-            <div className="inline-flex flex-wrap items-center gap-2 text-xs font-semibold text-[var(--accent)]">
-              <span>অধ্যায় {activeLesson.chapterNumber}</span>
-              <span aria-hidden="true">|</span>
-              <span>পাঠ {activeLesson.lessonNumber}</span>
-              <span aria-hidden="true">|</span>
-              <span>স্তর {chapter.level}</span>
-              <span aria-hidden="true">|</span>
-              <span>{activeLesson.track}</span>
-            </div>
-            <p className="font-arabic text-2xl sm:text-3xl text-[var(--accent)] leading-loose" dir="rtl">
-              {activeLesson.titleAr}
-            </p>
-            <h2 className="text-xl sm:text-2xl font-bold leading-snug">
-              {lang === 'bn' ? activeLesson.titleBn : activeLesson.titleEn}
-            </h2>
+        {/* Open Flat Lesson Header (No outer card squeezing mobile width) */}
+        <header className="space-y-2 pb-4 border-b border-[var(--border-subtle)]">
+          <div className="inline-flex flex-wrap items-center gap-2 text-xs font-bold text-[var(--accent)]">
+            <span>অধ্যায় {activeLesson.chapterNumber}</span>
+            <span>·</span>
+            <span>পাঠ {activeLesson.lessonNumber}</span>
+            <span>·</span>
+            <span>স্তর {chapter.level}</span>
+            <span>·</span>
+            <span>{activeLesson.track}</span>
           </div>
+          <p className="font-arabic text-3xl sm:text-4xl text-[var(--accent)] leading-loose" dir="rtl">
+            {activeLesson.titleAr}
+          </p>
+          <h2 className="text-xl sm:text-2xl font-extrabold leading-snug text-[var(--text-primary)]">
+            {lang === 'bn' ? activeLesson.titleBn : activeLesson.titleEn}
+          </h2>
+        </header>
 
-          {/* Clean Single-Row Horizontal Scrollable Tab Bar (No pill clutter) */}
-          <div className="flex items-center gap-1 overflow-x-auto border-b border-[var(--border-subtle)] -mx-2 px-2 pb-px">
+        {/* Clean Unboxed Horizontal Pill Tabs + Quick Nahw Tip Switch */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-subtle)]">
+          <nav className="flex flex-wrap gap-1.5">
             {(
               [
                 { id: 'overview', labelBn: 'উদ্দেশ্য', labelEn: 'Objectives' },
-                { id: 'vocab', labelBn: 'শব্দভাণ্ডার', labelEn: 'Vocabulary' },
+                {
+                  id: 'vocab',
+                  labelBn: `শব্দভাণ্ডার (${dedupedVocab.words.length})`,
+                  labelEn: `Vocabulary (${dedupedVocab.words.length})`,
+                },
                 { id: 'grammar', labelBn: 'ব্যাকরণ', labelEn: 'Grammar' },
                 { id: 'dialogue', labelBn: `সংলাপ (${activeLesson.conversation.length})`, labelEn: 'Dialogue' },
-                { id: 'practice', labelBn: 'লেখা ও অনুবাদ', labelEn: 'Practice' },
+                { id: 'practice', labelBn: 'অনুশীলন', labelEn: 'Practice' },
                 { id: 'quiz', labelBn: 'কুইজ', labelEn: 'Quiz' },
                 { id: 'ai-practice', labelBn: 'AI চর্চা', labelEn: 'AI Practice' },
               ] as const
@@ -211,316 +331,354 @@ export const LessonDetailPage: React.FC = () => {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-3.5 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap border-b-2 transition-colors shrink-0 ${
+                  className={`px-3.5 py-2 rounded-full text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
                     active
-                      ? 'border-[var(--accent)] text-[var(--accent)]'
-                      : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                      ? 'bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm'
+                      : 'btn-secondary text-[var(--text-secondary)]'
                   }`}
                 >
                   {lang === 'bn' ? tab.labelBn : tab.labelEn}
                 </button>
               );
             })}
-          </div>
+          </nav>
 
-          {/* TAB 1: Objectives & Revision */}
-          {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="surface-alt rounded-xl p-5 space-y-3">
-                <h3 className="font-bold text-sm text-[var(--accent)]">
-                  পাঠের শিখনফল (Learning Objectives)
-                </h3>
-                <ul className="space-y-2.5 text-sm text-[var(--text-secondary)] list-disc ps-5 leading-relaxed">
-                  {(lang === 'bn' ? activeLesson.objectivesBn : activeLesson.objectivesEn).map((obj, i) => (
-                    <li key={i}>{obj}</li>
-                  ))}
-                </ul>
-              </div>
+          <button
+            type="button"
+            onClick={() => setNahwTipsEnabled((v) => !v)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+              nahwTipsEnabled
+                ? 'bg-[var(--emerald-highlight)] text-[var(--accent)] border border-[var(--accent)]/40'
+                : 'btn-secondary text-[var(--text-muted)]'
+            }`}
+            title="বাক্যের আরবি ব্যাকরণিক পদে ক্লিক করে সংক্ষিপ্ত নাহু নিয়ম দেখুন"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>নাহু টিপস: {nahwTipsEnabled ? 'চালু' : 'বন্ধ'}</span>
+          </button>
+        </div>
 
-              <div className="surface-alt rounded-xl p-5 space-y-3">
-                <h3 className="font-bold text-sm text-[var(--accent)]">
-                  পূর্ববর্তী শব্দ পুনরালোচনা (সফওয়াতুল মাসাদির)
-                </h3>
-                <div className="space-y-3">
-                  {activeLesson.revisionVocabulary.map((v) => (
-                    <div
-                      key={v.id}
-                      className="p-4 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] space-y-2"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-arabic text-2xl text-[var(--accent)]" dir="rtl">
-                          {v.arabic}
-                        </span>
-                        <AudioButton text={v.arabic} compact />
-                      </div>
-                      <div className="space-y-1 text-xs sm:text-sm">
-                        <div>
-                          <span className="text-[var(--text-muted)]">উচ্চারণ: </span>
-                          <span className="font-medium text-[var(--text-primary)]">{v.pronunciationBn}</span>
-                        </div>
-                        <div>
-                          <span className="text-[var(--text-muted)]">বাংলা অর্থ: </span>
-                          <span className="font-semibold text-[var(--text-primary)]">{v.meaningBn}</span>
-                        </div>
-                        {v.root && (
-                          <div>
-                            <span className="text-[var(--text-muted)]">মূলধাতু ও ক্রিয়া: </span>
-                            <span className="font-arabic-ui text-[var(--text-secondary)]">{v.root}</span>
-                          </div>
-                        )}
-                      </div>
+        {/* TAB 1: Objectives & Revision (Open Gemini-like flat sections with large readable font) */}
+        {activeTab === 'overview' && (
+          <div className="space-y-8">
+            <section className="space-y-3 pb-6 border-b border-[var(--border-subtle)]">
+              <h3 className="text-base sm:text-lg font-extrabold text-[var(--accent)]">
+                পাঠের শিখনফল (Learning Objectives)
+              </h3>
+              <ul className="space-y-3 text-[15.5px] sm:text-base text-[var(--text-primary)] list-disc ps-5 leading-[1.85]">
+                {(lang === 'bn' ? activeLesson.objectivesBn : activeLesson.objectivesEn).map((obj, i) => (
+                  <li key={i}>{obj}</li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="space-y-4">
+              <h3 className="text-base sm:text-lg font-extrabold text-[var(--accent)]">
+                পূর্ববর্তী শব্দ পুনরালোচনা (সফওয়াতুল মাসাদির)
+              </h3>
+              <div className="divide-y divide-[var(--border-subtle)]">
+                {activeLesson.revisionVocabulary.map((v) => (
+                  <div key={v.id} className="py-4 first:pt-1 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-arabic text-3xl text-[var(--accent)]" dir="rtl">
+                        {v.arabic}
+                      </span>
+                      <AudioButton text={v.arabic} compact />
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: Cleanly Separated Vocabulary Cards */}
-          {activeTab === 'vocab' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {activeLesson.newVocabulary.map((word) => (
-                <div
-                  key={word.id}
-                  className="surface-alt rounded-xl p-4 sm:p-5 space-y-3 border border-[var(--border-subtle)]"
-                >
-                  <div className="flex items-start justify-between gap-3 pb-2.5 border-b border-[var(--border-subtle)]">
-                    <div className="space-y-1">
-                      <p className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]" dir="rtl">
-                        {word.arabic}
-                      </p>
-                      <div className="text-xs text-[var(--text-muted)]">
-                        উচ্চারণ: <span className="font-semibold text-[var(--text-primary)]">{word.pronunciationBn}</span>
-                      </div>
-                    </div>
-                    <AudioButton text={word.arabic} showSlow compact />
-                  </div>
-
-                  <div className="space-y-1.5 text-sm">
-                    <div>
-                      <span className="text-xs text-[var(--text-muted)]">বাংলা অর্থ: </span>
-                      <span className="font-bold text-[var(--text-primary)]">{word.meaningBn}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs text-[var(--text-muted)]">ইংরেজি: </span>
-                      <span className="text-xs text-[var(--text-secondary)]">{word.meaningEn}</span>
-                    </div>
-                    {word.category && (
-                      <div>
-                        <span className="text-xs text-[var(--text-muted)]">শ্রেণি / বাব: </span>
-                        <span className="text-xs font-medium text-[var(--accent)]">{word.category}</span>
-                      </div>
-                    )}
-                    {word.root && (
-                      <div>
-                        <span className="text-xs text-[var(--text-muted)]">মূলধাতু / নোট: </span>
-                        <span className="font-arabic-ui text-xs text-[var(--text-secondary)]">{word.root}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-[var(--bg-canvas)] border border-[var(--border-subtle)] space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-semibold text-[var(--accent)]">বাক্যে উদাহরণ:</span>
-                      <AudioButton text={word.exampleAr} compact showSlow={false} />
-                    </div>
-                    <p className="font-arabic text-lg text-[var(--text-primary)]" dir="rtl">
-                      {word.exampleAr}
-                    </p>
-                    <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{word.exampleBn}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* TAB 3: Clean Grammar Explanation & Examples */}
-          {activeTab === 'grammar' && (
-            <div className="space-y-5">
-              <div className="surface-alt rounded-xl p-5 space-y-3">
-                <p className="font-arabic text-2xl text-[var(--accent)]" dir="rtl">
-                  {activeLesson.grammarTopicAr}
-                </p>
-                <h3 className="text-lg font-bold">{activeLesson.grammarTopicBn}</h3>
-                <div className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-line">
-                  {lang === 'bn' ? activeLesson.grammarExplanationBn : activeLesson.grammarExplanationEn}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="text-sm font-bold text-[var(--accent)]">উদাহরণ ও পদ-বিশ্লেষণ:</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {activeLesson.grammarExamples.map((ex, i) => (
-                    <div key={i} className="surface-alt rounded-xl p-4 space-y-2 border border-[var(--border-subtle)]">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="font-arabic text-2xl text-[var(--accent)]" dir="rtl">
-                          {ex.arabic}
-                        </p>
-                        <AudioButton text={ex.arabic} compact />
-                      </div>
-                      <div className="space-y-1 text-xs sm:text-sm">
-                        <div>
-                          <span className="text-[var(--text-muted)]">উচ্চারণ: </span>
-                          <span className="font-medium">{ex.pronunciationBn}</span>
-                        </div>
-                        <div>
-                          <span className="text-[var(--text-muted)]">বাংলা অর্থ: </span>
-                          <span className="font-semibold">{ex.meaningBn}</span>
-                        </div>
-                        {ex.meaningEn && ex.meaningEn !== ex.meaningBn && (
-                          <div className="pt-1 border-t border-[var(--border-subtle)] text-xs text-[var(--text-secondary)]">
-                            <span className="font-semibold text-[var(--accent)]">বিশ্লেষণ: </span>
-                            {ex.meaningEn}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: 15-20 Line Dialogue */}
-          {activeTab === 'dialogue' && (
-            <div className="space-y-4">
-              <div className="surface-alt rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-bold text-[var(--accent)]">
-                  {activeLesson.conversation.length} লাইনের বাস্তবসম্মত আরবি সংলাপ
-                </h3>
-                <AudioButton text={activeLesson.conversation.map((c) => c.arabic).join(' ')} showSlow />
-              </div>
-
-              <div className="space-y-3">
-                {activeLesson.conversation.map((line, index) => (
-                  <div
-                    key={index}
-                    className="surface-alt rounded-xl p-4 sm:p-5 space-y-2.5 border border-[var(--border-subtle)]"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-xs font-semibold text-[var(--accent)]">
-                        <span className="font-mono-num me-2">{String(index + 1).padStart(2, '0')}.</span>
-                        <span className="font-arabic-ui text-sm me-2">{line.speaker}</span>
-                        <span className="text-[var(--text-muted)] font-normal">({line.speakerRoleBn})</span>
-                      </div>
-                      <AudioButton text={line.arabic} showSlow compact />
-                    </div>
-                    <p className="font-arabic text-2xl text-[var(--text-primary)] leading-relaxed" dir="rtl">
-                      {line.arabic}
-                    </p>
-                    <div className="space-y-1 text-xs sm:text-sm pt-1 border-t border-[var(--border-subtle)]">
+                    <div className="space-y-1 text-[15px] sm:text-base leading-relaxed">
                       <div>
                         <span className="text-[var(--text-muted)]">উচ্চারণ: </span>
-                        <span className="font-medium text-[var(--text-secondary)]">{line.pronunciationBn}</span>
+                        <span className="font-semibold text-[var(--text-primary)]">{v.pronunciationBn}</span>
                       </div>
                       <div>
-                        <span className="text-[var(--text-muted)]">বাংলা অনুবাদ: </span>
-                        <span className="font-semibold text-[var(--text-primary)]">{line.translationBn}</span>
+                        <span className="text-[var(--text-muted)]">বাংলা অর্থ: </span>
+                        <span className="font-bold text-[var(--text-primary)]">{v.meaningBn}</span>
                       </div>
+                      {v.root && (
+                        <div>
+                          <span className="text-[var(--text-muted)]">মূলধাতু ও ক্রিয়া: </span>
+                          <span className="font-arabic-ui text-[var(--text-secondary)]">{v.root}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            </section>
+          </div>
+        )}
 
-          {/* TAB 5: Writing & Translation */}
-          {activeTab === 'practice' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="surface-alt rounded-xl p-5 space-y-3.5">
-                <h3 className="font-bold text-sm text-[var(--accent)]">
-                  আরবি লেখার অনুশীলন ও AI সংশোধন
-                </h3>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  {lang === 'bn' ? activeLesson.writingPromptBn : activeLesson.writingPromptEn}
-                </p>
-                <textarea
-                  rows={3}
-                  dir="rtl"
-                  value={writingAnswer}
-                  onChange={(e) => setWritingAnswer(e.target.value)}
-                  placeholder="اكتب الجملة العربية هنا..."
-                  className="w-full p-3 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] font-arabic text-lg focus:outline-none focus:border-[var(--accent)]"
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (listeningMic) return;
-                      setListeningMic(true);
-                      startVoiceRecognition('ar-SA', {
-                        onResult: (transcript) => {
-                          setListeningMic(false);
-                          setWritingAnswer(transcript);
-                        },
-                        onError: (msg) => {
-                          setListeningMic(false);
-                          setAiWritingFeedback(msg);
-                        },
-                        onEnd: () => setListeningMic(false),
-                      });
-                    }}
-                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs ${
-                      listeningMic ? 'bg-[var(--danger)] text-white' : 'btn-secondary'
-                    }`}
-                  >
-                    {listeningMic ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-[var(--accent)]" />}
-                    <span>{listeningMic ? 'শুনছি...' : 'ভয়েসে বলুন'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCheckWritingWithAi}
-                    disabled={aiLoading || !writingAnswer.trim()}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs btn-primary disabled:opacity-50"
-                  >
-                    <Bot className="w-4 h-4" />
-                    <span>{aiLoading ? 'যাচাই হচ্ছে...' : 'AI দিয়ে লেখা যাচাই করুন'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWritingAnswer(activeLesson.writingTargetHintAr)}
-                    className="px-3 py-2 rounded-xl text-xs btn-secondary"
-                  >
-                    নমুনা উত্তর বসান
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('ai-practice')}
-                    className="px-3 py-2 rounded-xl text-xs font-bold text-[var(--accent)] hover:underline"
-                  >
-                    এই পাঠ নিয়ে AI চর্চায় যান →
-                  </button>
-                </div>
-                {aiWritingFeedback && (
-                  <div className="p-3.5 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-sm whitespace-pre-wrap leading-relaxed">
-                    {aiWritingFeedback}
-                  </div>
+        {/* TAB 2: Open Un-Cramped Complete Sequential Vocabulary List */}
+        {activeTab === 'vocab' && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-subtle)] text-xs sm:text-sm text-[var(--text-secondary)]">
+              <span>
+                এই পাঠে ব্যবহৃত <strong className="text-[var(--accent)] font-mono-num">{dedupedVocab.words.length}টি</strong> নতুন শব্দ
+                {dedupedVocab.skippedPreviouslyTaughtCount > 0 && (
+                  <span className="text-[var(--text-muted)]">
+                    {' '}· পূর্ববর্তী পাঠে শেখা {dedupedVocab.skippedPreviouslyTaughtCount}টি পুনরাবৃত্ত শব্দ বাদ দেওয়া হয়েছে
+                  </span>
+                )}
+              </span>
+            </div>
+
+            {dedupedVocab.words.length === 0 ? (
+              <div className="py-8 text-center text-sm text-[var(--text-secondary)]">
+                এই পাঠের ব্যবহৃত সকল শব্দ পূর্ববর্তী পাঠসমূহে ইতোমধ্যে শেখানো হয়েছে — পুনরাবৃত্তি এড়াতে পুনরায় তালিকাভুক্ত করা হয়নি।
+              </div>
+            ) : (
+              <div className="divide-y divide-[var(--border-subtle)]">
+                {dedupedVocab.words.map((word) => (
+                  <article key={word.id} className="py-5 first:pt-1 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <p className="font-arabic text-3xl sm:text-4xl text-[var(--accent)]" dir="rtl">
+                          {word.arabic}
+                        </p>
+                        <div className="text-sm text-[var(--text-muted)]">
+                          উচ্চারণ: <span className="font-semibold text-[var(--text-primary)]">{word.pronunciationBn}</span>
+                        </div>
+                      </div>
+                      <AudioButton text={word.arabic} showSlow compact />
+                    </div>
+
+                    <div className="space-y-1.5 text-[15.5px] sm:text-base leading-relaxed">
+                      <div>
+                        <span className="text-sm text-[var(--text-muted)]">বাংলা অর্থ: </span>
+                        <span className="font-extrabold text-[var(--text-primary)]">{word.meaningBn}</span>
+                        <span className="text-sm text-[var(--text-muted)] ms-2">({word.meaningEn})</span>
+                      </div>
+                      {(word.category || word.root) && (
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-[var(--text-secondary)]">
+                          {word.category && (
+                            <span>
+                              শ্রেণি: <strong className="text-[var(--accent)]">{word.category}</strong>
+                            </span>
+                          )}
+                          {word.root && (
+                            <span className="font-arabic-ui">মূলধাতু: {word.root}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-2xl surface-alt border border-[var(--border-subtle)] p-4 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-[var(--accent)]">বাক্যে উদাহরণ:</span>
+                        <AudioButton text={word.exampleAr} compact showSlow={false} />
+                      </div>
+                      <QuickNahwText
+                        text={word.exampleAr}
+                        enabled={nahwTipsEnabled}
+                        className="font-arabic text-xl sm:text-2xl text-[var(--text-primary)]"
+                      />
+                      <p className="text-[15px] text-[var(--text-secondary)] leading-relaxed">{word.exampleBn}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: Open Grammar Explanation & Examples */}
+        {activeTab === 'grammar' && (
+          <div className="space-y-7">
+            <section className="pb-6 border-b border-[var(--border-subtle)] space-y-3">
+              <p className="font-arabic text-3xl text-[var(--accent)]" dir="rtl">
+                {activeLesson.grammarTopicAr}
+              </p>
+              <h3 className="text-xl font-extrabold">{activeLesson.grammarTopicBn}</h3>
+              <div className="text-[15.5px] sm:text-base text-[var(--text-primary)] leading-[1.85] whitespace-pre-line">
+                {lang === 'bn' ? activeLesson.grammarExplanationBn : activeLesson.grammarExplanationEn}
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-base font-extrabold text-[var(--accent)]">উদাহরণ ও পদ-বিশ্লেষণ:</h4>
+                {nahwTipsEnabled && (
+                  <span className="text-xs text-[var(--text-muted)]">
+                    ডট-দাগযুক্ত আরবি শব্দে ক্লিক করে দ্রুত নাহু নিয়ম দেখুন
+                  </span>
                 )}
               </div>
+              <div className="divide-y divide-[var(--border-subtle)]">
+                {activeLesson.grammarExamples.map((ex, i) => (
+                  <div key={i} className="py-4 first:pt-1 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <QuickNahwText
+                          text={ex.arabic}
+                          enabled={nahwTipsEnabled}
+                          className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]"
+                        />
+                      </div>
+                      <AudioButton text={ex.arabic} compact />
+                    </div>
+                    <div className="space-y-1 text-[15px] sm:text-base leading-relaxed">
+                      <div>
+                        <span className="text-[var(--text-muted)]">উচ্চারণ: </span>
+                        <span className="font-medium">{ex.pronunciationBn}</span>
+                      </div>
+                      <div>
+                        <span className="text-[var(--text-muted)]">বাংলা অর্থ: </span>
+                        <span className="font-bold">{ex.meaningBn}</span>
+                      </div>
+                      {ex.meaningEn && ex.meaningEn !== ex.meaningBn && (
+                        <div className="text-sm text-[var(--text-secondary)]">
+                          <span className="font-bold text-[var(--accent)]">বিশ্লেষণ: </span>
+                          {ex.meaningEn}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
 
-              <div className="surface-alt rounded-xl p-5 space-y-4">
-                <h3 className="font-bold text-sm text-[var(--accent)]">অনুবাদ অনুশীলন</h3>
+        {/* TAB 4: Spacious Dialogue Flow */}
+        {activeTab === 'dialogue' && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--border-subtle)]">
+              <div>
+                <h3 className="text-base font-extrabold text-[var(--accent)]">
+                  {activeLesson.conversation.length} লাইনের বাস্তবসম্মত আরবি সংলাপ
+                </h3>
+                {nahwTipsEnabled && (
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    ডট-দাগযুক্ত ব্যাকরণিক পদে ক্লিক করলে সাথে সাথে সংক্ষিপ্ত নাহু টিপ খুলবে
+                  </p>
+                )}
+              </div>
+              <AudioButton text={activeLesson.conversation.map((c) => c.arabic).join(' ')} showSlow />
+            </div>
+
+            <div className="divide-y divide-[var(--border-subtle)]">
+              {activeLesson.conversation.map((line, index) => (
+                <div key={index} className="py-4 first:pt-1 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs sm:text-sm font-bold text-[var(--accent)]">
+                      <span className="font-mono-num me-2">{String(index + 1).padStart(2, '0')}.</span>
+                      <span className="font-arabic-ui me-2">{line.speaker}</span>
+                      <span className="text-[var(--text-muted)] font-normal">({line.speakerRoleBn})</span>
+                    </div>
+                    <AudioButton text={line.arabic} showSlow compact />
+                  </div>
+                  <QuickNahwText
+                    text={line.arabic}
+                    enabled={nahwTipsEnabled}
+                    className="font-arabic text-2xl sm:text-3xl text-[var(--text-primary)] leading-[2.05]"
+                  />
+                  <div className="space-y-1 text-[15px] sm:text-base leading-relaxed">
+                    <div>
+                      <span className="text-[var(--text-muted)]">উচ্চারণ: </span>
+                      <span className="font-medium text-[var(--text-secondary)]">{line.pronunciationBn}</span>
+                    </div>
+                    <div>
+                      <span className="text-[var(--text-muted)]">বাংলা অনুবাদ: </span>
+                      <span className="font-bold text-[var(--text-primary)]">{line.translationBn}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: Writing & Translation */}
+        {activeTab === 'practice' && (
+          <div className="space-y-8">
+            <section className="space-y-3.5 pb-6 border-b border-[var(--border-subtle)]">
+              <h3 className="text-base font-extrabold text-[var(--accent)]">
+                আরবি লেখার অনুশীলন ও AI সংশোধন
+              </h3>
+              <p className="text-[15.5px] sm:text-base text-[var(--text-primary)] leading-relaxed">
+                {lang === 'bn' ? activeLesson.writingPromptBn : activeLesson.writingPromptEn}
+              </p>
+              <textarea
+                rows={3}
+                dir="rtl"
+                value={writingAnswer}
+                onChange={(e) => setWritingAnswer(e.target.value)}
+                placeholder="اكتب الجملة العربية هنا..."
+                className="w-full p-4 rounded-2xl surface-alt border border-[var(--border-subtle)] font-arabic text-xl sm:text-2xl focus:outline-none focus:border-[var(--accent)]"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleTogglePracticeMic}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold ${
+                    listeningMic ? 'bg-emerald-500 text-white animate-pulse' : 'btn-secondary'
+                  }`}
+                >
+                  {listeningMic ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-[var(--accent)]" />}
+                  <span>{listeningMic ? 'শুনছে... থামান' : 'ভয়েসে আরবি বলুন'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCheckWritingWithAi}
+                  disabled={aiLoading || !writingAnswer.trim()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold btn-primary disabled:opacity-50"
+                >
+                  <Bot className="w-4 h-4" />
+                  <span>{aiLoading ? 'যাচাই হচ্ছে...' : 'AI দিয়ে লেখা যাচাই করুন'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWritingAnswer(activeLesson.writingTargetHintAr)}
+                  className="px-3.5 py-2 rounded-full text-xs font-semibold btn-secondary"
+                >
+                  নমুনা উত্তর বসান
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('ai-practice')}
+                  className="px-3 py-2 text-xs font-bold text-[var(--accent)] hover:underline"
+                >
+                  এই পাঠ নিয়ে AI চর্চায় যান →
+                </button>
+              </div>
+              {aiWritingFeedback && (
+                <div className="surface-card rounded-3xl border border-[var(--border-subtle)] p-5 space-y-2">
+                  <div className="text-xs font-bold text-[var(--accent)]">AI শিক্ষকের সংশোধন ও পরামর্শ</div>
+                  <GeminiRichText
+                    text={aiWritingFeedback}
+                    className="text-[15.5px] sm:text-base whitespace-pre-wrap leading-[1.85] font-arabic-ui"
+                  />
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="text-base font-extrabold text-[var(--accent)]">অনুবাদ অনুশীলন</h3>
+              <div className="divide-y divide-[var(--border-subtle)]">
                 {activeLesson.translationExercises.map((ex, idx) => {
                   const revealed = revealedTransIdx.includes(idx);
                   return (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] space-y-2"
-                    >
-                      <div className="text-xs font-semibold text-[var(--accent)]">
+                    <div key={idx} className="py-4 first:pt-1 space-y-2">
+                      <div className="text-xs font-bold text-[var(--accent)]">
                         {ex.direction === 'ar-to-bn' ? 'আরবি → বাংলা অনুবাদ' : 'বাংলা → আরবি অনুবাদ'}
                       </div>
-                      <p className={ex.direction === 'ar-to-bn' ? 'font-arabic text-xl' : 'text-sm font-medium'}>
-                        {ex.prompt}
-                      </p>
-                      <div className="text-xs text-[var(--text-muted)]">ইঙ্গিত: {ex.hint}</div>
+                      {ex.direction === 'ar-to-bn' ? (
+                        <QuickNahwText
+                          text={ex.prompt}
+                          enabled={nahwTipsEnabled}
+                          className="font-arabic text-2xl sm:text-3xl text-[var(--text-primary)]"
+                        />
+                      ) : (
+                        <p className="text-base font-semibold">{ex.prompt}</p>
+                      )}
+                      <div className="text-sm text-[var(--text-muted)]">ইঙ্গিত: {ex.hint}</div>
                       {revealed ? (
-                        <p className="text-sm font-semibold text-[var(--success)] pt-1">{ex.answer}</p>
+                        <p className="text-base font-bold text-[var(--success)] pt-1">{ex.answer}</p>
                       ) : (
                         <button
                           type="button"
                           onClick={() => setRevealedTransIdx((prev) => [...prev, idx])}
-                          className="px-3 py-1.5 rounded-lg text-xs btn-secondary"
+                          className="px-3.5 py-1.5 rounded-full text-xs font-semibold btn-secondary"
                         >
                           উত্তর দেখুন
                         </button>
@@ -529,76 +687,78 @@ export const LessonDetailPage: React.FC = () => {
                   );
                 })}
               </div>
-            </div>
-          )}
+            </section>
+          </div>
+        )}
 
-          {/* TAB 6: Quiz */}
-          {activeTab === 'quiz' && (
-            <div className="space-y-4">
-              {activeLesson.quiz.map((q, qIdx) => {
-                const chosen = quizAnswers[q.id];
-                const isAnswered = chosen !== undefined;
-                const isCorrect = chosen === q.correctIndex;
-                return (
-                  <div key={q.id} className="surface-alt rounded-xl p-5 space-y-3">
-                    <div className="text-sm font-bold">
-                      {qIdx + 1}. {lang === 'bn' ? q.questionBn : q.questionEn}
-                    </div>
-                    {q.arabicPrompt && (
-                      <p className="font-arabic text-2xl text-[var(--accent)]" dir="rtl">
-                        {q.arabicPrompt}
-                      </p>
-                    )}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {q.options.map((opt, oIdx) => (
-                        <button
-                          key={oIdx}
-                          type="button"
-                          onClick={() => {
-                            triggerSound(oIdx === q.correctIndex ? 'success' : 'error');
-                            setQuizAnswers((prev) => ({ ...prev, [q.id]: oIdx }));
-                          }}
-                          className={`text-left px-4 py-2.5 rounded-xl text-sm border transition-colors ${
-                            chosen === oIdx
-                              ? oIdx === q.correctIndex
-                                ? 'border-[var(--success)] bg-[var(--emerald-highlight)] font-semibold'
-                                : 'border-[var(--danger)] bg-[var(--danger)]/10'
-                              : 'border-[var(--border-subtle)] bg-[var(--bg-canvas)] hover:border-[var(--border-strong)]'
-                          }`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                    {isAnswered && (
-                      <div className={`text-xs font-medium ${isCorrect ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
-                        {isCorrect ? 'সঠিক উত্তর! ' : 'আবার দেখুন: '}
-                        {lang === 'bn' ? q.explanationBn : q.explanationEn}
-                      </div>
-                    )}
+        {/* TAB 6: Quiz */}
+        {activeTab === 'quiz' && (
+          <div className="divide-y divide-[var(--border-subtle)]">
+            {activeLesson.quiz.map((q, qIdx) => {
+              const chosen = quizAnswers[q.id];
+              const isAnswered = chosen !== undefined;
+              const isCorrect = chosen === q.correctIndex;
+              return (
+                <div key={q.id} className="py-5 first:pt-1 space-y-3">
+                  <div className="text-base font-bold leading-snug">
+                    {qIdx + 1}. {lang === 'bn' ? q.questionBn : q.questionEn}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  {q.arabicPrompt && (
+                    <QuickNahwText
+                      text={q.arabicPrompt}
+                      enabled={nahwTipsEnabled}
+                      className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]"
+                    />
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {q.options.map((opt, oIdx) => (
+                      <button
+                        key={oIdx}
+                        type="button"
+                        onClick={() => {
+                          triggerSound(oIdx === q.correctIndex ? 'success' : 'error');
+                          setQuizAnswers((prev) => ({ ...prev, [q.id]: oIdx }));
+                        }}
+                        className={`text-left px-4 py-3 rounded-2xl text-[15px] border transition-colors ${
+                          chosen === oIdx
+                            ? oIdx === q.correctIndex
+                              ? 'border-[var(--success)] bg-[var(--emerald-highlight)] font-bold'
+                              : 'border-[var(--danger)] bg-[var(--danger)]/10'
+                            : 'border-[var(--border-subtle)] surface-alt hover:border-[var(--border-strong)]'
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                  {isAnswered && (
+                    <div className={`text-sm font-medium leading-relaxed ${isCorrect ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
+                      {isCorrect ? 'সঠিক উত্তর! ' : 'আবার দেখুন: '}
+                      {lang === 'bn' ? q.explanationBn : q.explanationEn}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
-          {/* TAB 7: Embedded Strictly Scoped AI Lesson Practice */}
-          {activeTab === 'ai-practice' && (
-            <LessonAiPracticePanel
-              lessonTitle={`অধ্যায় ${activeLesson.chapterNumber} · পাঠ ${activeLesson.lessonNumber}: ${activeLesson.titleBn}`}
-              lessonScopeContext={lessonScopeContext}
-              starterQuestions={starterQuestions}
-              levelLabel={`Level ${chapter.level}`}
-            />
-          )}
-        </div>
+        {/* TAB 7: Embedded Strictly Scoped AI Lesson Practice */}
+        {activeTab === 'ai-practice' && (
+          <LessonAiPracticePanel
+            lessonTitle={`অধ্যায় ${activeLesson.chapterNumber} · পাঠ ${activeLesson.lessonNumber}: ${activeLesson.titleBn}`}
+            lessonScopeContext={lessonScopeContext}
+            starterQuestions={starterQuestions}
+            levelLabel={`Level ${chapter.level}`}
+          />
+        )}
 
         {/* Clean Footer Lesson Navigation */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="pt-4 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3">
           {prevLink ? (
             <Link
               to={prevLink}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold btn-secondary"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold btn-secondary"
             >
               <ArrowLeft className="w-4 h-4 text-[var(--accent)]" />
               <span>পূর্ববর্তী পাঠ</span>
@@ -610,14 +770,14 @@ export const LessonDetailPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Link
               to={`/courses/chapter/${activeLesson.chapterNumber}`}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold btn-secondary"
+              className="px-4 py-2.5 rounded-full text-xs font-semibold btn-secondary"
             >
               অধ্যায় {activeLesson.chapterNumber} সূচি
             </Link>
             {nextLink && (
               <Link
                 to={nextLink}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold btn-primary"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold btn-primary"
               >
                 <span>পরবর্তী পাঠ</span>
                 <ArrowRight className="w-4 h-4" />

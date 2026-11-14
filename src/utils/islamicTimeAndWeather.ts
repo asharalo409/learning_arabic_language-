@@ -212,6 +212,72 @@ export function getHijriDateString(date: Date): string {
   }
 }
 
+const BANGLA_MONTHS = [
+  'বৈশাখ',
+  'জ্যৈষ্ঠ',
+  'আষাঢ়',
+  'শ্রাবণ',
+  'ভাদ্র',
+  'আশ্বিন',
+  'কার্তিক',
+  'অগ্রহায়ণ',
+  'পৌষ',
+  'মাঘ',
+  'ফাল্গুন',
+  'চৈত্র',
+];
+
+function toBengaliDigits(num: number): string {
+  const digits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  return String(num).replace(/\d/g, (d) => digits[Number(d)] || d);
+}
+
+/**
+ * Calculates the revised Bangladesh Bangla Calendar date (বৈশাখ ১ = 14 April).
+ */
+export function getBanglaDateString(date: Date): string {
+  const gy = date.getFullYear();
+  const isLeap = (gy % 4 === 0 && gy % 100 !== 0) || gy % 400 === 0;
+  // Revised calendar month lengths from Boishakh (14 April)
+  const monthDays = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, isLeap ? 30 : 29, 30];
+
+  const pohela = new Date(gy, 3, 14);
+  let startYear = gy;
+  let refPohela = pohela;
+  if (date < pohela) {
+    startYear = gy - 1;
+    refPohela = new Date(startYear, 3, 14);
+    const prevLeap = (startYear % 4 === 0 && startYear % 100 !== 0) || startYear % 400 === 0;
+    monthDays[10] = prevLeap ? 30 : 29;
+  }
+
+  const banglaYear = startYear - 593;
+  const diffDays = Math.floor(
+    (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) -
+      Date.UTC(refPohela.getFullYear(), refPohela.getMonth(), refPohela.getDate())) /
+      86400000
+  );
+
+  let remaining = Math.max(0, diffDays);
+  let mIdx = 0;
+  while (mIdx < 11 && remaining >= monthDays[mIdx]) {
+    remaining -= monthDays[mIdx];
+    mIdx += 1;
+  }
+  const day = remaining + 1;
+  return `${toBengaliDigits(day)} ${BANGLA_MONTHS[mIdx]}, ${toBengaliDigits(banglaYear)}`;
+}
+
+export function getBanglaDayPeriod(date: Date): string {
+  const h = date.getHours();
+  if (h >= 4 && h < 6) return 'ভোর';
+  if (h >= 6 && h < 12) return 'সকাল';
+  if (h >= 12 && h < 15) return 'দুপুর';
+  if (h >= 15 && h < 18) return 'বিকাল';
+  if (h >= 18 && h < 20) return 'সন্ধ্যা';
+  return 'রাত';
+}
+
 export function wmoCodeToBengali(code: number): string {
   if (code === 0) return 'উজ্জ্বল ও পরিষ্কার আকাশ';
   if (code <= 2) return 'আংশিক মেঘলা আকাশ';

@@ -1,10 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
-import { Check, Crown, Play, Search, Sparkles, Star } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, Crown, Layers, Play, ScrollText, Search, Sparkles, Star, X } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
+import { AudioButton } from '../components/AudioButton';
 import { useApp } from '../context/AppContext';
 import { CURRICULUM_LEVELS } from '../data/curriculum';
-import { ChapterInfo, CurriculumLevelNumber, LearningTrack } from '../types/academy';
+import { QURAN_ALL_SHORT_SURAHS } from '../data/quranicData';
+import { ChapterInfo, CurriculumLevelNumber, LearningTrack, SyllabusLessonStub, VocabItem } from '../types/academy';
+
+function stripArabicHarakat(text: string): string {
+  return text.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '');
+}
 
 const LEVEL_THEMES: Record<
   CurriculumLevelNumber,
@@ -52,7 +58,7 @@ const LEVEL_THEMES: Record<
 const WAVE_OFFSETS = [0, 36, 56, 36, 0, -36, -56, -36];
 
 export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = ({ initialLevel }) => {
-  const { t, lang, progress, allChapters } = useApp();
+  const { t, lang, progress, allChapters, allVocabulary } = useApp();
   const [searchParams] = useSearchParams();
 
   const chParam = searchParams.get('chapter');
@@ -61,6 +67,7 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
   const [levelFilter, setLevelFilter] = useState<CurriculumLevelNumber | 'all'>(initialLevel ?? 'all');
   const [trackFilter, setTrackFilter] = useState<LearningTrack | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchScope, setSearchScope] = useState<'all' | 'chapters' | 'lessons' | 'vocab'>('all');
 
   useEffect(() => {
     const lvlParam = searchParams.get('level');
@@ -112,22 +119,93 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
     ).length;
   }, [allChapters, progress.completedLessonIds]);
 
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const normalizedArabicQuery = stripArabicHarakat(searchQuery.trim());
+
+  const globalSearch = useMemo(() => {
+    if (!normalizedQuery) {
+      return {
+        chapters: [] as ChapterInfo[],
+        lessons: [] as { chapter: ChapterInfo; lesson: SyllabusLessonStub }[],
+        vocab: [] as VocabItem[],
+      };
+    }
+
+    const matchedChapters = allChapters.filter((ch) => {
+      if (levelFilter !== 'all' && ch.level !== levelFilter) return false;
+      if (trackFilter !== 'all' && ch.track !== trackFilter) return false;
+      return (
+        ch.titleBn.toLowerCase().includes(normalizedQuery) ||
+        ch.titleEn.toLowerCase().includes(normalizedQuery) ||
+        ch.objectiveBn.toLowerCase().includes(normalizedQuery) ||
+        stripArabicHarakat(ch.titleAr).includes(normalizedArabicQuery) ||
+        String(ch.chapterNumber) === normalizedQuery ||
+        `অধ্যায় ${ch.chapterNumber}`.includes(normalizedQuery)
+      );
+    });
+
+    const matchedLessons: { chapter: ChapterInfo; lesson: SyllabusLessonStub }[] = [];
+    for (const ch of allChapters) {
+      if (levelFilter !== 'all' && ch.level !== levelFilter) continue;
+      if (trackFilter !== 'all' && ch.track !== trackFilter) continue;
+      for (const ls of ch.lessons) {
+        const refCode = `${ch.chapterNumber}.${ls.lessonNumber}`;
+        if (
+          ls.titleBn.toLowerCase().includes(normalizedQuery) ||
+          ls.titleEn.toLowerCase().includes(normalizedQuery) ||
+          ls.grammarFocus.toLowerCase().includes(normalizedQuery) ||
+          stripArabicHarakat(ls.titleAr).includes(normalizedArabicQuery) ||
+          refCode === normalizedQuery
+        ) {
+          matchedLessons.push({ chapter: ch, lesson: ls });
+          if (matchedLessons.length >= 18) break;
+        }
+      }
+      if (matchedLessons.length >= 18) break;
+    }
+
+    const matchedVocab: VocabItem[] = [];
+    for (const v of allVocabulary) {
+      if (levelFilter !== 'all' && v.level && v.level !== levelFilter) continue;
+      if (
+        stripArabicHarakat(v.arabic).includes(normalizedArabicQuery) ||
+        v.pronunciationBn.toLowerCase().includes(normalizedQuery) ||
+        v.meaningBn.toLowerCase().includes(normalizedQuery) ||
+        v.meaningEn.toLowerCase().includes(normalizedQuery) ||
+        v.category.toLowerCase().includes(normalizedQuery) ||
+        (v.root && stripArabicHarakat(v.root).includes(normalizedArabicQuery))
+      ) {
+        matchedVocab.push(v);
+        if (matchedVocab.length >= 18) break;
+      }
+    }
+
+    return { chapters: matchedChapters, lessons: matchedLessons, vocab: matchedVocab };
+  }, [allChapters, allVocabulary, levelFilter, trackFilter, normalizedQuery, normalizedArabicQuery]);
+
   const filteredChapters = useMemo(() => {
     return allChapters.filter((ch) => {
       if (levelFilter !== 'all' && ch.level !== levelFilter) return false;
       if (trackFilter !== 'all' && ch.track !== trackFilter) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        return (
-          ch.titleBn.toLowerCase().includes(q) ||
-          ch.titleEn.toLowerCase().includes(q) ||
-          ch.titleAr.includes(searchQuery) ||
-          String(ch.chapterNumber).includes(q)
+      if (normalizedQuery) {
+        const chapterMatch =
+          ch.titleBn.toLowerCase().includes(normalizedQuery) ||
+          ch.titleEn.toLowerCase().includes(normalizedQuery) ||
+          ch.objectiveBn.toLowerCase().includes(normalizedQuery) ||
+          stripArabicHarakat(ch.titleAr).includes(normalizedArabicQuery) ||
+          String(ch.chapterNumber).includes(normalizedQuery);
+        const lessonMatch = ch.lessons.some(
+          (ls) =>
+            ls.titleBn.toLowerCase().includes(normalizedQuery) ||
+            ls.titleEn.toLowerCase().includes(normalizedQuery) ||
+            ls.grammarFocus.toLowerCase().includes(normalizedQuery) ||
+            stripArabicHarakat(ls.titleAr).includes(normalizedArabicQuery)
         );
+        return chapterMatch || lessonMatch;
       }
       return true;
     });
-  }, [allChapters, levelFilter, trackFilter, searchQuery]);
+  }, [allChapters, levelFilter, trackFilter, normalizedQuery, normalizedArabicQuery]);
 
   // Group visible chapters by Level so each Level gets its own vibrant Banner + single-line winding path
   const groupedByLevel = useMemo(() => {
@@ -162,7 +240,7 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
 
   return (
     <AppShell
-      title={initialLevel === 1 ? t.sidebar.beginners : t.sidebar.courses}
+      title={lang === 'bn' ? '১–১০০ ধাপ আরবি কোর্স' : t.sidebar.courses}
       subtitle={
         lang === 'bn'
           ? '৬টি স্তরের ১০০টি ধাপ (যে কোনো স্তরে পড়ুন — প্রতিটি স্তরের হিসাব সংরক্ষিত থাকবে)'
@@ -209,6 +287,7 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
 
             {levelStats.map((st) => {
               const selected = levelFilter === st.level;
+              const levelTheme = LEVEL_THEMES[st.level];
               const statusText =
                 st.completedChapters === st.totalChapters
                   ? 'সম্পন্ন'
@@ -220,30 +299,27 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
                   key={st.level}
                   type="button"
                   onClick={() => setLevelFilter(st.level)}
-                  className={`min-w-[155px] p-3 rounded-2xl border text-left transition-all shrink-0 space-y-1.5 ${
-                    selected
-                      ? 'surface-alt border-[var(--accent)] ring-1 ring-[var(--accent)]'
-                      : 'bg-[var(--bg-canvas)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
-                  }`}
+                  className="min-w-[160px] p-3.5 rounded-2xl text-left transition-all shrink-0 space-y-1.5 text-white shadow-md hover:brightness-105"
+                  style={{
+                    background: levelTheme.bannerGrad,
+                    outline: selected ? '3px solid #ffffff' : 'none',
+                    outlineOffset: '2px',
+                  }}
                 >
                   <div className="flex items-center justify-between gap-2 text-[11px]">
-                    <span className="font-bold text-[var(--text-primary)]">স্তর {st.level}</span>
-                    <span
-                      className="font-semibold"
-                      style={{ color: st.completedLessons > 0 ? LEVEL_THEMES[st.level].ringColor : 'var(--text-muted)' }}
-                    >
+                    <span className="font-extrabold">স্তর {st.level}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold">
                       {statusText}
                     </span>
                   </div>
                   <div className="text-xs font-bold font-mono-num">
                     {st.completedChapters}/{st.totalChapters} ধাপ · {st.completedLessons} পাঠ
                   </div>
-                  <div className="w-full h-1.5 rounded-full bg-[var(--bg-surface)] overflow-hidden">
+                  <div className="w-full h-1.5 rounded-full bg-black/25 overflow-hidden">
                     <div
-                      className="h-full rounded-full transition-all"
+                      className="h-full rounded-full bg-amber-300 transition-all"
                       style={{
-                        width: `${Math.max(st.completedLessons > 0 ? 8 : 0, st.pct)}%`,
-                        backgroundColor: LEVEL_THEMES[st.level].ringColor,
+                        width: `${Math.max(st.completedLessons > 0 ? 10 : 0, st.pct)}%`,
                       }}
                     />
                   </div>
@@ -252,7 +328,7 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
             })}
           </div>
 
-          {/* Search & Track Select */}
+          {/* Global Search Across 100 Chapters, 1,000 Lessons & Curriculum Vocabulary */}
           <div className="flex flex-col sm:flex-row gap-2.5 pt-2 border-t border-[var(--border-subtle)]">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
@@ -260,16 +336,27 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="১০০ ধাপ বা অধ্যায় খুঁজুন (যেমন: ১৪, মসজিদ, বর্ণমালা)..."
-                className="w-full ps-9 pe-4 py-2 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-sm focus:outline-none focus:border-[var(--accent)]"
+                placeholder="অধ্যায়, পাঠ (যেমন: 2.3), গ্রামার বা আরবি/বাংলা শব্দ খুঁজুন..."
+                aria-label="Global curriculum search"
+                className="w-full ps-9 pe-9 py-2.5 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-sm focus:outline-none focus:border-[var(--accent)]"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Clear search"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             <select
               value={trackFilter}
               onChange={(e) => setTrackFilter(e.target.value as LearningTrack | 'all')}
               aria-label="Track Filter"
-              className="px-3.5 py-2 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-primary)]"
+              className="px-3.5 py-2.5 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-xs font-semibold text-[var(--text-primary)]"
             >
               <option value="all">সকল ট্র্যাক (MSA + কুরআনিক)</option>
               <option value="MSA">শুধু আধুনিক আরবি (MSA)</option>
@@ -279,13 +366,196 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
           </div>
         </div>
 
+        {/* Instant Global Search Results Panel (Chapters, Lessons, Vocabulary) */}
+        {normalizedQuery && (
+          <section className="surface-card rounded-3xl p-5 sm:p-6 space-y-4 border border-[var(--accent)]/40 shadow-md">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-xs font-bold text-[var(--accent)]">গ্লোবাল কারিকুলাম সার্চ ফলাফল</div>
+                <h3 className="text-base sm:text-lg font-bold">
+                  "{searchQuery.trim()}" এর জন্য পাওয়া গেছে: {globalSearch.chapters.length} অধ্যায় ·{' '}
+                  {globalSearch.lessons.length} পাঠ · {globalSearch.vocab.length} শব্দ
+                </h3>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    { id: 'all', label: 'সব ফলাফল' },
+                    { id: 'chapters', label: `অধ্যায় (${globalSearch.chapters.length})` },
+                    { id: 'lessons', label: `পাঠ (${globalSearch.lessons.length})` },
+                    { id: 'vocab', label: `শব্দ (${globalSearch.vocab.length})` },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setSearchScope(tab.id)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+                      searchScope === tab.id ? 'btn-primary' : 'btn-secondary'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {globalSearch.chapters.length === 0 &&
+            globalSearch.lessons.length === 0 &&
+            globalSearch.vocab.length === 0 ? (
+              <div className="surface-alt rounded-2xl p-6 text-center text-sm text-[var(--text-muted)]">
+                কোনো অধ্যায়, পাঠ বা শব্দ পাওয়া যায়নি। অন্য কীওয়ার্ড (যেমন: কিতাব, নাম, মubtada, ২.১ বা আরবি শব্দ) চেষ্টা করুন।
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {/* Matched Lessons */}
+                {(searchScope === 'all' || searchScope === 'lessons') && globalSearch.lessons.length > 0 && (
+                  <div className="space-y-2.5">
+                    <div className="text-xs font-bold text-[var(--text-muted)] flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-[var(--accent)]" />
+                      <span>মিল পাওয়া পাঠসমূহ (সরাসরি পাঠে যান)</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                      {globalSearch.lessons.slice(0, 10).map(({ chapter, lesson }) => {
+                        const done = progress.completedLessonIds.includes(
+                          `ch${chapter.chapterNumber}-l${lesson.lessonNumber}`
+                        );
+                        return (
+                          <Link
+                            key={`${chapter.chapterNumber}-${lesson.lessonNumber}`}
+                            to={`/courses/lesson/${chapter.chapterNumber}/${lesson.lessonNumber}`}
+                            className="p-3.5 rounded-2xl surface-alt border border-[var(--border-subtle)] hover:border-[var(--border-strong)] transition-colors flex items-center justify-between gap-3"
+                          >
+                            <div className="min-w-0 space-y-0.5">
+                              <div className="flex items-center gap-2 text-[11px] font-mono-num text-[var(--accent)] font-bold">
+                                <span>
+                                  অধ্যায় {chapter.chapterNumber} · পাঠ {lesson.lessonNumber}
+                                </span>
+                                {done && <span className="text-emerald-500">· সম্পন্ন</span>}
+                              </div>
+                              <div className="text-sm font-bold truncate">
+                                {lang === 'bn' ? lesson.titleBn : lesson.titleEn}
+                              </div>
+                              <div className="text-xs text-[var(--text-muted)] truncate">
+                                ব্যাকরণ: {lesson.grammarFocus}
+                              </div>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Matched Vocabulary */}
+                {(searchScope === 'all' || searchScope === 'vocab') && globalSearch.vocab.length > 0 && (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[var(--text-muted)] inline-flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        <span>শব্দভাণ্ডার ফলাফল</span>
+                      </span>
+                      <Link to="/vocabulary" className="text-xs font-semibold text-[var(--accent)] hover:underline">
+                        SRS ফ্ল্যাশকার্ড ল্যাব →
+                      </Link>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {globalSearch.vocab.slice(0, 12).map((v) => (
+                        <div
+                          key={v.id}
+                          className="p-3.5 rounded-2xl surface-alt border border-[var(--border-subtle)] flex items-center justify-between gap-2.5"
+                        >
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-arabic text-xl text-[var(--accent)]" dir="rtl">
+                                {v.arabic}
+                              </span>
+                              <span className="text-[11px] text-[var(--text-muted)] truncate">
+                                ({v.pronunciationBn})
+                              </span>
+                            </div>
+                            <div className="text-xs font-bold truncate">
+                              {lang === 'bn' ? v.meaningBn : v.meaningEn}
+                            </div>
+                            {v.chapterNumber && (
+                              <Link
+                                to={`/courses/chapter/${v.chapterNumber}`}
+                                className="inline-block text-[11px] text-[var(--accent)] hover:underline font-mono-num"
+                              >
+                                অধ্যায় {v.chapterNumber} দেখুন →
+                              </Link>
+                            )}
+                          </div>
+                          <AudioButton text={v.arabic} compact />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Matched Chapters summary pills when scope is chapters */}
+                {searchScope === 'chapters' && globalSearch.chapters.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {globalSearch.chapters.slice(0, 12).map((ch) => (
+                      <Link
+                        key={ch.chapterNumber}
+                        to={`/courses/chapter/${ch.chapterNumber}`}
+                        className="p-3.5 rounded-2xl surface-alt border border-[var(--border-subtle)] hover:border-[var(--border-strong)] flex items-center justify-between gap-2"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-mono-num font-bold text-[var(--accent)]">
+                            অধ্যায় {ch.chapterNumber} · স্তর {ch.level}
+                          </div>
+                          <div className="text-sm font-bold truncate">
+                            {lang === 'bn' ? ch.titleBn : ch.titleEn}
+                          </div>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Quick Quran Reading Strip when browsing Quranic track */}
+        {trackFilter === 'Quranic' && (
+          <section className="surface-card rounded-3xl p-5 space-y-3 border border-emerald-500/35">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                <ScrollText className="w-4 h-4" />
+                <span>কোরআনের মাধ্যমে পড়ুন — সূরা আল-ফাতিহা ও শেষ ২৫ সূরা</span>
+              </div>
+              <Link to="/quranic-arabic" className="text-xs font-bold text-[var(--accent)] hover:underline">
+                সব সূরা ও গ্রামার ল্যাব →
+              </Link>
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {QURAN_ALL_SHORT_SURAHS.map((s) => (
+                <Link
+                  key={s.surahNumber}
+                  to={`/quranic-arabic?surah=${s.surahNumber}`}
+                  className="shrink-0 px-3 py-2 rounded-2xl surface-alt border border-[var(--border-subtle)] hover:border-[var(--border-strong)] text-xs font-semibold flex items-center gap-2"
+                >
+                  <span className="font-mono-num text-[var(--accent)] font-bold">{s.surahNumber}.</span>
+                  <span>{s.nameBn.replace('সূরা ', '')}</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Duolingo-Style Single-Line Winding Game Path */}
         {groupedByLevel.length === 0 ? (
           <div className="surface-card rounded-2xl p-10 text-center text-sm text-[var(--text-muted)]">
             এই ফিল্টারে কোনো ধাপ পাওয়া যায়নি। অন্য স্তর বা ট্র্যাক নির্বাচন করুন।
           </div>
         ) : (
-          <div className="space-y-10 pb-8">
+          <div className="space-y-10 pb-24">
             {groupedByLevel.map(({ levelInfo, stats, chapters }) => {
               const themeStyle = LEVEL_THEMES[levelInfo.level];
               return (

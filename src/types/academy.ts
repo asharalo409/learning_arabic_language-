@@ -7,6 +7,7 @@ export type ThemeMode =
   | 'kaaba'
   | 'parchment'
   | 'andalus';
+export type ColorSchemeMode = 'system' | 'light' | 'dark';
 export type BackdropIntensity = 'vivid' | 'gentle' | 'off';
 export type InterfaceLang = 'bn' | 'en' | 'ar';
 export type LearningTrack = 'MSA' | 'Quranic' | 'Combined';
@@ -38,6 +39,9 @@ export interface VocabItem {
   exampleBn: string;
   exampleEn: string;
   isQuranic?: boolean;
+  chapterNumber?: number;
+  level?: CurriculumLevelNumber;
+  chapterTitleBn?: string;
 }
 
 export interface DialogueLine {
@@ -173,6 +177,38 @@ export interface MasdarEntry {
   exampleBn: string;
 }
 
+export interface IsmSifatEntry {
+  id: string;
+  wordType: 'ism' | 'sifat';
+  categoryId: string;
+  categoryTitleBn: string;
+  arabic: string;
+  pluralOrFemAr?: string;
+  pronunciationBn: string;
+  meaningBn: string;
+  meaningEn: string;
+  rootLetters?: string;
+  grammarNoteBn?: string;
+  exampleAr: string;
+  exampleBn: string;
+}
+
+export interface IsmSifatCategory {
+  id: string;
+  wordType: 'ism' | 'sifat';
+  titleAr: string;
+  titleBn: string;
+  titleEn: string;
+  descriptionBn: string;
+  entries: IsmSifatEntry[];
+}
+
+export interface WeeklyDayActivity {
+  date: string; // YYYY-MM-DD
+  minutesStudied: number;
+  vocabLearned: number;
+}
+
 export interface QuranWordAnalysis {
   arabic: string;
   pronunciationBn: string;
@@ -281,6 +317,7 @@ export interface StudentProgress {
   examHistory: ExamHistoryEntry[];
   recentActivities: ActivityLogEntry[];
   unlockedBadgeIds: string[];
+  personalVocab?: VocabItem[];
 }
 
 export interface AdminCustomContent {

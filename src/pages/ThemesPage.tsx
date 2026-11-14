@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Check, CloudSun, Sliders, Sparkles, Volume2 } from 'lucide-react';
+import { Check, CloudSun, Monitor, Moon, Sliders, Sparkles, Sun, Volume2 } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
 import { useApp } from '../context/AppContext';
-import { BackdropIntensity, ThemeMode } from '../types/academy';
+import { BackdropIntensity, ColorSchemeMode, ThemeMode } from '../types/academy';
 import skyMosqueImg from '../assets/images/theme_bright_sky_mosque_1794521633239.jpg';
 import kaabaImg from '../assets/images/theme_kaaba_sanctuary_1794521633707.jpg';
 import madinahImg from '../assets/images/theme_madinah_courtyard_1794521633886.jpg';
@@ -81,8 +81,19 @@ const THEME_SHOWCASE: ThemeCardMeta[] = [
 ];
 
 export const ThemesPage: React.FC = () => {
-  const { t, theme, setTheme, backdropIntensity, setBackdropIntensity, soundEnabled, setSoundEnabled, triggerSound } =
-    useApp();
+  const {
+    t,
+    theme,
+    setTheme,
+    colorScheme,
+    setColorScheme,
+    osPrefersDark,
+    backdropIntensity,
+    setBackdropIntensity,
+    soundEnabled,
+    setSoundEnabled,
+    triggerSound,
+  } = useApp();
   const [tapCount, setTapCount] = useState(0);
 
   const activeMeta = THEME_SHOWCASE.find((m) => m.id === theme) || THEME_SHOWCASE[0];
@@ -213,6 +224,39 @@ export const ThemesPage: React.FC = () => {
                         {opt.label}
                       </button>
                     ))}
+                  </div>
+                </div>
+
+                <div className="p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">সিস্টেম ডার্ক মোড ও ম্যানুয়াল</div>
+                    <div className="text-xs text-[var(--text-muted)]">
+                      ডিভাইসের OS: {osPrefersDark ? 'ডার্ক' : 'লাইট'} · কাস্টম থিমের সাথে স্বয়ংক্রিয় সামঞ্জস্য
+                    </div>
+                  </div>
+                  <div className="inline-flex gap-1 bg-[var(--bg-canvas)] p-1 rounded-full border border-[var(--border-subtle)]">
+                    {(
+                      [
+                        { id: 'system', label: 'অটো', icon: Monitor },
+                        { id: 'light', label: 'লাইট', icon: Sun },
+                        { id: 'dark', label: 'ডার্ক', icon: Moon },
+                      ] as { id: ColorSchemeMode; label: string; icon: typeof Monitor }[]
+                    ).map((opt) => {
+                      const Icon = opt.icon;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setColorScheme(opt.id)}
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+                            colorScheme === opt.id ? 'btn-primary' : 'text-[var(--text-secondary)]'
+                          }`}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                          <span>{opt.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

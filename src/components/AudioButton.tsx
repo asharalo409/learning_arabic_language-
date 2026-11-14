@@ -10,7 +10,7 @@ interface AudioButtonProps {
 }
 
 export const AudioButton: React.FC<AudioButtonProps> = ({ text, showSlow = true, compact = false }) => {
-  const { t } = useApp();
+  const { t, progress } = useApp();
   const [playingMode, setPlayingMode] = useState<'normal' | 'slow' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -18,6 +18,7 @@ export const AudioButton: React.FC<AudioButtonProps> = ({ text, showSlow = true,
     setErrorMsg(null);
     speakArabic(text, {
       rate,
+      voiceGender: progress.voiceGender || 'male',
       onStart: () => setPlayingMode(mode),
       onEnd: () => setPlayingMode(null),
       onError: (msg) => {
@@ -38,7 +39,10 @@ export const AudioButton: React.FC<AudioButtonProps> = ({ text, showSlow = true,
         {playingMode ? (
           <button
             type="button"
-            onClick={handleStop}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStop();
+            }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium btn-primary whitespace-nowrap shrink-0"
           >
             <Square className="w-3.5 h-3.5" />
@@ -47,7 +51,10 @@ export const AudioButton: React.FC<AudioButtonProps> = ({ text, showSlow = true,
         ) : (
           <button
             type="button"
-            onClick={() => handlePlay(0.95, 'normal')}
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePlay(0.95, 'normal');
+            }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium btn-secondary whitespace-nowrap shrink-0"
             title={t.common.playAudio}
           >
@@ -59,7 +66,10 @@ export const AudioButton: React.FC<AudioButtonProps> = ({ text, showSlow = true,
         {showSlow && !playingMode && (
           <button
             type="button"
-            onClick={() => handlePlay(0.62, 'slow')}
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePlay(0.62, 'slow');
+            }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium btn-secondary whitespace-nowrap shrink-0"
             title={t.common.slowAudio}
           >

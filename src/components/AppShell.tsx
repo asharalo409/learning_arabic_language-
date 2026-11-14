@@ -3,43 +3,40 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Award,
-  BookMarked,
   BookOpen,
   BookOpenCheck,
   Bot,
   ChevronRight,
   ClipboardCheck,
   Clock,
-  Compass,
   Flame,
   GraduationCap,
-  Headphones,
   Home,
   LayoutDashboard,
   Layers,
-  ListChecks,
   LogIn,
   Menu,
   Mic,
+  Monitor,
   Moon,
   Palette,
   ScrollText,
   Shield,
   Sparkles,
   Sun,
-  Target,
-  Trophy,
   User,
   UserCheck,
+  WifiOff,
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { BrandLogo } from './Navbar';
-import { InterfaceLang, ThemeMode } from '../types/academy';
+import { ColorSchemeMode, InterfaceLang } from '../types/academy';
 import { PWAInstallButton } from './PWAInstallButton';
 import { NotificationCenter } from './NotificationCenter';
 import { getRouteSoundEffect } from '../utils/soundEffects';
+import { useOfflineManifest, useOnlineStatus } from '../utils/offlineCache';
 
 interface AppShellProps {
   title: string;
@@ -48,12 +45,27 @@ interface AppShellProps {
 }
 
 export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children }) => {
-  const { t, theme, setTheme, lang, setLang, progress, currentLevelNumber, triggerSound } = useApp();
+  const {
+    t,
+    theme,
+    colorScheme,
+    setColorScheme,
+    resolvedDarkMode,
+    lang,
+    setLang,
+    progress,
+    currentLevelNumber,
+    triggerSound,
+    globalGrammarEnabled,
+    setGlobalGrammarEnabled,
+  } = useApp();
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const prevPathRef = useRef(location.pathname);
+  const isOnline = useOnlineStatus();
+  const offlineManifest = useOfflineManifest();
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -75,47 +87,60 @@ export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children })
     }
   };
 
-  const isDarkTheme = !['sky-cloud', 'light', 'parchment'].includes(theme);
+  const isDarkTheme = resolvedDarkMode;
 
-  const navGroups = [
+  const navGroups: {
+    label: string;
+    accentColor: string;
+    items: { to: string; label: string; icon: typeof Home }[];
+  }[] = [
     ...(user
       ? [
           {
-            label: 'আমার অ্যাকাউন্ট',
+            label: 'আমার ড্যাশবোর্ড',
+            accentColor: '#10b981',
             items: [
               { to: '/dashboard', label: t.sidebar.dashboard, icon: LayoutDashboard },
-              { to: '/leaderboard', label: t.sidebar.leaderboard, icon: Trophy },
               { to: '/certificates', label: t.sidebar.certificates, icon: Award },
             ],
           },
         ]
       : []),
     {
-      label: 'ধাপে ধাপে শিক্ষা (Step 1 → 4)',
+      label: '১. ধাপে ধাপে আরবি কোর্স',
+      accentColor: '#059669',
       items: [
-        { to: '/courses/beginners', label: `১. ${t.sidebar.beginners}`, icon: Compass },
-        { to: '/courses', label: `২. ${t.sidebar.courses}`, icon: BookOpen },
-        { to: '/daily-lessons', label: `৩. ${t.sidebar.dailyLessons}`, icon: ListChecks },
-        { to: '/bayna-yadayk', label: `৪. ${t.sidebar.baynaYadayk}`, icon: BookMarked },
-        { to: '/safwatul-masadir', label: `৫. ${t.sidebar.safwatulMasadir}`, icon: BookOpenCheck },
-        { to: '/grammar', label: `৬. ${t.sidebar.grammar}`, icon: GraduationCap },
-        { to: '/quranic-arabic', label: `৭. ${t.sidebar.quranic}`, icon: ScrollText },
-        { to: '/vocabulary', label: `৮. ${t.sidebar.vocabulary}`, icon: Layers },
+        { to: '/courses', label: lang === 'bn' ? '১–১০০ ধাপ আরবি কোর্স' : t.sidebar.courses, icon: BookOpen },
       ],
     },
     {
-      label: 'অনুশীলন ও AI ভয়েস (Step 5 → 6)',
+      label: '২. কোরআনের মাধ্যমে পড়ুন ও শব্দ',
+      accentColor: '#e11d48',
+      items: [
+        { to: '/quranic-arabic', label: 'কোরআনের মাধ্যমে পড়ুন (২৬ সূরা)', icon: ScrollText },
+        { to: '/vocabulary', label: t.sidebar.vocabulary, icon: Layers },
+      ],
+    },
+    {
+      label: '৩. ব্যাকরণ (নাহু ও ছরফ)',
+      accentColor: '#d97706',
+      items: [
+        { to: '/safwatul-masadir', label: t.sidebar.safwatulMasadir, icon: BookOpenCheck },
+        { to: '/grammar', label: t.sidebar.grammar, icon: GraduationCap },
+      ],
+    },
+    {
+      label: '৪. AI লাইভ ভয়েস ও পরীক্ষা',
+      accentColor: '#6366f1',
       items: [
         { to: '/ai-teacher', label: t.sidebar.aiTeacher, icon: Bot },
-        { to: '/listening', label: t.sidebar.listening, icon: Headphones },
         { to: '/speaking', label: t.sidebar.speaking, icon: Mic },
         { to: '/quiz', label: t.sidebar.quiz, icon: ClipboardCheck },
-        { to: '/practice', label: t.sidebar.practice, icon: Sparkles },
-        { to: '/daily-challenge', label: t.sidebar.dailyChallenge, icon: Target },
       ],
     },
     {
-      label: 'সহায়ক ও সেটিংস',
+      label: '৫. নামাজ, থিম ও অ্যাকাউন্ট',
+      accentColor: '#0284c7',
       items: [
         { to: '/prayer-weather', label: t.sidebar.prayerWeather, icon: Clock },
         { to: '/themes', label: t.sidebar.themes, icon: Palette },
@@ -161,12 +186,19 @@ export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children })
           <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
         </Link>
 
-        {/* Grouped Navigation */}
+        {/* Grouped Navigation (5 Core Hubs) */}
         <nav className="space-y-4">
           {navGroups.map((group) => (
             <div key={group.label} className="space-y-1">
-              <div className="px-3 text-[10px] font-semibold tracking-wider text-[var(--text-muted)]">
-                {group.label}
+              <div
+                className="px-3 text-[10px] font-bold tracking-wider flex items-center gap-1.5"
+                style={{ color: group.accentColor }}
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: group.accentColor }}
+                />
+                <span>{group.label}</span>
               </div>
               {group.items.map((item) => {
                 const Icon = item.icon;
@@ -178,11 +210,15 @@ export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children })
                     onClick={() => setSidebarOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] transition-all ${
                       active
-                        ? 'bg-[var(--accent)] text-[var(--accent-fg)] font-semibold shadow-sm'
+                        ? 'text-white font-semibold shadow-sm'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface-alt)] hover:text-[var(--text-primary)]'
                     }`}
+                    style={active ? { backgroundColor: group.accentColor } : undefined}
                   >
-                    <Icon className="w-4 h-4 shrink-0" />
+                    <Icon
+                      className="w-4 h-4 shrink-0"
+                      style={{ color: active ? '#ffffff' : group.accentColor }}
+                    />
                     <span className="truncate">{item.label}</span>
                   </Link>
                 );
@@ -192,20 +228,46 @@ export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children })
         </nav>
       </div>
 
-      {/* Bottom Clean Toggle + Founder Badge (Prodex Sidebar Footer style) */}
+      {/* Bottom Clean Mode Switcher (System / Light / Dark) + Founder Badge */}
       <div className="pt-3 border-t border-[var(--border-subtle)] space-y-3">
-        <div className="flex items-center justify-between px-2 py-1.5 rounded-xl surface-alt">
-          <span className="text-xs font-medium inline-flex items-center gap-2">
-            {isDarkTheme ? <Moon className="w-3.5 h-3.5 text-[var(--accent)]" /> : <Sun className="w-3.5 h-3.5 text-[var(--accent)]" />}
-            <span>{isDarkTheme ? 'ডার্ক মোড' : 'লাইট মোড'}</span>
-          </span>
-          <button
-            type="button"
-            onClick={() => setTheme(isDarkTheme ? 'sky-cloud' : 'andalus')}
-            className="px-2.5 py-1 rounded-full text-[11px] font-semibold btn-primary"
-          >
-            বদলান
-          </button>
+        <div className="p-2 rounded-xl surface-alt space-y-1.5">
+          <div className="flex items-center justify-between px-1 text-[11px] font-semibold text-[var(--text-secondary)]">
+            <span className="inline-flex items-center gap-1.5">
+              {isDarkTheme ? (
+                <Moon className="w-3.5 h-3.5 text-[var(--accent)]" />
+              ) : (
+                <Sun className="w-3.5 h-3.5 text-[var(--accent)]" />
+              )}
+              <span>{colorScheme === 'system' ? 'সিস্টেম অটো' : isDarkTheme ? 'ডার্ক মোড' : 'লাইট মোড'}</span>
+            </span>
+            <span className="text-[10px] text-[var(--text-muted)]">
+              {isDarkTheme ? 'Dark' : 'Light'}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {(
+              [
+                { id: 'system', label: 'অটো', icon: Monitor },
+                { id: 'light', label: 'লাইট', icon: Sun },
+                { id: 'dark', label: 'ডার্ক', icon: Moon },
+              ] as { id: ColorSchemeMode; label: string; icon: typeof Monitor }[]
+            ).map((opt) => {
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setColorScheme(opt.id)}
+                  className={`py-1 px-1.5 rounded-lg text-[10px] font-semibold inline-flex items-center justify-center gap-1 transition-colors whitespace-nowrap ${
+                    colorScheme === opt.id ? 'btn-primary' : 'btn-secondary'
+                  }`}
+                >
+                  <Icon className="w-3 h-3 shrink-0" />
+                  <span>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-1">
@@ -313,12 +375,39 @@ export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children })
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {!isOnline && (
+              <span
+                title={`অফলাইনে সংরক্ষিত: ${offlineManifest.downloadedLessonIds.length} পাঠ, ${offlineManifest.vocabularyCount} শব্দ`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/45 text-amber-700 dark:text-amber-300 text-[11px] font-extrabold shrink-0"
+              >
+                <WifiOff className="w-3.5 h-3.5" />
+                <span>Offline Mode</span>
+              </span>
+            )}
+
             <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full surface-alt text-xs font-mono-num">
               <Flame className="w-3.5 h-3.5 text-[var(--accent)]" />
               <span className="font-semibold">{progress.streakDays}d</span>
               <span className="text-[var(--text-muted)]">·</span>
               <span className="font-semibold text-[var(--accent)]">{progress.xp} XP</span>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                triggerSound('click');
+                setGlobalGrammarEnabled(!globalGrammarEnabled);
+              }}
+              title={globalGrammarEnabled ? 'গ্লোবাল ব্যাকরণ ও তারকিব টুল চালু (বন্ধ করতে ক্লিক করুন)' : 'গ্লোবাল ব্যাকরণ ও তারকিব টুল বন্ধ (চালু করতে ক্লিক করুন)'}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-colors shrink-0 ${
+                globalGrammarEnabled
+                  ? 'bg-[var(--emerald-highlight)] text-[var(--accent)] border border-[var(--accent)]/40'
+                  : 'btn-secondary text-[var(--text-muted)]'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">ব্যাকরণ টুল</span>
+            </button>
 
             <PWAInstallButton compact />
             <NotificationCenter />
@@ -337,7 +426,7 @@ export const AppShell: React.FC<AppShellProps> = ({ title, subtitle, children })
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-32 lg:pb-10 max-w-[1260px] w-full mx-auto">
+        <main className="flex-1 px-3 py-4 sm:p-6 lg:p-8 pb-36 lg:pb-12 max-w-[1320px] w-full mx-auto">
           {children}
         </main>
       </div>

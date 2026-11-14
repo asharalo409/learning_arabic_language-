@@ -97,7 +97,7 @@ export const Navbar: React.FC = () => {
           </Link>
 
           <Link
-            to="/courses/beginners"
+            to="/courses"
             className="hidden sm:inline-flex items-center px-3.5 py-1.5 rounded-xl text-xs btn-primary whitespace-nowrap shrink-0"
           >
             {t.nav.startLearning}
@@ -178,7 +178,7 @@ export const Navbar: React.FC = () => {
             </div>
 
             <Link
-              to="/courses/beginners"
+              to="/courses"
               onClick={() => setMobileOpen(false)}
               className="block w-full text-center px-4 py-2.5 rounded-xl text-sm btn-primary"
             >

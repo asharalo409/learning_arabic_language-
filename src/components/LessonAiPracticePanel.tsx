@@ -1,8 +1,26 @@
-import React, { useState } from 'react';
-import { Bot, MessageSquarePlus, Mic, MicOff, Send, Sparkles, Trash2, Volume2, VolumeX } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import {
+  Bot,
+  GitBranch,
+  MessageSquarePlus,
+  Mic,
+  MicOff,
+  Send,
+  Sparkles,
+  Trash2,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AudioButton } from './AudioButton';
-import { speakText, startVoiceRecognition, stopArabicSpeech } from '../utils/speech';
+import { GeminiRichText } from './GeminiRichText';
+import { SentenceTarkibCard } from './SentenceTarkibCard';
+import {
+  RecognitionHandle,
+  speakBilingualText,
+  startContinuousSpeechRecognition,
+  stopArabicSpeech,
+} from '../utils/speech';
 
 export interface LessonAiPracticePanelProps {
   lessonTitle: string;
@@ -27,18 +45,24 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
   const makeWelcomeMsg = (): PracticeMsg => ({
     id: `scoped-welcome-${Date.now()}`,
     role: 'assistant',
-    content: `السَّلَامُ عَلَيْكُمْ!\n\nআমি এখন শুধুমাত্র "${lessonTitle}" পাঠটি নিয়ে আপনার সাথে চর্চা করছি। প্রশ্ন লিখুন বা মাইকে বলুন।`,
+    content: `السَّلَامُ عَلَيْكُمْ!\n\nআমি এখন শুধুমাত্র "${lessonTitle}" পাঠটি নিয়ে আপনার সাথে চর্চা করছি। নিচে বাংলা বা আরবিতে প্রশ্ন লিখুন অথবা মাইক্রোফোনে সরাসরি বলুন।`,
   });
 
   const [messages, setMessages] = useState<PracticeMsg[]>([makeWelcomeMsg()]);
   const [input, setInput] = useState('');
+  const [speechLang, setSpeechLang] = useState<'bn-BD' | 'ar-SA'>('bn-BD');
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [expandedTarkibIds, setExpandedTarkibIds] = useState<Record<string, boolean>>({});
+  const recRef = useRef<RecognitionHandle | null>(null);
+  const baseInputRef = useRef('');
 
   const activeGender = progress.voiceGender === 'female' ? 'female' : 'male';
 
   const handleResetChat = () => {
+    recRef.current?.stop();
+    setListening(false);
     stopArabicSpeech();
     setSpeaking(false);
     setMessages([makeWelcomeMsg()]);
@@ -52,6 +76,10 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
     const query = (textOverride ?? input).trim();
     if (!query || loading) return;
     if (!textOverride) setInput('');
+    if (listening) {
+      recRef.current?.stop();
+      setListening(false);
+    }
 
     const userMsg: PracticeMsg = { id: `u-${Date.now()}`, role: 'user', content: query };
     setMessages((prev) => [...prev, userMsg]);
@@ -62,10 +90,11 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: 'conversation',
+          mode: 'live-voice',
           level: levelLabel,
           interfaceLang: lang,
-          context: `STRICT LESSON SCOPE: You must ONLY practice, explain, and quiz the student on "${lessonTitle}". Do NOT drift to unrelated chapters or generic greetings outside this lesson.\n\nLESSON MATERIAL:\n${lessonScopeContext}\n\nInstruction: Praise or correct the student in clear Bengali, give vowelized Arabic (full Harakat) + Bengali pronunciation + Bengali meaning, and ask ONE short follow-up question strictly from this lesson.`,
+          voiceGender: activeGender,
+          context: `STRICT LESSON SCOPE: You must ONLY practice, explain, and quiz the student on "${lessonTitle}". Do NOT drift to unrelated chapters or generic greetings outside this lesson.\n\nLESSON MATERIAL:\n${lessonScopeContext}\n\nInstruction: Always correct any Arabic mistake cleanly first, give vowelized Arabic (full Harakat) + Bengali meaning, and ask ONE short follow-up question strictly from this lesson.`,
           message: query,
           history: messages.slice(-6).map((m) => ({ role: m.role, content: m.content })),
         }),
@@ -74,9 +103,8 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
       const reply = data.reply || data.error || 'উত্তর পাওয়া যায়নি।';
 
       setMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: 'assistant', content: reply }]);
-      const arabicMatches = reply.match(/[\u0600-\u06FF][\u0600-\u06FF\s،؟.!]{2,}/g);
-      const speechChunk = arabicMatches ? arabicMatches.slice(0, 3).join(' ') : reply.slice(0, 240);
-      speakText(speechChunk, arabicMatches ? 'ar-SA' : 'bn-BD', {
+      speakBilingualText(reply, {
+        fallbackLang: 'bn-BD',
         voiceGender: activeGender,
         onStart: () => setSpeaking(true),
         onEnd: () => setSpeaking(false),
@@ -102,15 +130,21 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
     }
   };
 
-  const handleVoiceMic = () => {
-    if (listening) return;
+  const handleToggleVoiceMic = (overrideLang?: 'bn-BD' | 'ar-SA') => {
+    const targetLang = overrideLang || speechLang;
+    if (listening && !overrideLang) {
+      recRef.current?.stop();
+      setListening(false);
+      return;
+    }
+    recRef.current?.stop();
     stopArabicSpeech();
+    baseInputRef.current = input.trim();
     setListening(true);
-    startVoiceRecognition('ar-SA', {
-      onResult: (transcript) => {
-        setListening(false);
-        setInput(transcript);
-        void sendScopedQuery(transcript);
+
+    const handle = startContinuousSpeechRecognition(targetLang, {
+      onTranscript: ({ fullText }) => {
+        setInput([baseInputRef.current, fullText].filter(Boolean).join(' '));
       },
       onError: (msg) => {
         setListening(false);
@@ -118,6 +152,12 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
       },
       onEnd: () => setListening(false),
     });
+
+    if (!handle) {
+      setListening(false);
+    } else {
+      recRef.current = handle;
+    }
   };
 
   const shortPrompts =
@@ -134,24 +174,14 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
         ];
 
   return (
-    <div className="surface-card rounded-2xl p-4 sm:p-5 space-y-4 border border-[var(--border-subtle)]">
-      {/* Clean Single-Row Header with New Chat & Delete Chat */}
+    <div className="space-y-4">
+      {/* Flat Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-subtle)]">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform ${
-              listening
-                ? 'bg-emerald-500 text-white animate-pulse'
-                : speaking
-                ? 'bg-indigo-600 text-white'
-                : 'bg-[var(--emerald-highlight)] text-[var(--accent)]'
-            }`}
-          >
-            <Bot className="w-5 h-5" />
-          </div>
+        <div className="flex items-center gap-2 min-w-0">
+          <Bot className="w-5 h-5 text-[var(--accent)] shrink-0" />
           <div className="min-w-0">
-            <div className="text-[11px] font-bold text-[var(--accent)]">পাঠ-কেন্দ্রিক AI</div>
-            <div className="text-xs font-semibold truncate">{lessonTitle}</div>
+            <span className="text-xs font-bold text-[var(--accent)]">পাঠ-কেন্দ্রিক AI চর্চা</span>
+            <span className="text-xs text-[var(--text-muted)] ms-2 truncate">· {lessonTitle}</span>
           </div>
         </div>
 
@@ -163,7 +193,7 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
                 stopArabicSpeech();
                 setSpeaking(false);
               }}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] btn-secondary text-[var(--danger)]"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs btn-secondary text-[var(--danger)]"
             >
               <VolumeX className="w-3.5 h-3.5" />
               <span>থামান</span>
@@ -172,7 +202,7 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
           <button
             type="button"
             onClick={handleResetChat}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium btn-secondary"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold btn-secondary"
             title="নতুন চ্যাট শুরু করুন"
           >
             <MessageSquarePlus className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -185,16 +215,15 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
               setSpeaking(false);
               setMessages([]);
             }}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium btn-secondary text-[var(--danger)]"
+            className="p-2 rounded-full btn-secondary text-[var(--danger)]"
             title="সব মেসেজ ডিলিট করুন"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>ডিলিট</span>
           </button>
         </div>
       </div>
 
-      {/* Compact Single-Line Horizontal Quick Action Strip (No giant wrapping boxes) */}
+      {/* Horizontal Starter Prompts */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {shortPrompts.map((p, idx) => (
           <button
@@ -202,7 +231,7 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
             type="button"
             onClick={() => void sendScopedQuery(p.query)}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium btn-secondary whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold btn-secondary whitespace-nowrap shrink-0"
           >
             <Sparkles className="w-3 h-3 text-[var(--accent)]" />
             <span>{p.label}</span>
@@ -210,10 +239,10 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
         ))}
       </div>
 
-      {/* Clean Messages Stream */}
-      <div className="space-y-3 max-h-[340px] overflow-y-auto pe-1">
+      {/* Open Unboxed Gemini-Style Messages */}
+      <div className="space-y-5 py-2">
         {messages.length === 0 ? (
-          <div className="text-center py-8 text-xs text-[var(--text-muted)]">
+          <div className="text-center py-8 text-sm text-[var(--text-muted)]">
             চ্যাট মুছে ফেলা হয়েছে। উপরের অপশন বা নিচে লিখে নতুন চর্চা শুরু করুন।
           </div>
         ) : (
@@ -222,90 +251,158 @@ export const LessonAiPracticePanel: React.FC<LessonAiPracticePanelProps> = ({
             const arabicPart = !isUser
               ? (m.content.match(/[\u0600-\u06FF][\u0600-\u06FF\s،؟.!]{2,}/g) || []).slice(0, 3).join(' ')
               : '';
-            return (
-              <div key={m.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-                <div
-                  className={`max-w-[92%] sm:max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-                    isUser ? 'bg-[var(--accent)] text-[var(--accent-fg)] font-medium' : 'surface-alt'
-                  }`}
-                >
-                  <div className="font-arabic-ui">{m.content}</div>
+            if (isUser) {
+              return (
+                <div key={m.id} className="flex justify-end">
+                  <div className="max-w-[85%] rounded-3xl px-4 py-2.5 bg-[var(--bg-surface-alt)] border border-[var(--border-subtle)] text-[15px] leading-relaxed whitespace-pre-wrap font-arabic-ui">
+                    {m.content}
+                  </div>
                 </div>
-                <div className="mt-1 flex items-center gap-2">
-                  {!isUser && arabicPart && <AudioButton text={arabicPart} compact showSlow={false} />}
-                  {!isUser && (
+              );
+            }
+            const showTarkib = Boolean(expandedTarkibIds[m.id] && arabicPart);
+            return (
+              <article
+                key={m.id}
+                className="surface-card rounded-3xl border border-[var(--border-subtle)] p-4 sm:p-5 space-y-3"
+              >
+                <GeminiRichText
+                  text={m.content}
+                  className="text-[15.5px] sm:text-base leading-[1.85] text-[var(--text-primary)] whitespace-pre-wrap font-arabic-ui"
+                />
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[var(--border-subtle)] text-[var(--text-muted)]">
+                  {arabicPart && <AudioButton text={arabicPart} compact showSlow={false} />}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      speakBilingualText(m.content, {
+                        fallbackLang: 'bn-BD',
+                        voiceGender: activeGender,
+                        onStart: () => setSpeaking(true),
+                        onEnd: () => setSpeaking(false),
+                      })
+                    }
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full hover:bg-[var(--bg-surface-alt)] text-xs font-semibold"
+                  >
+                    <Volume2 className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span>শুনুন</span>
+                  </button>
+                  {arabicPart && arabicPart.trim().split(/\s+/).length >= 2 && (
                     <button
                       type="button"
                       onClick={() =>
-                        speakText(m.content.slice(0, 260), 'bn-BD', {
-                          voiceGender: activeGender,
-                          onStart: () => setSpeaking(true),
-                          onEnd: () => setSpeaking(false),
-                        })
+                        setExpandedTarkibIds((prev) => ({
+                          ...prev,
+                          [m.id]: !prev[m.id],
+                        }))
                       }
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] btn-secondary"
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                        showTarkib ? 'btn-primary' : 'hover:bg-[var(--bg-surface-alt)]'
+                      }`}
                     >
-                      <Volume2 className="w-3 h-3 text-[var(--accent)]" />
-                      <span>শুনুন</span>
+                      <GitBranch className="w-3.5 h-3.5" />
+                      <span>{showTarkib ? 'তারকিব লুকান' : 'তারকিব'}</span>
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => handleDeleteMsg(m.id)}
-                    className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors"
+                    className="p-1.5 rounded-full hover:text-[var(--danger)] transition-colors"
                     title="এই মেসেজ ডিলিট করুন"
                     aria-label="Delete message"
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </div>
+                {showTarkib && arabicPart && (
+                  <SentenceTarkibCard
+                    sentenceAr={arabicPart}
+                    onClose={() =>
+                      setExpandedTarkibIds((prev) => ({
+                        ...prev,
+                        [m.id]: false,
+                      }))
+                    }
+                  />
+                )}
+              </article>
             );
           })
         )}
 
         {loading && (
-          <div className="surface-alt rounded-2xl px-4 py-2.5 text-xs text-[var(--text-muted)] w-fit">
-            উত্তর প্রস্তুত হচ্ছে...
+          <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+            <Sparkles className="w-4 h-4 text-[var(--accent)] animate-spin" />
+            <span>উত্তর প্রস্তুত হচ্ছে...</span>
           </div>
         )}
       </div>
 
-      {/* Input Composer */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void sendScopedQuery();
-        }}
-        className="flex items-center gap-2 pt-2 border-t border-[var(--border-subtle)]"
-      >
-        <button
-          type="button"
-          onClick={handleVoiceMic}
-          className={`p-2.5 rounded-xl shrink-0 transition-colors ${
-            listening ? 'bg-emerald-500 text-white' : 'btn-secondary'
-          }`}
-          title="মাইক্রোফোনে আরবি বলুন"
-        >
-          {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-[var(--accent)]" />}
-        </button>
+      {/* Gemini Pill Composer with Continuous Bilingual Mic */}
+      <div className="space-y-1.5 pt-2">
+        <div className="flex items-center gap-1.5 text-[11px]">
+          <span className="text-[var(--text-muted)]">ভয়েস:</span>
+          <button
+            type="button"
+            onClick={() => {
+              setSpeechLang('bn-BD');
+              if (listening) handleToggleVoiceMic('bn-BD');
+            }}
+            className={`px-2 py-0.5 rounded-full font-bold ${
+              speechLang === 'bn-BD' ? 'bg-[var(--accent)] text-[var(--accent-fg)]' : 'btn-secondary'
+            }`}
+          >
+            বাংলা
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSpeechLang('ar-SA');
+              if (listening) handleToggleVoiceMic('ar-SA');
+            }}
+            className={`px-2 py-0.5 rounded-full font-bold ${
+              speechLang === 'ar-SA' ? 'bg-[var(--accent)] text-[var(--accent-fg)]' : 'btn-secondary'
+            }`}
+          >
+            العربية
+          </button>
+        </div>
 
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="এই পাঠ সম্পর্কে লিখুন..."
-          className="flex-1 px-3.5 py-2.5 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-sm focus:outline-none focus:border-[var(--accent)]"
-        />
-
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold btn-primary inline-flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void sendScopedQuery();
+          }}
+          className="surface-alt rounded-full border border-[var(--border-strong)] px-2.5 py-1.5 flex items-center gap-2"
         >
-          <Send className="w-4 h-4" />
-        </button>
-      </form>
+          <button
+            type="button"
+            onClick={() => handleToggleVoiceMic()}
+            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+              listening ? 'bg-emerald-500 text-white animate-pulse' : 'hover:bg-[var(--bg-surface)] text-[var(--text-primary)]'
+            }`}
+            title="মাইক্রোফোনে বাংলা বা আরবি বলুন"
+          >
+            {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-[var(--accent)]" />}
+          </button>
+
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={listening ? 'বলুন, আমি শুনছি...' : 'এই পাঠ সম্পর্কে লিখুন...'}
+            className="flex-1 min-w-0 px-1 py-2 bg-transparent text-[15px] focus:outline-none"
+          />
+
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            className="w-9 h-9 rounded-full btn-primary flex items-center justify-center shrink-0 disabled:opacity-50"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
+      </div>
     </div>
   );
 };

@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Bell, Clock, CloudSun, MapPin, MoonStar, Volume2 } from 'lucide-react';
+import { ArrowRight, Calendar, CloudSun, MapPin, MoonStar, Sparkles, Volume2 } from 'lucide-react';
 import {
   calculatePrayerTimes,
   fetchLiveWeather,
   formatCountdown,
+  getBanglaDateString,
+  getBanglaDayPeriod,
   getHijriDateString,
   getNextPrayer,
   ISLAMIC_CITIES,
@@ -12,6 +14,7 @@ import {
   WaqtKey,
   WeatherSnapshot,
 } from '../utils/islamicTimeAndWeather';
+import { ClockDialVariant, IslamicClockDial } from './IslamicClockDial';
 import { useApp } from '../context/AppContext';
 
 export interface CompanionPrefs {
@@ -20,6 +23,7 @@ export interface CompanionPrefs {
   customLon?: number;
   customNameBn?: string;
   asrMethod: 'hanafi' | 'shafii';
+  dialVariant: ClockDialVariant;
   adhanEnabled: Record<WaqtKey, boolean>;
 }
 
@@ -29,6 +33,7 @@ export function getCompanionPrefs(): CompanionPrefs {
   const defaults: CompanionPrefs = {
     cityId: 'kushtia',
     asrMethod: 'hanafi',
+    dialVariant: 'sky',
     adhanEnabled: {
       fajr: true,
       sunrise: false,
@@ -46,6 +51,7 @@ export function getCompanionPrefs(): CompanionPrefs {
     return {
       ...defaults,
       ...parsed,
+      dialVariant: parsed.dialVariant === 'calligraphy' ? 'calligraphy' : 'sky',
       adhanEnabled: { ...defaults.adhanEnabled, ...(parsed.adhanEnabled || {}) },
     };
   } catch {
@@ -64,7 +70,7 @@ export function saveCompanionPrefs(prefs: CompanionPrefs): void {
 }
 
 export const MuslimCompanionStrip: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
-  const { pushNotification } = useApp();
+  const { pushNotification, triggerSound } = useApp();
   const [prefs, setPrefs] = useState<CompanionPrefs>(() => getCompanionPrefs());
   const [now, setNow] = useState<Date>(() => new Date());
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
@@ -121,6 +127,8 @@ export const MuslimCompanionStrip: React.FC<{ compact?: boolean }> = ({ compact 
 
   const { next, remainingSeconds } = useMemo(() => getNextPrayer(now, schedule), [now, schedule]);
   const hijriDate = useMemo(() => getHijriDateString(now), [now]);
+  const banglaDate = useMemo(() => getBanglaDateString(now), [now]);
+  const banglaPeriod = useMemo(() => getBanglaDayPeriod(now), [now]);
 
   // Automatic exact-minute Adhan check while the app is open
   useEffect(() => {
@@ -147,78 +155,151 @@ export const MuslimCompanionStrip: React.FC<{ compact?: boolean }> = ({ compact 
     }
   }, [pushNotification, locationMeta.nameBn, now, prefs.adhanEnabled, schedule]);
 
-  const clockStr = now.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true,
-  });
+  const hour12 = String(now.getHours() % 12 === 0 ? 12 : now.getHours() % 12).padStart(2, '0');
+  const minStr = String(now.getMinutes()).padStart(2, '0');
+  const secStr = String(now.getSeconds()).padStart(2, '0');
+
+  const handleToggleDial = (variant: ClockDialVariant) => {
+    triggerSound('click');
+    const nextPrefs: CompanionPrefs = { ...prefs, dialVariant: variant };
+    setPrefs(nextPrefs);
+    saveCompanionPrefs(nextPrefs);
+  };
 
   return (
-    <div className="surface-card rounded-3xl p-4 sm:p-5 border border-[var(--border-strong)] shadow-sm">
-      <div className={`grid grid-cols-1 ${compact ? 'md:grid-cols-3' : 'lg:grid-cols-12'} gap-4 items-center`}>
-        {/* Live Clock & Hijri Date */}
-        <div className={`${compact ? '' : 'lg:col-span-4'} flex items-center gap-3.5 min-w-0`}>
-          <div className="w-11 h-11 rounded-2xl bg-[var(--emerald-highlight)] text-[var(--accent)] flex items-center justify-center shrink-0">
-            <Clock className="w-5 h-5" />
+    <div
+      className="rounded-3xl p-4 sm:p-6 text-white shadow-xl border border-white/25 relative overflow-hidden"
+      style={{
+        background:
+          prefs.dialVariant === 'calligraphy'
+            ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 52%, #0c1938 100%)'
+            : 'linear-gradient(135deg, #0284c7 0%, #2563eb 52%, #1d4ed8 100%)',
+      }}
+    >
+      {/* Subtle Ambient Sky Glow */}
+      <div
+        aria-hidden="true"
+        className="absolute -top-16 -right-16 w-60 h-60 rounded-full bg-white/12 blur-2xl pointer-events-none"
+      />
+
+      <div className="relative z-10 space-y-4">
+        {/* Top Control Row: City Location + Switchable Clock Dial Pills */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-[11px] font-semibold">
+            <MapPin className="w-3.5 h-3.5 text-amber-300" />
+            <span>{locationMeta.nameBn}</span>
           </div>
-          <div className="min-w-0">
-            <div className="text-lg sm:text-xl font-bold font-mono-num tracking-tight">{clockStr}</div>
-            <div className="text-[11px] text-[var(--text-muted)] truncate">
-              {hijriDate} · {now.toLocaleDateString('bn-BD', { weekday: 'short', day: 'numeric', month: 'short' })}
+
+          <div className="flex items-center gap-1.5">
+            <div className="inline-flex p-0.5 rounded-full bg-black/20 border border-white/15 text-[11px]">
+              <button
+                type="button"
+                onClick={() => handleToggleDial('sky')}
+                className={`px-2.5 py-1 rounded-full font-semibold transition-all ${
+                  prefs.dialVariant === 'sky' ? 'bg-white text-sky-900 shadow' : 'text-white/80 hover:text-white'
+                }`}
+              >
+                নীল আকাশ ঘড়ি
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleDial('calligraphy')}
+                className={`px-2.5 py-1 rounded-full font-semibold transition-all ${
+                  prefs.dialVariant === 'calligraphy' ? 'bg-white text-slate-950 shadow' : 'text-white/80 hover:text-white'
+                }`}
+              >
+                ক্যালিগ্রাফি ঘড়ি
+              </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => playAdhanPreview(next.nameAr)}
+              className="p-2 rounded-full bg-white/15 hover:bg-white/25 transition-colors"
+              title="আজান শুনুন"
+              aria-label="আজান শুনুন"
+            >
+              <Volume2 className="w-3.5 h-3.5 text-amber-200" />
+            </button>
           </div>
         </div>
 
-        {/* Next Prayer & Countdown */}
-        <div className={`${compact ? '' : 'lg:col-span-4'} flex items-center justify-between gap-3 p-3 rounded-2xl surface-alt border border-[var(--border-subtle)]`}>
-          <div className="flex items-center gap-2.5 min-w-0">
-            <MoonStar className="w-4 h-4 text-[var(--accent)] shrink-0" />
-            <div className="min-w-0">
-              <div className="text-[11px] text-[var(--text-muted)]">পরবর্তী নামাজ · {next.nameBn}</div>
-              <div className="text-sm font-bold font-mono-num">
-                {next.formattedTime}{' '}
-                <span className="text-xs font-medium text-[var(--accent)]">(-{formatCountdown(remainingSeconds)})</span>
-              </div>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => playAdhanPreview(next.nameAr)}
-            className="p-2 rounded-xl btn-secondary shrink-0"
-            title="আজান শুনুন"
-          >
-            <Volume2 className="w-3.5 h-3.5 text-[var(--accent)]" />
-          </button>
-        </div>
+        {/* Center Hero Stage: Left Analog Clock Dial | Right Big Digital Time & Weather */}
+        <div className={`flex ${compact ? 'flex-col sm:flex-row' : 'flex-col sm:flex-row'} items-center justify-between gap-5`}>
+          <div className="flex items-center gap-4 sm:gap-6">
+            <IslamicClockDial
+              now={now}
+              variant={prefs.dialVariant}
+              sizeClass="w-32 h-32 sm:w-36 sm:h-36"
+            />
 
-        {/* Live Weather + Hub Link */}
-        <div className={`${compact ? '' : 'lg:col-span-4'} flex items-center justify-between gap-3`}>
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-sky-500/12 text-sky-500 flex items-center justify-center shrink-0">
-              <CloudSun className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-bold font-mono-num flex items-center gap-1.5">
-                <span>{weather ? `${weather.temperatureC}°C` : '২৭°C'}</span>
-                <span className="text-xs font-normal text-[var(--text-secondary)] truncate">
-                  {weather ? weather.conditionBn : 'স্নিগ্ধ আকাশ'}
+            <div className="space-y-1">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl sm:text-5xl font-extrabold font-mono-num tracking-tight">
+                  {hour12}:{minStr}
                 </span>
+                <div className="flex flex-col leading-none">
+                  <span className="text-sm sm:text-base font-bold font-mono-num text-amber-300">:{secStr}</span>
+                  <span className="text-xs font-bold text-white/90 mt-0.5">{banglaPeriod}</span>
+                </div>
               </div>
-              <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-1 truncate">
-                <MapPin className="w-3 h-3 shrink-0" />
-                <span className="truncate">{locationMeta.nameBn}</span>
+
+              <div className="text-xs text-white/85 font-medium">
+                {now.toLocaleDateString('bn-BD', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                })}
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 pt-1 text-xs font-semibold text-amber-100">
+                <CloudSun className="w-4 h-4 text-amber-300" />
+                <span className="font-mono-num">{weather ? `${weather.temperatureC}°C` : '২৮°C'}</span>
+                <span>·</span>
+                <span>{weather ? weather.conditionBn : 'উজ্জ্বল আকাশ'}</span>
               </div>
             </div>
           </div>
 
           <Link
             to="/prayer-weather"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold btn-primary shrink-0 whitespace-nowrap"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white text-slate-900 font-bold text-xs shadow-lg hover:bg-sky-50 transition-colors shrink-0"
           >
-            <Bell className="w-3.5 h-3.5" />
-            <span>সব ওয়াক্ত</span>
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <span>৫ ওয়াক্ত, কিবলা ও আবহাওয়া</span>
             <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {/* Bottom 3 Colorful Pills (Bangla Date | Hijri Date | Orange Next Prayer Countdown) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+          <div className="rounded-2xl px-3.5 py-2.5 bg-emerald-500/28 border border-emerald-300/35 flex items-center gap-2.5">
+            <Calendar className="w-4 h-4 text-emerald-200 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-[10px] text-emerald-100/80">বঙ্গাব্দ</div>
+              <div className="text-xs font-bold truncate">{banglaDate}</div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl px-3.5 py-2.5 bg-white/15 border border-white/25 flex items-center gap-2.5">
+            <MoonStar className="w-4 h-4 text-amber-200 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-[10px] text-white/75">হিজরি তারিখ</div>
+              <div className="text-xs font-bold truncate">{hijriDate}</div>
+            </div>
+          </div>
+
+          <Link
+            to="/prayer-weather"
+            className="rounded-2xl px-3.5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md flex items-center justify-between gap-2 hover:brightness-105 transition"
+          >
+            <div className="min-w-0">
+              <div className="text-[10px] text-amber-50/90 font-semibold">পরবর্তী ওয়াক্ত · {next.nameBn}</div>
+              <div className="text-xs font-extrabold font-mono-num truncate">
+                {next.formattedTime} · -{formatCountdown(remainingSeconds)}
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 shrink-0" />
           </Link>
         </div>
       </div>

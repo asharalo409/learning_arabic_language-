@@ -1,13 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Bot, CheckCircle2 } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
 import { AudioButton } from '../components/AudioButton';
 import { LessonAiPracticePanel } from '../components/LessonAiPracticePanel';
+import { QuickNahwText } from '../components/QuickNahwText';
 import { useApp } from '../context/AppContext';
 import { GRAMMAR_TOPICS } from '../data/grammarData';
 
 export const GrammarPage: React.FC = () => {
-  const { t, lang, progress, completeGrammarTopic, triggerSound } = useApp();
+  const { t, lang, progress, completeGrammarTopic, triggerSound, syncMissingVocabFromSegments } = useApp();
+  const syncedTopicIdsRef = useRef<Set<string>>(new Set());
   const [branchFilter, setBranchFilter] = useState<'all' | 'Nahw' | 'Sarf'>('all');
   const [bookFilter, setBookFilter] = useState<
     | 'all'
@@ -31,6 +33,18 @@ export const GrammarPage: React.FC = () => {
     return branchMatch && bookMatch;
   });
   const activeTopic = GRAMMAR_TOPICS.find((tItem) => tItem.id === selectedId) || GRAMMAR_TOPICS[0];
+
+  useEffect(() => {
+    if (syncedTopicIdsRef.current.has(activeTopic.id)) return;
+    syncedTopicIdsRef.current.add(activeTopic.id);
+    syncMissingVocabFromSegments(
+      activeTopic.examples.map((ex) => ({
+        arabic: ex.arabic,
+        translationBn: ex.meaningBn,
+        sourceLabelBn: `ব্যাকরণ · ${activeTopic.titleBn}`,
+      }))
+    );
+  }, [activeTopic, syncMissingVocabFromSegments]);
 
   const grammarScopeContext = useMemo(() => {
     const exLines = activeTopic.examples
@@ -145,24 +159,24 @@ export const GrammarPage: React.FC = () => {
             <span>সব ব্যাকরণ অধ্যায়ের তালিকায় ফিরুন</span>
           </button>
 
-          <div className="surface-card rounded-2xl p-5 sm:p-6 space-y-5">
+          <div className="space-y-6">
             <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-[var(--border-subtle)]">
               <div className="space-y-1">
-                <div className="text-xs font-semibold text-[var(--accent)]">
+                <div className="text-xs font-bold text-[var(--accent)]">
                   <span>{activeTopic.branch}</span>
                   <span aria-hidden="true"> · </span>
                   <span>{activeTopic.sourceBook || 'মাবাদিউল আরাবিয়াহ / হেদায়েতুন নাহু'}</span>
                 </div>
-                <p className="font-arabic text-3xl text-[var(--accent)]" dir="rtl">
+                <p className="font-arabic text-3xl sm:text-4xl text-[var(--accent)]" dir="rtl">
                   {activeTopic.titleAr}
                 </p>
-                <h2 className="text-xl font-bold">
+                <h2 className="text-xl sm:text-2xl font-extrabold">
                   {lang === 'bn' ? activeTopic.titleBn : activeTopic.titleEn}
                 </h2>
               </div>
 
               {progress.completedGrammarIds.includes(activeTopic.id) ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--emerald-highlight)] text-[var(--success)]">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[var(--emerald-highlight)] text-[var(--success)]">
                   <CheckCircle2 className="w-4 h-4" />
                   <span>{t.common.completed}</span>
                 </span>
@@ -172,100 +186,106 @@ export const GrammarPage: React.FC = () => {
                   onClick={() =>
                     completeGrammarTopic(activeTopic.id, activeTopic.titleBn, activeTopic.titleEn)
                   }
-                  className="px-4 py-2 rounded-xl text-xs btn-primary font-bold"
+                  className="px-4 py-2 rounded-full text-xs btn-primary font-bold"
                 >
                   অধ্যায় সম্পন্ন করুন (+35 XP)
                 </button>
               )}
             </div>
 
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-[var(--text-primary)] leading-relaxed">{activeTopic.summaryBn}</p>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+            <div className="space-y-3 pb-4 border-b border-[var(--border-subtle)]">
+              <p className="text-base font-bold text-[var(--text-primary)] leading-[1.8]">{activeTopic.summaryBn}</p>
+              <p className="text-[15.5px] sm:text-base text-[var(--text-secondary)] leading-[1.85]">
                 {lang === 'bn' ? activeTopic.explanationBn : activeTopic.explanationEn}
               </p>
             </div>
 
-            <div className="surface-alt rounded-xl p-4 sm:p-5 space-y-2.5">
-              <div className="text-xs font-bold text-[var(--accent)]">মূল নিয়মাবলি:</div>
-              <ul className="list-disc ps-5 space-y-1.5 text-sm text-[var(--text-secondary)] leading-relaxed">
+            <div className="rounded-3xl surface-alt border border-[var(--border-subtle)] p-5 space-y-2.5">
+              <div className="text-sm font-extrabold text-[var(--accent)]">মূল নিয়মাবলি:</div>
+              <ul className="list-disc ps-5 space-y-2 text-[15.5px] sm:text-base text-[var(--text-primary)] leading-[1.85]">
                 {activeTopic.rulesBn.map((r, i) => (
                   <li key={i}>{r}</li>
                 ))}
               </ul>
             </div>
 
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-[var(--accent)]">উদাহরণ ও পদ-বিশ্লেষণ (হারাকাতসহ):</h3>
-              {activeTopic.examples.map((ex, idx) => (
-                <div
-                  key={idx}
-                  className="surface-alt rounded-xl p-4 sm:p-5 space-y-2 border border-[var(--border-subtle)]"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-arabic text-2xl text-[var(--accent)]" dir="rtl">{ex.arabic}</p>
-                    <AudioButton text={ex.arabic} compact />
+            <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+              <h3 className="text-base font-extrabold text-[var(--accent)]">উদাহরণ ও পদ-বিশ্লেষণ (হারাকাতসহ):</h3>
+              <div className="divide-y divide-[var(--border-subtle)]">
+                {activeTopic.examples.map((ex, idx) => (
+                  <div key={idx} className="py-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <QuickNahwText
+                          text={ex.arabic}
+                          className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]"
+                        />
+                      </div>
+                      <AudioButton text={ex.arabic} compact />
+                    </div>
+                    <div className="text-sm text-[var(--text-muted)]">
+                      উচ্চারণ: <span className="font-semibold text-[var(--text-primary)]">{ex.pronunciationBn}</span>
+                    </div>
+                    <div className="text-[15.5px] sm:text-base font-bold text-[var(--text-primary)]">
+                      বাংলা অর্থ: {ex.meaningBn}
+                    </div>
+                    <div className="text-[15px] text-[var(--text-secondary)] leading-[1.8]">
+                      <span className="font-bold text-[var(--accent)]">নাহু/ছরফ বিশ্লেষণ: </span>
+                      {ex.analysisBn}
+                    </div>
                   </div>
-                  <div className="text-xs text-[var(--text-muted)]">
-                    উচ্চারণ: <span className="font-medium text-[var(--text-primary)]">{ex.pronunciationBn}</span>
-                  </div>
-                  <div className="text-sm font-semibold text-[var(--text-primary)]">
-                    বাংলা অর্থ: {ex.meaningBn}
-                  </div>
-                  <div className="text-xs text-[var(--text-secondary)] pt-2 border-t border-[var(--border-subtle)] leading-relaxed">
-                    <span className="font-semibold text-[var(--accent)]">নাহু/ছরফ বিশ্লেষণ: </span>
-                    {ex.analysisBn}
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
 
             {/* Practice Quiz */}
-            <div className="space-y-3 pt-2 border-t border-[var(--border-subtle)]">
-              <h3 className="text-sm font-bold text-[var(--accent)]">অনুশীলন প্রশ্ন:</h3>
-              {activeTopic.quiz.map((q) => {
-                const chosen = quizChoice[q.id];
-                const isCorrect = chosen === q.correctIndex;
-                return (
-                  <div key={q.id} className="surface-alt rounded-xl p-4 space-y-2.5">
-                    <div className="text-sm font-semibold">{lang === 'bn' ? q.questionBn : q.questionEn}</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {q.options.map((opt, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            triggerSound(idx === q.correctIndex ? 'success' : 'error');
-                            setQuizChoice((prev) => ({ ...prev, [q.id]: idx }));
-                          }}
-                          className={`px-3.5 py-2.5 rounded-xl text-sm text-left border ${
-                            chosen === idx
-                              ? idx === q.correctIndex
-                                ? 'border-[var(--success)] bg-[var(--emerald-highlight)] font-semibold'
-                                : 'border-[var(--danger)] bg-[var(--danger)]/10'
-                              : 'border-[var(--border-subtle)] bg-[var(--bg-canvas)]'
-                          }`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                    {chosen !== undefined && (
-                      <div className={`text-xs font-medium ${isCorrect ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
-                        {q.explanationBn}
+            <div className="space-y-3 pt-4 border-t border-[var(--border-subtle)]">
+              <h3 className="text-base font-extrabold text-[var(--accent)]">অনুশীলন প্রশ্ন:</h3>
+              <div className="divide-y divide-[var(--border-subtle)]">
+                {activeTopic.quiz.map((q) => {
+                  const chosen = quizChoice[q.id];
+                  const isCorrect = chosen === q.correctIndex;
+                  return (
+                    <div key={q.id} className="py-4 space-y-2.5">
+                      <div className="text-base font-bold">{lang === 'bn' ? q.questionBn : q.questionEn}</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {q.options.map((opt, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              triggerSound(idx === q.correctIndex ? 'success' : 'error');
+                              setQuizChoice((prev) => ({ ...prev, [q.id]: idx }));
+                            }}
+                            className={`px-4 py-3 rounded-2xl text-[15px] text-left border ${
+                              chosen === idx
+                                ? idx === q.correctIndex
+                                  ? 'border-[var(--success)] bg-[var(--emerald-highlight)] font-bold'
+                                  : 'border-[var(--danger)] bg-[var(--danger)]/10'
+                                : 'border-[var(--border-subtle)] surface-alt hover:border-[var(--border-strong)]'
+                            }`}
+                          >
+                            {opt}
+                          </button>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      {chosen !== undefined && (
+                        <div className={`text-sm font-medium ${isCorrect ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
+                          {q.explanationBn}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Embedded Scoped AI Grammar Practice */}
-            <div className="pt-2 border-t border-[var(--border-subtle)] space-y-4">
+            <div className="pt-4 border-t border-[var(--border-subtle)] space-y-4">
               <button
                 type="button"
                 onClick={() => setShowScopedAi((prev) => !prev)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold btn-primary"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold btn-primary"
               >
                 <Bot className="w-4 h-4" />
                 <span>

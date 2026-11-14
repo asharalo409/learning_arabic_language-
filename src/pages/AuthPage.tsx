@@ -324,7 +324,7 @@ export const AuthPage: React.FC = () => {
                   লগইন করতে না চাইলে গেস্ট হিসেবেও সকল পাঠ ও AI রোবট ব্যবহার করতে পারবেন (ড্যাশবোর্ড ছাড়া)।
                 </p>
                 <Link
-                  to="/courses/beginners"
+                  to="/courses"
                   className="inline-flex items-center justify-center gap-1.5 px-5 py-2 rounded-full text-xs font-semibold btn-secondary"
                 >
                   <span>লগইন ছাড়াই গেস্ট হিসেবে প্রবেশ করুন</span>

@@ -8,6 +8,8 @@ interface AiVoiceRobotOrbProps {
   listening: boolean;
   speaking: boolean;
   thinking: boolean;
+  liveCallActive?: boolean;
+  liveCaption?: string;
   hasError?: boolean;
   voiceGender: VoiceGender;
   voiceLang: 'bn-BD' | 'ar-SA' | 'en-US';
@@ -22,6 +24,8 @@ export const AiVoiceRobotOrb: React.FC<AiVoiceRobotOrbProps> = ({
   listening,
   speaking,
   thinking,
+  liveCallActive = false,
+  liveCaption = '',
   hasError = false,
   voiceGender,
   voiceLang,
@@ -43,14 +47,16 @@ export const AiVoiceRobotOrb: React.FC<AiVoiceRobotOrbProps> = ({
 
   const statusLabel =
     activeMood === 'listening'
-      ? 'কান খাড়া করে শুনছি... বলুন!'
+      ? liveCallActive
+        ? 'লাইভ কল চলছে — নির্ভয়ে কথা বলুন...'
+        : 'কান খাড়া করে শুনছি... বলুন!'
       : activeMood === 'thinking'
-      ? 'চিন্তা করছি...'
+      ? 'আপনার কথা বিশ্লেষণ করছি ও সঠিক উত্তর প্রস্তুত হচ্ছে...'
       : activeMood === 'speaking'
-      ? `কথা বলছি (${voiceGender === 'male' ? 'ছেলে কণ্ঠ' : 'মেয়ে কণ্ঠ'})`
+      ? `আরবি ও বাংলায় বলছি (${voiceGender === 'male' ? 'ছেলে কণ্ঠ' : 'মেয়ে কণ্ঠ'})`
       : activeMood === 'angry'
       ? 'সংযোগ বা মাইক্রোফোনে ত্রুটি হয়েছে!'
-      : 'কথা বলতে অরব বা মাইকে ট্যাপ করুন';
+      : 'লাইভ ভয়েস কল শুরু করতে অরবে ট্যাপ করুন';
 
   const orbGradient =
     activeMood === 'listening'
@@ -354,6 +360,14 @@ export const AiVoiceRobotOrb: React.FC<AiVoiceRobotOrbProps> = ({
           </button>
         </div>
 
+        {/* Live Speech Caption (Does not pollute the text composer box) */}
+        {liveCaption && (
+          <div className="max-w-md w-full px-4 py-2 rounded-2xl bg-white/12 border border-white/20 text-xs text-emerald-100 font-medium backdrop-blur-md">
+            <span className="text-emerald-300 font-bold me-1.5">আপনি বলেছেন:</span>
+            <span className="font-arabic-ui">{liveCaption}</span>
+          </div>
+        )}
+
         {/* Clean Status & Action Button */}
         <div className="flex flex-wrap items-center justify-center gap-2.5">
           <span className="text-xs font-medium text-sky-100">{statusLabel}</span>
@@ -362,13 +376,17 @@ export const AiVoiceRobotOrb: React.FC<AiVoiceRobotOrbProps> = ({
             onClick={onToggleVoice}
             disabled={!sttSupported}
             className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold shadow transition-all disabled:opacity-45 ${
-              listening
-                ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+              liveCallActive || listening
+                ? 'bg-rose-500 text-white hover:bg-rose-600'
                 : 'bg-white text-slate-900 hover:bg-sky-50'
             }`}
           >
-            {listening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-indigo-600" />}
-            <span>{listening ? 'শোনা থামান' : 'মাইকে কথা বলুন'}</span>
+            {liveCallActive || listening ? (
+              <MicOff className="w-3.5 h-3.5" />
+            ) : (
+              <Mic className="w-3.5 h-3.5 text-indigo-600" />
+            )}
+            <span>{liveCallActive ? 'লাইভ কল বন্ধ করুন' : listening ? 'শোনা থামান' : 'লাইভ ভয়েস কল শুরু'}</span>
           </button>
 
           {speaking && (
@@ -378,7 +396,7 @@ export const AiVoiceRobotOrb: React.FC<AiVoiceRobotOrbProps> = ({
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold bg-white/15 hover:bg-white/25 text-white border border-white/20"
             >
               <VolumeX className="w-3.5 h-3.5" />
-              <span>থামান</span>
+              <span>কথা থামান</span>
             </button>
           )}
           {!speaking && !listening && (

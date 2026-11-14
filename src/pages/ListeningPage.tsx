@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Volume2, Turtle, Repeat, Square, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
+import { QuickNahwText } from '../components/QuickNahwText';
 import { useApp } from '../context/AppContext';
 import { LISTENING_EXERCISES } from '../data/practiceAndVocabData';
 import { getSpeechSupport, speakArabic, stopArabicSpeech } from '../utils/speech';
 
 export const ListeningPage: React.FC = () => {
-  const { t, lang, awardXp } = useApp();
+  const { t, lang, awardXp, syncMissingVocabFromSegments } = useApp();
+  const syncedRef = useRef(false);
   const [filterType, setFilterType] = useState<'all' | 'word' | 'sentence' | 'conversation'>('all');
   const [showTranslation, setShowTranslation] = useState(true);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -21,10 +23,20 @@ export const ListeningPage: React.FC = () => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.onvoiceschanged = check;
     }
+    if (!syncedRef.current) {
+      syncedRef.current = true;
+      syncMissingVocabFromSegments(
+        LISTENING_EXERCISES.map((ex) => ({
+          arabic: ex.arabic,
+          translationBn: ex.translationBn,
+          sourceLabelBn: 'শ্রবণ অনুশীলন',
+        }))
+      );
+    }
     return () => {
       stopArabicSpeech();
     };
-  }, []);
+  }, [syncMissingVocabFromSegments]);
 
   const filtered = LISTENING_EXERCISES.filter((ex) => filterType === 'all' || ex.type === filterType);
 
@@ -211,16 +223,17 @@ export const ListeningPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="surface-alt rounded-xl p-4 space-y-2">
-                  <p className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]" dir="rtl">
-                    {ex.arabic}
-                  </p>
+                <div className="surface-alt rounded-2xl p-4 sm:p-5 space-y-2.5">
+                  <QuickNahwText
+                    text={ex.arabic}
+                    className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]"
+                  />
                   {showTranslation && (
                     <div className="space-y-1 pt-2 border-t border-[var(--border-subtle)]">
-                      <p className="text-xs text-[var(--text-muted)]">
+                      <p className="text-xs sm:text-sm text-[var(--text-muted)]">
                         {t.common.pronunciation}: {ex.pronunciationBn}
                       </p>
-                      <p className="text-sm font-medium">
+                      <p className="text-[15px] sm:text-base font-medium">
                         {ex.translationBn}{' '}
                         <span className="text-xs text-[var(--text-muted)]">({ex.translationEn})</span>
                       </p>

@@ -1,4 +1,12 @@
 import { QuranAyah } from '../types/academy';
+import { QURAN_SURAHS_PART_1, QuranSurahComplete } from './quranLast25Part1';
+import { QURAN_SURAHS_PART_2 } from './quranLast25Part2';
+
+export type { QuranSurahComplete };
+export const QURAN_ALL_SHORT_SURAHS: QuranSurahComplete[] = [
+  ...QURAN_SURAHS_PART_1,
+  ...QURAN_SURAHS_PART_2,
+];
 
 export const QURANIC_AYAT: QuranAyah[] = [
   {
