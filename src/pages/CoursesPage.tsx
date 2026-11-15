@@ -498,23 +498,37 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
                 {/* Matched Chapters summary pills when scope is chapters */}
                 {searchScope === 'chapters' && globalSearch.chapters.length > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                    {globalSearch.chapters.slice(0, 12).map((ch) => (
-                      <Link
-                        key={ch.chapterNumber}
-                        to={`/courses/chapter/${ch.chapterNumber}`}
-                        className="p-3.5 rounded-2xl surface-alt border border-[var(--border-subtle)] hover:border-[var(--border-strong)] flex items-center justify-between gap-2"
-                      >
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-mono-num font-bold text-[var(--accent)]">
-                            অধ্যায় {ch.chapterNumber} · স্তর {ch.level}
+                    {globalSearch.chapters.slice(0, 12).map((ch) => {
+                      const doneInSearchCh = ch.lessons.filter((l) =>
+                        progress.completedLessonIds.includes(`ch${ch.chapterNumber}-l${l.lessonNumber}`)
+                      ).length;
+                      const searchPct = Math.round((doneInSearchCh / 10) * 100);
+                      return (
+                        <Link
+                          key={ch.chapterNumber}
+                          to={`/courses/chapter/${ch.chapterNumber}`}
+                          className="p-3.5 rounded-2xl surface-alt border border-[var(--border-subtle)] hover:border-[var(--border-strong)] space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-mono-num font-bold text-[var(--accent)]">
+                                অধ্যায় {ch.chapterNumber} · স্তর {ch.level} ({doneInSearchCh}/10 পাঠ)
+                              </div>
+                              <div className="text-sm font-bold truncate">
+                                {lang === 'bn' ? ch.titleBn : ch.titleEn}
+                              </div>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-[var(--accent)] shrink-0" />
                           </div>
-                          <div className="text-sm font-bold truncate">
-                            {lang === 'bn' ? ch.titleBn : ch.titleEn}
+                          <div className="w-full h-1.5 rounded-full bg-[var(--bg-canvas)] overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-[var(--accent)] transition-all"
+                              style={{ width: `${searchPct}%` }}
+                            />
                           </div>
-                        </div>
-                        <ArrowRight className="w-4 h-4 text-[var(--accent)] shrink-0" />
-                      </Link>
-                    ))}
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -577,13 +591,19 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
                       </p>
                     </div>
 
-                    <div className="bg-black/25 backdrop-blur-md rounded-2xl px-4 py-3 text-center min-w-[120px]">
+                    <div className="bg-black/25 backdrop-blur-md rounded-2xl px-4 py-3 text-center min-w-[155px] space-y-1.5">
                       <div className="text-[11px] text-white/75">স্তরের হিসাব</div>
                       <div className="text-lg font-bold font-mono-num">
                         {stats.completedChapters}/{stats.totalChapters} ধাপ
                       </div>
                       <div className="text-[11px] text-emerald-200 font-mono-num">
                         {stats.completedLessons}/{stats.totalLessons} পাঠ ({stats.pct}%)
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-white/20 overflow-hidden" aria-label={`Section progress ${stats.pct}%`}>
+                        <div
+                          className="h-full rounded-full bg-amber-300 transition-all duration-500"
+                          style={{ width: `${stats.pct}%` }}
+                        />
                       </div>
                     </div>
                   </div>
@@ -682,7 +702,7 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
                               )}
                             </Link>
 
-                            {/* Compact Floating Step Info Card */}
+                            {/* Compact Floating Step Info Card with Visual Progress Bar */}
                             <Link
                               to={`/courses/chapter/${chapter.chapterNumber}`}
                               className="mt-2 surface-card rounded-2xl px-4 py-2.5 text-center shadow-sm hover:border-[var(--border-strong)] transition-colors w-[225px] sm:w-[255px]"
@@ -700,6 +720,20 @@ export const CoursesPage: React.FC<{ initialLevel?: CurriculumLevelNumber }> = (
                               </p>
                               <div className="text-xs sm:text-sm font-bold text-[var(--text-primary)] leading-snug line-clamp-2">
                                 {lang === 'bn' ? chapter.titleBn : chapter.titleEn}
+                              </div>
+                              <div className="mt-2 flex items-center gap-2">
+                                <div className="flex-1 h-1.5 rounded-full bg-[var(--bg-surface-alt)] overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{
+                                      width: `${pct}%`,
+                                      backgroundColor: isComplete ? '#10b981' : themeStyle.ringColor,
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-mono-num font-bold text-[var(--text-muted)] w-7 text-right">
+                                  {Math.round(pct)}%
+                                </span>
                               </div>
                             </Link>
                           </div>

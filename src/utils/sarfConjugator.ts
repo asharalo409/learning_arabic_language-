@@ -693,7 +693,9 @@ export function buildFullSarfPackage(entry: MasdarEntry): FullSarfPackage {
       break;
     default:
       if (entry.babCategory === 'Rubai') {
-        sarfNoteBn = 'রুবাই (৪ মূল অক্ষর): মুনশাঈবের নিয়ম অনুযায়ী এর মুদারির আলামতে সর্বদা পেশ (يُفَعْلِلُ) হয়।';
+        sarfNoteBn = entry.babNameBn.includes('মাজীদ')
+          ? 'রুবাই মাজীদ ফীহ (৪ মূল অক্ষর + অতিরিক্ত হরফ): মুনশাঈবের নিয়ম অনুযায়ী এর মুদারির আলামতে ফাতহা (يَتَفَعْلَلُ / يَفْعَنْلِلُ / يَفْعَلِلُّ) হয়।'
+          : 'রুবাই মুজাররাদ (৪ মূল অক্ষর): মুনশাঈবের নিয়ম অনুযায়ী এর মুদারির আলামতে সর্বদা পেশ (يُفَعْلِلُ) হয়।';
       } else if (entry.babCategory === 'Thulathi Mazid') {
         sarfNoteBn = `সুলাসি মাজীদ ফীহ (${entry.babNameBn}): মূল তিন অক্ষরের সাথে অতিরিক্ত হরফ যুক্ত হয়ে নতুন অর্থবৈচিত্র্য তৈরি করে।`;
       }

@@ -12,6 +12,82 @@ export type BackdropIntensity = 'vivid' | 'gentle' | 'off';
 export type InterfaceLang = 'bn' | 'en' | 'ar';
 export type LearningTrack = 'MSA' | 'Quranic' | 'Combined';
 export type VoiceGender = 'male' | 'female';
+export type GrammarTerminologyMode = 'arabic' | 'bengali';
+export type SpeechEngineMode = 'auto' | 'gemini-tts' | 'native';
+
+export interface RootVariantSuggestion {
+  id: string;
+  encounteredWordAr: string;
+  matchedMasdarAr: string;
+  masdarPronunciationBn: string;
+  meaningBn: string;
+  meaningEn: string;
+  rootLetters: string;
+  babNameAr: string;
+  babNameBn: string;
+  madiAr: string;
+  mudariAr: string;
+  sourceLabelBn: string;
+}
+
+export type PdfOutputCategory =
+  | 'ar-bn-harakat'
+  | 'ar-only-harakat'
+  | 'bn-only'
+  | 'kitabi-bilingual';
+
+export type PdfVisualStyle = 'color' | 'bw';
+export type VocabDeckStatus = 'learning' | 'mastered' | 'review';
+export type SyncStatus = 'online' | 'offline' | 'pending' | 'syncing' | 'synced';
+
+export interface WeeklyVelocityPoint {
+  weekKey: string;
+  weekLabel: string;
+  rangeLabel: string;
+  lessonsCompleted: number;
+  target: number;
+}
+
+export interface FormattedPdfItem {
+  kind?: 'card' | 'table-row' | 'prose' | 'step' | 'quote';
+  badge?: string;
+  badgeNumber?: string;
+  labelAr?: string;
+  labelBn?: string;
+  arabic?: string;
+  pronunciationBn?: string;
+  bengali?: string;
+  reference?: string;
+  highlightColor?: 'emerald' | 'sky' | 'amber' | 'violet' | 'rose' | 'slate';
+}
+
+export type PdfSectionAccentTheme = 'emerald' | 'blue' | 'violet' | 'rose' | 'slate' | 'amber';
+
+export interface FormattedPdfSection {
+  id?: string;
+  headingAr?: string;
+  headingBn?: string;
+  introBn?: string;
+  layout: 'cards' | 'grid-3' | 'table' | 'prose' | 'flow' | 'quotes';
+  accentTheme?: PdfSectionAccentTheme;
+  items: FormattedPdfItem[];
+}
+
+export interface FormattedPdfDocument {
+  titleAr?: string;
+  titleBn?: string;
+  subtitleBn?: string;
+  category: PdfOutputCategory;
+  sections: FormattedPdfSection[];
+  footerNote?: string;
+}
+
+export interface PaginatedPdfPage {
+  pageNumber: number;
+  totalPages: number;
+  showHeaderBanner: boolean;
+  sections: FormattedPdfSection[];
+}
 
 export type CurriculumLevelNumber = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -290,6 +366,7 @@ export interface VocabProgressRecord {
   nextReviewIso: string;
   repetitions: number;
   favorite: boolean;
+  status?: VocabDeckStatus;
 }
 
 export interface ActivityLogEntry {
@@ -318,6 +395,10 @@ export interface StudentProgress {
   recentActivities: ActivityLogEntry[];
   unlockedBadgeIds: string[];
   personalVocab?: VocabItem[];
+  lessonCompletionDates?: Record<string, number>;
+  favoriteLessonIds?: string[];
+  lastLessonId?: string;
+  lastLessonVisitedAt?: string;
 }
 
 export interface AdminCustomContent {

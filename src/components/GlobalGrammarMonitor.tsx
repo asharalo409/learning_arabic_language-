@@ -1,14 +1,19 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { BookOpen, GitBranch, Sparkles, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { BookOpen, GitBranch, Link2, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { matchNahwTipForToken, NahwQuickTip } from '../data/nahwQuickTips';
+import { analyzeSentenceTarkib, matchNahwTipForToken, NahwQuickTip } from '../data/nahwQuickTips';
+import { formatGrammarTerm, localizeGrammarLabel } from '../utils/grammarTerminology';
 import { AudioButton } from './AudioButton';
-import { SentenceTarkibCard } from './SentenceTarkibCard';
+import { computePortalPopoverCoords, FloatingAnchor, FloatingWordPortal } from './FloatingWordPortal';
+import { TarkibVisualizer } from './TarkibVisualizer';
 
 interface GlobalInspectedWord {
   word: string;
   sentence: string;
+  tokenIndex: number;
   tip: NahwQuickTip;
+  anchor: FloatingAnchor;
 }
 
 const SKIP_TAGS = new Set([
@@ -41,7 +46,10 @@ function isIgnoredElement(el: Element | null): boolean {
   return false;
 }
 
-function getCaretTextAndOffset(x: number, y: number): { node: Text; offset: number } | null {
+function getCaretTextAndOffset(
+  x: number,
+  y: number
+): { node: Text; offset: number; rect: DOMRect | null } | null {
   if (typeof document === 'undefined') return null;
 
   const doc = document as Document & {
@@ -54,16 +62,31 @@ function getCaretTextAndOffset(x: number, y: number): { node: Text; offset: numb
   if (typeof doc.caretRangeFromPoint === 'function') {
     const range = doc.caretRangeFromPoint(x, y);
     if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
-      return { node: range.startContainer as Text, offset: range.startOffset };
+      const rect = range.getBoundingClientRect();
+      return {
+        node: range.startContainer as Text,
+        offset: range.startOffset,
+        rect: rect && (rect.width > 0 || rect.height > 0) ? rect : null,
+      };
     }
   } else if (typeof doc.caretPositionFromPoint === 'function') {
     const pos = doc.caretPositionFromPoint(x, y);
     if (pos && pos.offsetNode.nodeType === Node.TEXT_NODE) {
-      return { node: pos.offsetNode as Text, offset: pos.offset };
+      const r = document.createRange();
+      r.setStart(pos.offsetNode, pos.offset);
+      r.setEnd(pos.offsetNode, Math.min((pos.offsetNode.textContent || '').length, pos.offset + 1));
+      const rect = r.getBoundingClientRect();
+      return {
+        node: pos.offsetNode as Text,
+        offset: pos.offset,
+        rect: rect && (rect.width > 0 || rect.height > 0) ? rect : null,
+      };
     }
   }
   return null;
 }
+
+// Positioning delegated to computePortalPopoverCoords inside FloatingWordPortal
 
 function extractArabicContextFromText(
   fullText: string,
@@ -71,7 +94,6 @@ function extractArabicContextFromText(
 ): { word: string; prevWord?: string; nextWord?: string; sentence: string; tokenIndex: number } | null {
   if (!fullText || !/[\u0621-\u064A]/.test(fullText)) return null;
 
-  // Tokenize preserving character spans
   const tokenRegex = /\S+/g;
   const spans: { raw: string; start: number; end: number; isArabic: boolean }[] = [];
   let m: RegExpExecArray | null;
@@ -86,7 +108,6 @@ function extractArabicContextFromText(
 
   if (spans.length === 0) return null;
 
-  // Find token near clicked offset (tolerance +/- 3 chars for RTL touch taps)
   let hitIdx = spans.findIndex((s) => offset >= s.start && offset <= s.end && s.isArabic);
   if (hitIdx < 0) {
     let bestDist = Infinity;
@@ -102,7 +123,6 @@ function extractArabicContextFromText(
 
   if (hitIdx < 0) return null;
 
-  // Collect contiguous Arabic sentence around hitIdx
   const arabicRunIndices: number[] = [];
   let left = hitIdx;
   while (left > 0 && spans[left - 1].isArabic) {
@@ -137,7 +157,9 @@ function extractArabicContextFromText(
 }
 
 export const GlobalGrammarMonitor: React.FC = () => {
-  const { globalGrammarEnabled } = useApp();
+  const { globalGrammarEnabled, grammarTerminologyMode } = useApp();
+  const isArabicMode = grammarTerminologyMode === 'arabic';
+
   const [inspected, setInspected] = useState<GlobalInspectedWord | null>(null);
   const [showFullTarkib, setShowFullTarkib] = useState(false);
   const rafRef = useRef<number | null>(null);
@@ -179,7 +201,7 @@ export const GlobalGrammarMonitor: React.FC = () => {
     targets.forEach((el) => {
       el.setAttribute('data-global-arabic', 'true');
       if (!el.getAttribute('title')) {
-        el.setAttribute('title', 'যেকোনো আরবি শব্দে চাপলে ব্যাকরণ ও তারকিব দেখাবে');
+        el.setAttribute('title', 'যেকোনো আরবি শব্দে চাপলে সেখানেই ব্যাকরণ ও তারকিব দেখাবে');
       }
     });
   }, [globalGrammarEnabled]);
@@ -228,24 +250,40 @@ export const GlobalGrammarMonitor: React.FC = () => {
     const handleDocumentClick = (e: MouseEvent) => {
       if (e.defaultPrevented) return;
       const target = e.target as Element | null;
-      if (!target || isIgnoredElement(target)) return;
 
-      // Ignore clicks inside our own inspector modal
-      if (target.closest('[data-global-inspector="true"]')) return;
+      if (target?.closest('[data-global-inspector="true"]')) return;
+      if (target?.closest('[data-global-tarkib-modal="true"]')) return;
+
+      if (!target || isIgnoredElement(target)) {
+        setInspected(null);
+        return;
+      }
 
       let extracted: ReturnType<typeof extractArabicContextFromText> = null;
+      let wordRect: { left: number; top: number; bottom: number; width: number } = {
+        left: e.clientX - 20,
+        top: e.clientY - 12,
+        bottom: e.clientY + 12,
+        width: 40,
+      };
 
       const caret = getCaretTextAndOffset(e.clientX, e.clientY);
       if (caret && !isIgnoredElement(caret.node.parentElement)) {
+        if (caret.rect) {
+          wordRect = {
+            left: caret.rect.left,
+            top: caret.rect.top,
+            bottom: caret.rect.bottom,
+            width: Math.max(24, caret.rect.width),
+          };
+        }
         const blockEl =
           caret.node.parentElement?.closest('p, div, li, td, th, span, h1, h2, h3, h4') ||
           caret.node.parentElement;
         const containerText = blockEl?.textContent || caret.node.nodeValue || '';
 
-        // If caret node is inside block text, compute relative offset accurately
         if (caret.node.nodeValue && /[\u0621-\u064A]/.test(caret.node.nodeValue)) {
           extracted = extractArabicContextFromText(caret.node.nodeValue, caret.offset);
-          // Upgrade sentence context from surrounding block if container has full multi-word sentence
           if (
             extracted &&
             containerText.length <= 500 &&
@@ -262,18 +300,27 @@ export const GlobalGrammarMonitor: React.FC = () => {
         }
       }
 
-      // Touch-friendly fallback: if user tapped a leaf Arabic element containing 1-3 words
       if (!extracted && target.getAttribute('data-global-arabic') === 'true') {
         const text = (target.textContent || '').trim();
         if (text && /[\u0621-\u064A]{2,}/.test(text) && text.length <= 160) {
           extracted = extractArabicContextFromText(text, Math.floor(text.length / 2));
+          const r = target.getBoundingClientRect();
+          if (r.width > 0) {
+            wordRect = { left: r.left, top: r.top, bottom: r.bottom, width: r.width };
+          }
         }
       }
 
-      if (!extracted) return;
+      if (!extracted) {
+        setInspected(null);
+        return;
+      }
 
       const cleanWord = extracted.word.replace(/[؟،.!:,;"'«»()\[\]{}]/g, '').trim();
-      if (!cleanWord || !/[\u0621-\u064A]/.test(cleanWord)) return;
+      if (!cleanWord || !/[\u0621-\u064A]/.test(cleanWord)) {
+        setInspected(null);
+        return;
+      }
 
       const tip = matchNahwTipForToken(
         extracted.word,
@@ -288,117 +335,189 @@ export const GlobalGrammarMonitor: React.FC = () => {
       setInspected({
         word: cleanWord,
         sentence: extracted.sentence,
+        tokenIndex: extracted.tokenIndex,
         tip,
+        anchor: computePortalPopoverCoords(wordRect),
       });
     };
 
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setInspected(null);
+        setShowFullTarkib(false);
+      }
+    };
+
+    const handleScroll = () => {
+      if (!showFullTarkib) setInspected(null);
+    };
+
     document.addEventListener('click', handleDocumentClick);
-    return () => document.removeEventListener('click', handleDocumentClick);
-  }, [globalGrammarEnabled]);
+    document.addEventListener('keydown', handleEscape);
+    window.addEventListener('scroll', handleScroll, { passive: true, capture: true });
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+      document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('scroll', handleScroll, { capture: true });
+    };
+  }, [globalGrammarEnabled, showFullTarkib]);
 
-  if (!globalGrammarEnabled || !inspected) return null;
+  const tarkibInfo = useMemo(() => {
+    if (!inspected) return null;
+    const analysis = analyzeSentenceTarkib(inspected.sentence);
+    const wordObj = analysis.words[inspected.tokenIndex];
+    return { analysis, wordObj };
+  }, [inspected]);
 
-  const sentenceWordCount = inspected.sentence
-    .split(/\s+/)
-    .filter((w) => /[\u0621-\u064A]/.test(w)).length;
+  if (!globalGrammarEnabled) return null;
+
+  const sentenceWordCount = inspected
+    ? inspected.sentence.split(/\s+/).filter((w) => /[\u0621-\u064A]/.test(w)).length
+    : 0;
 
   return (
-    <div
-      data-global-inspector="true"
-      data-global-grammar-ignore="true"
-      className="fixed inset-x-3 bottom-20 lg:bottom-6 lg:inset-x-auto lg:right-6 lg:w-[540px] z-50 max-h-[78vh] overflow-y-auto rounded-3xl surface-card border border-[var(--border-strong)] shadow-2xl p-5 sm:p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-150"
-    >
-      <div className="flex items-start justify-between gap-3 pb-3 border-b border-[var(--border-subtle)]">
-        <div className="min-w-0 space-y-1">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--accent)]">
-            <Sparkles className="w-3.5 h-3.5 shrink-0" />
-            <span>গ্লোবাল ব্যাকরণ ও তারকিব টুল · {inspected.tip.categoryBn}</span>
+    <>
+      {inspected && (
+        <FloatingWordPortal
+          anchor={inspected.anchor}
+          dataAttrs={{ 'data-global-inspector': 'true', 'data-global-grammar-ignore': 'true' }}
+        >
+          <div className="flex items-start justify-between gap-2 pb-1.5 border-b border-[var(--border-subtle)]">
+            <div className="min-w-0 space-y-0.5">
+              <div className="flex flex-wrap items-baseline gap-1.5">
+                <span className="font-arabic text-xl font-bold text-[var(--accent)]" dir="rtl">
+                  {inspected.word}
+                </span>
+                {tarkibInfo?.wordObj && (
+                  <span
+                    title={formatGrammarTerm(tarkibInfo.wordObj.roleKey, grammarTerminologyMode).tooltipBn}
+                    className={`text-[11px] font-bold text-[var(--accent)] ${
+                      isArabicMode ? 'font-arabic text-xs' : ''
+                    }`}
+                  >
+                    · {isArabicMode ? tarkibInfo.wordObj.posShortAr : tarkibInfo.wordObj.posShortBn}
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] font-bold text-[var(--text-primary)] leading-snug">
+                {localizeGrammarLabel(inspected.tip.titleBn, grammarTerminologyMode)}
+                {inspected.tip.meaningBn ? (
+                  <span className="font-normal text-[var(--text-secondary)]"> — {inspected.tip.meaningBn}</span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+              <AudioButton text={inspected.word} compact showSlow={false} />
+              <button
+                type="button"
+                onClick={() => {
+                  setInspected(null);
+                  setShowFullTarkib(false);
+                }}
+                className="p-1 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-alt)]"
+                aria-label="বন্ধ করুন"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-baseline gap-2.5">
-            <span className="font-arabic text-3xl text-[var(--accent)]" dir="rtl">
-              {inspected.word}
-            </span>
-            <span className="text-base font-extrabold text-[var(--text-primary)]">
-              {inspected.tip.titleBn}
-            </span>
-          </div>
-          {inspected.tip.meaningBn && (
-            <div className="text-sm font-semibold text-[var(--text-primary)]">
-              অর্থ: {inspected.tip.meaningBn}
+
+          {(tarkibInfo?.wordObj || inspected.tip.tarkibRoleBn) && (
+            <div className="space-y-0.5 text-[11px]">
+              <div className="flex flex-wrap items-baseline justify-between gap-1">
+                <span
+                  className={`font-extrabold text-[var(--accent)] ${
+                    isArabicMode ? 'font-arabic text-xs' : ''
+                  }`}
+                >
+                  {tarkibInfo?.wordObj
+                    ? isArabicMode
+                      ? tarkibInfo.wordObj.tarkibRoleAr
+                      : tarkibInfo.wordObj.tarkibRoleBn
+                    : localizeGrammarLabel(inspected.tip.tarkibRoleBn || '', grammarTerminologyMode)}
+                </span>
+                {tarkibInfo?.wordObj && (
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    {isArabicMode ? tarkibInfo.wordObj.tarkibRoleBn : tarkibInfo.wordObj.tarkibRoleAr}
+                  </span>
+                )}
+              </div>
+
+              {tarkibInfo?.wordObj && tarkibInfo.wordObj.linkedIndices.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 font-semibold">
+                  <Link2 className="w-3 h-3 shrink-0" />
+                  <span className={isArabicMode ? 'font-arabic text-[11px]' : ''}>
+                    {isArabicMode
+                      ? tarkibInfo.wordObj.relationshipLabelAr
+                      : tarkibInfo.wordObj.relationshipLabelBn}
+                    :
+                  </span>
+                  {tarkibInfo.wordObj.linkedIndices.map((li) => {
+                    const p = tarkibInfo.analysis.words[li];
+                    return p ? (
+                      <span key={li} className="font-arabic font-bold underline decoration-dotted" dir="rtl">
+                        {p.clean}
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
             </div>
           )}
-          {inspected.tip.rootOrFormBn && (
-            <div className="text-xs text-[var(--text-muted)] font-arabic-ui">
-              {inspected.tip.rootOrFormBn}
-            </div>
-          )}
-        </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          <AudioButton text={inspected.word} compact showSlow={false} />
-          <button
-            type="button"
-            onClick={() => {
-              setInspected(null);
-              setShowFullTarkib(false);
-            }}
-            className="p-2 rounded-full btn-secondary text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            aria-label="বন্ধ করুন"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Word Role in Sentence (Tarkib) */}
-      {inspected.tip.tarkibRoleBn && (
-        <div className="rounded-2xl bg-[var(--emerald-highlight)] border border-[var(--accent)]/30 p-3.5 space-y-1">
-          <div className="flex items-center gap-1.5 text-xs font-extrabold text-[var(--accent)]">
-            <GitBranch className="w-3.5 h-3.5 shrink-0" />
-            <span>বাক্যে তারকিব (পদ ভূমিকা): {inspected.tip.tarkibRoleBn}</span>
-          </div>
-          {inspected.tip.tarkibReasonBn && (
-            <p className="text-sm text-[var(--text-primary)] leading-relaxed">
-              {inspected.tip.tarkibReasonBn}
+          <div className="pt-1.5 border-t border-[var(--border-subtle)] space-y-1 text-[11px] leading-snug">
+            <p className="text-[var(--text-primary)]">
+              <strong className="text-[var(--accent)]">কায়দা: </strong>
+              {localizeGrammarLabel(inspected.tip.ruleBn, grammarTerminologyMode)}
             </p>
-          )}
-        </div>
+            <p className="text-[var(--text-secondary)]">
+              <strong className="text-[var(--accent)]">ই‘রাব: </strong>
+              {localizeGrammarLabel(inspected.tip.irabEffectBn, grammarTerminologyMode)}
+            </p>
+          </div>
+
+          <div className="pt-1.5 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] min-w-0 truncate">
+              <BookOpen className="w-3 h-3 text-[var(--accent)] shrink-0" />
+              <span className="truncate">{inspected.tip.exampleBn}</span>
+            </div>
+            {sentenceWordCount >= 2 && (
+              <button
+                type="button"
+                onClick={() => setShowFullTarkib(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold btn-primary shrink-0"
+              >
+                <GitBranch className="w-3 h-3" />
+                <span>তারকিব ট্রি</span>
+              </button>
+            )}
+          </div>
+        </FloatingWordPortal>
       )}
 
-      <div className="space-y-2 text-sm leading-relaxed">
-        <p className="text-[var(--text-primary)]">
-          <strong className="text-[var(--accent)]">কায়দা ও ছরফ: </strong>
-          {inspected.tip.ruleBn}
-        </p>
-        <p className="text-[var(--text-secondary)]">
-          <strong className="text-[var(--accent)]">ই‘রাব ও অবস্থান: </strong>
-          {inspected.tip.irabEffectBn}
-        </p>
-      </div>
-
-      <div className="pt-2.5 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] min-w-0">
-          <BookOpen className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
-          <span className="truncate">{inspected.tip.exampleBn}</span>
-        </div>
-        {sentenceWordCount >= 2 && (
-          <button
-            type="button"
-            onClick={() => setShowFullTarkib((v) => !v)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold btn-primary shrink-0"
+      {/* Full Sentence Tree Modal via document.body Portal */}
+      {showFullTarkib && inspected && sentenceWordCount >= 2 && typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            data-global-tarkib-modal="true"
+            data-global-grammar-ignore="true"
+            className="fixed inset-0 z-[9999] bg-black/55 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+            onClick={() => setShowFullTarkib(false)}
           >
-            <GitBranch className="w-3.5 h-3.5" />
-            <span>{showFullTarkib ? 'পূর্ণ তারকিব লুকান' : 'সম্পূর্ণ বাক্যের তারকিব'}</span>
-          </button>
+            <div
+              className="w-full max-w-4xl my-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <TarkibVisualizer
+                sentenceAr={inspected.sentence}
+                initialSelectedIndex={inspected.tokenIndex}
+                onClose={() => setShowFullTarkib(false)}
+              />
+            </div>
+          </div>,
+          document.body
         )}
-      </div>
-
-      {showFullTarkib && sentenceWordCount >= 2 && (
-        <SentenceTarkibCard
-          sentenceAr={inspected.sentence}
-          onClose={() => setShowFullTarkib(false)}
-        />
-      )}
-    </div>
+    </>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Bot, AlertTriangle, Sparkles } from 'lucide-react';
+import { Mic, MicOff, Bot, AlertTriangle, Sparkles, Timer, Flame } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
 import { AudioButton } from '../components/AudioButton';
 import { GeminiRichText } from '../components/GeminiRichText';
@@ -15,8 +15,42 @@ const DRILL_CHIP_COLORS = [
   'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
 ];
 
+const DAILY_SPEAKING_KEY = 'aaa_daily_speaking_seconds_v1';
+const SESSION_TARGET_SECONDS = 30;
+const DAILY_TARGET_SECONDS = 180; // 3 minutes daily speaking consistency goal
+
+function readTodaySpeakingSeconds(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const raw = localStorage.getItem(DAILY_SPEAKING_KEY);
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw) as { date?: string; seconds?: number };
+    return parsed.date === today ? Math.max(0, Number(parsed.seconds) || 0) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveTodaySpeakingSeconds(seconds: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    localStorage.setItem(DAILY_SPEAKING_KEY, JSON.stringify({ date: today, seconds: Math.round(seconds) }));
+  } catch {
+    // ignore
+  }
+}
+
+function formatDurationMmSs(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${String(rem).padStart(2, '0')}`;
+}
+
 export const SpeakingPage: React.FC = () => {
-  const { t, lang, awardXp, progress, updateProfile, syncMissingVocabFromSegments } = useApp();
+  const { t, lang, awardXp, progress, updateProfile, syncMissingVocabFromSegments, recordDailyPracticeTouch } = useApp();
   const activeGender = progress.voiceGender === 'female' ? 'female' : 'male';
   const [selectedEx, setSelectedEx] = useState(SPEAKING_EXERCISES[0]);
   const [speechSupport] = useState(() => getSpeechSupport());
@@ -25,6 +59,12 @@ export const SpeakingPage: React.FC = () => {
   const [micError, setMicError] = useState<string | null>(null);
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
+
+  // Real-time microphone duration state
+  const [sessionElapsedSec, setSessionElapsedSec] = useState(0);
+  const [dailySpeakingSec, setDailySpeakingSec] = useState<number>(() => readTodaySpeakingSeconds());
+  const sessionStartMsRef = useRef<number | null>(null);
+  const dailyBaselineSecRef = useRef<number>(readTodaySpeakingSeconds());
   const recRef = useRef<RecognitionHandle | null>(null);
   const syncedRef = useRef(false);
 
@@ -44,15 +84,55 @@ export const SpeakingPage: React.FC = () => {
     };
   }, [syncMissingVocabFromSegments]);
 
+  // Real-time speaking timer updates every 250ms while microphone input is active
+  useEffect(() => {
+    if (!recording) return;
+    if (sessionStartMsRef.current === null) {
+      sessionStartMsRef.current = Date.now();
+      dailyBaselineSecRef.current = readTodaySpeakingSeconds();
+    }
+    const timer = window.setInterval(() => {
+      if (sessionStartMsRef.current === null) return;
+      const elapsed = (Date.now() - sessionStartMsRef.current) / 1000;
+      setSessionElapsedSec(elapsed);
+      const updatedDaily = dailyBaselineSecRef.current + elapsed;
+      setDailySpeakingSec(updatedDaily);
+      saveTodaySpeakingSeconds(updatedDaily);
+    }, 250);
+
+    return () => window.clearInterval(timer);
+  }, [recording]);
+
+  const finalizeMicSession = () => {
+    if (sessionStartMsRef.current !== null) {
+      const elapsed = (Date.now() - sessionStartMsRef.current) / 1000;
+      const updatedDaily = dailyBaselineSecRef.current + elapsed;
+      setSessionElapsedSec(elapsed);
+      setDailySpeakingSec(updatedDaily);
+      saveTodaySpeakingSeconds(updatedDaily);
+      dailyBaselineSecRef.current = updatedDaily;
+      sessionStartMsRef.current = null;
+      if (elapsed >= 5) {
+        recordDailyPracticeTouch();
+      }
+    }
+  };
+
   const handleToggleMic = () => {
     setMicError(null);
     if (recording) {
       recRef.current?.stop();
       setRecording(false);
+      finalizeMicSession();
       return;
     }
 
+    sessionStartMsRef.current = Date.now();
+    dailyBaselineSecRef.current = dailySpeakingSec;
+    setSessionElapsedSec(0);
     setRecording(true);
+    recordDailyPracticeTouch();
+
     const handle = startArabicRecognition({
       onResult: (transcript) => {
         setSpokenText(transcript);
@@ -60,14 +140,17 @@ export const SpeakingPage: React.FC = () => {
       onError: (message) => {
         setMicError(message);
         setRecording(false);
+        finalizeMicSession();
       },
       onEnd: () => {
         setRecording(false);
+        finalizeMicSession();
       },
     });
 
     if (!handle) {
       setRecording(false);
+      sessionStartMsRef.current = null;
     } else {
       recRef.current = handle;
     }
@@ -104,6 +187,9 @@ export const SpeakingPage: React.FC = () => {
       setLoadingAi(false);
     }
   };
+
+  const sessionPct = Math.min(100, Math.round((sessionElapsedSec / SESSION_TARGET_SECONDS) * 100));
+  const dailySpeakingPct = Math.min(100, Math.round((dailySpeakingSec / DAILY_TARGET_SECONDS) * 100));
 
   return (
     <AppShell
@@ -220,7 +306,7 @@ export const SpeakingPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Voice Capture & Instant AI Correction */}
+          {/* Voice Capture, Real-Time Duration Progress & Instant AI Correction */}
           <div className="p-5 sm:p-6 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -237,10 +323,74 @@ export const SpeakingPage: React.FC = () => {
                 <span>{recording ? 'রেকর্ডিং থামান' : 'মাইক্রোফোনে আরবি বলুন'}</span>
               </button>
               {recording && (
-                <span className="text-xs text-[var(--accent)] font-semibold">
+                <span className="inline-flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
                   শোনা হচ্ছে... স্পষ্টভাবে আরবি বলুন
                 </span>
               )}
+            </div>
+
+            {/* Real-Time Speaking Duration Progress Indicator */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="surface-alt rounded-2xl border border-[var(--border-subtle)] p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="inline-flex items-center gap-1.5 font-bold text-[var(--text-primary)]">
+                    <Timer className={`w-3.5 h-3.5 ${recording ? 'text-rose-500 animate-spin' : 'text-[var(--accent)]'}`} />
+                    <span>{lang === 'bn' ? 'বর্তমান সেশন সময়' : 'Active Mic Duration'}</span>
+                  </span>
+                  <span className="font-mono-num font-bold text-[var(--accent)]">
+                    {formatDurationMmSs(sessionElapsedSec)} / {formatDurationMmSs(SESSION_TARGET_SECONDS)}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-[var(--bg-canvas)] overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-200 ${
+                      sessionPct >= 100
+                        ? 'bg-emerald-500'
+                        : recording
+                        ? 'bg-gradient-to-r from-rose-500 via-amber-500 to-emerald-500'
+                        : 'bg-[var(--accent)]'
+                    }`}
+                    style={{ width: `${sessionPct}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                  <span>
+                    {sessionPct >= 100
+                      ? 'মাশাআল্লাহ! এই সেশনের লক্ষ্য পূর্ণ হয়েছে'
+                      : recording
+                      ? 'মাইক্রোফোন চালু — লাইভ অগ্রগতি বাড়ছে'
+                      : 'প্রতি চর্চায় অন্তত ৩০ সেকেন্ড বলার চেষ্টা করুন'}
+                  </span>
+                  <span className="font-mono-num font-semibold">{sessionPct}%</span>
+                </div>
+              </div>
+
+              <div className="surface-alt rounded-2xl border border-[var(--border-subtle)] p-3.5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="inline-flex items-center gap-1.5 font-bold text-[var(--text-primary)]">
+                    <Flame className="w-3.5 h-3.5 text-amber-500" />
+                    <span>{lang === 'bn' ? 'দৈনিক কথা বলার লক্ষ্য' : 'Daily Speaking Goal'}</span>
+                  </span>
+                  <span className="font-mono-num font-bold text-emerald-600 dark:text-emerald-400">
+                    {formatDurationMmSs(dailySpeakingSec)} / {formatDurationMmSs(DAILY_TARGET_SECONDS)}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-[var(--bg-canvas)] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-200"
+                    style={{ width: `${dailySpeakingPct}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                  <span>
+                    {dailySpeakingPct >= 100
+                      ? 'আজকের দৈনিক Speaking চ্যালেঞ্জ সম্পন্ন!'
+                      : `দৈনিক ৩ মিনিট লক্ষ্য (${Math.max(0, Math.ceil(DAILY_TARGET_SECONDS - dailySpeakingSec))} সে. বাকি)`}
+                  </span>
+                  <span className="font-mono-num font-semibold">{dailySpeakingPct}%</span>
+                </div>
+              </div>
             </div>
 
             {micError && (

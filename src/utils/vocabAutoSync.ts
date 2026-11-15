@@ -1,7 +1,10 @@
+import { SAFWATUL_MASADIR_LIST } from '../data/safwatulMasadirData';
 import { matchNahwTipForToken } from '../data/nahwQuickTips';
 import {
   CurriculumLevelNumber,
   DetailedLesson,
+  MasdarEntry,
+  RootVariantSuggestion,
   VocabItem,
   VocabProgressRecord,
 } from '../types/academy';
@@ -32,6 +35,74 @@ function stableSlug(text: string): string {
   return (hash >>> 0).toString(36);
 }
 
+let cachedMasdarFormIndex: Map<string, MasdarEntry> | null = null;
+
+function getMasdarFormIndex(): Map<string, MasdarEntry> {
+  if (cachedMasdarFormIndex) return cachedMasdarFormIndex;
+  const idx = new Map<string, MasdarEntry>();
+  const addForm = (raw: string, entry: MasdarEntry) => {
+    if (!raw) return;
+    // Some masdar entries have "الكَتْبُ / الكِتَابَةُ"
+    raw.split(/[\/،,]/).forEach((part) => {
+      const k = normalizeArabicTokenKey(part);
+      if (k && k.length >= 2 && !idx.has(k)) {
+        idx.set(k, entry);
+      }
+      if (k.startsWith('ال') && k.length >= 4 && !idx.has(k.slice(2))) {
+        idx.set(k.slice(2), entry);
+      }
+    });
+  };
+
+  for (const m of SAFWATUL_MASADIR_LIST) {
+    addForm(m.madiAr, m);
+    addForm(m.mudariAr, m);
+    addForm(m.amrAr, m);
+    addForm(m.ismFailAr, m);
+    addForm(m.ismMafulAr, m);
+    addForm(m.masdarAr, m);
+  }
+  cachedMasdarFormIndex = idx;
+  return idx;
+}
+
+function findMasdarByToken(rawToken: string): MasdarEntry | null {
+  const index = getMasdarFormIndex();
+  const base = normalizeArabicTokenKey(rawToken);
+  if (!base || base.length < 2) return null;
+
+  const candidates = new Set<string>([base]);
+  if ((base.startsWith('و') || base.startsWith('ف')) && base.length >= 4) {
+    candidates.add(base.slice(1));
+  }
+  for (const c of [...candidates]) {
+    if ((c.startsWith('ب') || c.startsWith('ل') || c.startsWith('ك') || c.startsWith('س')) && c.length >= 4) {
+      candidates.add(c.slice(1));
+    }
+    if (c.startsWith('ال') && c.length >= 4) {
+      candidates.add(c.slice(2));
+    }
+  }
+  for (const c of [...candidates]) {
+    for (const suf of ['نا', 'ها', 'هم', 'كم', 'ون', 'ين', 'ات']) {
+      if (c.endsWith(suf) && c.length - suf.length >= 3) {
+        candidates.add(c.slice(0, -suf.length));
+      }
+    }
+    for (const suf of ['ي', 'ك', 'ه', 'ا', 'ت']) {
+      if (c.endsWith(suf) && c.length - 1 >= 3) {
+        candidates.add(c.slice(0, -1));
+      }
+    }
+  }
+
+  for (const cand of candidates) {
+    const hit = index.get(cand);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 /**
  * Builds the canonical set of Arabic word keys already registered or learned
  * in the user's vocabulary bank and SRS review progress.
@@ -59,6 +130,91 @@ export function buildKnownArabicWordKeySet(
   }
 
   return known;
+}
+
+/**
+ * Detects morphological variants (e.g., verb conjugations, ism fa'il / maf'ul) in reading segments
+ * whose underlying root/masdar from Safwatul Masadir has not yet been learned by the user.
+ */
+export function detectUnlearnedRootVariants(
+  segments: ReadingSegmentInput[],
+  existingVocab: VocabItem[],
+  vocabProgress: Record<string, VocabProgressRecord>,
+  dismissedIds: Set<string> = new Set(),
+  maxSuggestions = 4
+): RootVariantSuggestion[] {
+  if (!segments || segments.length === 0) return [];
+
+  const learnedRoots = new Set<string>();
+  const learnedWordKeys = new Set<string>();
+
+  for (const item of existingVocab) {
+    const k = normalizeArabicTokenKey(item.arabic);
+    const prog = vocabProgress[item.id];
+    if (prog && prog.repetitions >= 1) {
+      if (k) learnedWordKeys.add(k);
+      if (item.root) {
+        const rootNorm = normalizeArabicTokenKey(item.root.split('·')[0].replace(/\s+/g, ''));
+        if (rootNorm) learnedRoots.add(rootNorm);
+      }
+    }
+    // Also consider personal deck additions as already tracked
+    if (item.id.startsWith('root-masdar-')) {
+      if (k) learnedWordKeys.add(k);
+      if (item.root) {
+        const rootNorm = normalizeArabicTokenKey(item.root.split('·')[0].replace(/\s+/g, ''));
+        if (rootNorm) learnedRoots.add(rootNorm);
+      }
+    }
+  }
+
+  const suggestions: RootVariantSuggestion[] = [];
+  const seenMasdarIds = new Set<string>();
+
+  for (const seg of segments) {
+    if (suggestions.length >= maxSuggestions) break;
+    if (!seg.arabic || !seg.arabic.trim()) continue;
+    const tokens = seg.arabic.split(/\s+/).filter(Boolean);
+
+    for (const rawTok of tokens) {
+      if (suggestions.length >= maxSuggestions) break;
+      if (!isArabicWordToken(rawTok)) continue;
+
+      const entry = findMasdarByToken(rawTok);
+      if (!entry) continue;
+
+      const suggestionId = `root-masdar-${entry.id}`;
+      if (dismissedIds.has(suggestionId) || seenMasdarIds.has(entry.id)) continue;
+
+      const primaryMasdarKey = normalizeArabicTokenKey(entry.masdarAr.split(/[\/،,]/)[0] || entry.masdarAr);
+      const rootClean = normalizeArabicTokenKey(entry.rootLetters.replace(/\s+/g, ''));
+
+      if (
+        (primaryMasdarKey && learnedWordKeys.has(primaryMasdarKey)) ||
+        (rootClean && learnedRoots.has(rootClean))
+      ) {
+        continue;
+      }
+
+      seenMasdarIds.add(entry.id);
+      suggestions.push({
+        id: suggestionId,
+        encounteredWordAr: cleanPunctuation(rawTok),
+        matchedMasdarAr: entry.masdarAr.split('/')[0].trim(),
+        masdarPronunciationBn: entry.masdarPronunciationBn.split('/')[0].trim(),
+        meaningBn: entry.meaningBn,
+        meaningEn: entry.meaningEn,
+        rootLetters: entry.rootLetters,
+        babNameAr: entry.babNameAr,
+        babNameBn: entry.babNameBn,
+        madiAr: entry.madiAr,
+        mudariAr: entry.mudariAr,
+        sourceLabelBn: seg.sourceLabelBn || 'পাঠ্য বিশ্লেষণ',
+      });
+    }
+  }
+
+  return suggestions;
 }
 
 /**

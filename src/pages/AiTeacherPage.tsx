@@ -5,6 +5,7 @@ import {
   AudioLines,
   Check,
   Copy,
+  FileDown,
   FileText,
   GitBranch,
   History,
@@ -25,13 +26,14 @@ import {
   X,
 } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
+import { AiPdfStudioPanel } from '../components/AiPdfStudioPanel';
 import { AudioButton } from '../components/AudioButton';
 import { AiVoiceRobotOrb } from '../components/AiVoiceRobotOrb';
 import { DocumentAnalyzerPanel } from '../components/DocumentAnalyzerPanel';
 import { GeminiRichText } from '../components/GeminiRichText';
 import { SentenceTarkibCard } from '../components/SentenceTarkibCard';
 import { useApp } from '../context/AppContext';
-import { VoiceGender } from '../types/academy';
+import { SpeechEngineMode, VoiceGender } from '../types/academy';
 import { useOnlineStatus } from '../utils/offlineCache';
 import {
   getSpeechSupport,
@@ -119,12 +121,22 @@ function extractArabicSnippet(text: string): string {
 }
 
 export const AiTeacherPage: React.FC = () => {
-  const { t, lang, awardXp, currentLevelNumber, progress, updateProfile, syncMissingVocabFromSegments } = useApp();
+  const {
+    t,
+    lang,
+    awardXp,
+    currentLevelNumber,
+    progress,
+    updateProfile,
+    syncMissingVocabFromSegments,
+    speechEngine,
+    setSpeechEngine,
+  } = useApp();
   const [searchParams] = useSearchParams();
   const isOnline = useOnlineStatus();
   const [expandedTarkibMsgIds, setExpandedTarkibMsgIds] = useState<Record<string, boolean>>({});
 
-  const [activeWorkspace, setActiveWorkspace] = useState<'chat' | 'ocr'>('chat');
+  const [activeWorkspace, setActiveWorkspace] = useState<'chat' | 'ocr' | 'pdf-studio'>('chat');
   const [showVoiceSettings, setShowVoiceSettings] = useState(false);
   const [speechTuning, setSpeechTuningState] = useState<SpeechTuning>(() => getSpeechTuning());
 
@@ -680,16 +692,16 @@ export const AiTeacherPage: React.FC = () => {
         <div className="space-y-3">
           {/* Primary Workspace Tab Bar: Chat vs Dedicated Document OCR & Grammar Lab */}
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
-            <div className="inline-flex items-center gap-1 p-1 rounded-full surface-alt border border-[var(--border-subtle)]">
+            <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-2xl sm:rounded-full surface-alt border border-[var(--border-subtle)]">
               <button
                 type="button"
                 onClick={() => setActiveWorkspace('chat')}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
                   activeWorkspace === 'chat' ? 'btn-primary shadow-xs' : 'text-[var(--text-secondary)]'
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>AI চ্যাট ও লাইভ ভয়েস</span>
+                <span>AI চ্যাট ও ভয়েস</span>
               </button>
               <button
                 type="button"
@@ -697,12 +709,25 @@ export const AiTeacherPage: React.FC = () => {
                   endLiveCall();
                   setActiveWorkspace('ocr');
                 }}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
                   activeWorkspace === 'ocr' ? 'btn-primary shadow-xs' : 'text-[var(--text-secondary)]'
                 }`}
               >
                 <ScanText className="w-3.5 h-3.5" />
                 <span>ডকুমেন্ট OCR ও গ্রামার</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  endLiveCall();
+                  setActiveWorkspace('pdf-studio');
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                  activeWorkspace === 'pdf-studio' ? 'btn-primary shadow-xs' : 'text-[var(--text-secondary)]'
+                }`}
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                <span>সুন্দর PDF তৈরি</span>
               </button>
             </div>
 
@@ -838,6 +863,32 @@ export const AiTeacherPage: React.FC = () => {
                         </button>
                       );
                     })}
+                  </div>
+
+                  <div className="text-xs font-semibold text-[var(--text-muted)] pt-1">
+                    কণ্ঠ ইঞ্জিন (Voice Engine)
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(
+                      [
+                        { id: 'auto' as SpeechEngineMode, label: 'Auto (AI)' },
+                        { id: 'gemini-tts' as SpeechEngineMode, label: 'Gemini TTS' },
+                        { id: 'native' as SpeechEngineMode, label: 'ডিভাইস' },
+                      ]
+                    ).map((eng) => (
+                      <button
+                        key={eng.id}
+                        type="button"
+                        onClick={() => setSpeechEngine(eng.id)}
+                        className={`py-1.5 px-2 rounded-xl text-[11px] font-bold border transition-colors ${
+                          speechEngine === eng.id
+                            ? 'btn-primary border-transparent'
+                            : 'bg-[var(--bg-canvas)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        {eng.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -975,6 +1026,10 @@ export const AiTeacherPage: React.FC = () => {
                 setInput(promptText);
               }}
             />
+          )}
+
+          {activeWorkspace === 'pdf-studio' && (
+            <AiPdfStudioPanel onAwardXp={(xp, info) => awardXp(xp, info)} />
           )}
 
           {/* Collapsible Saved Chat Sessions */}

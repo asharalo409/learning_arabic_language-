@@ -289,7 +289,7 @@ export const PrayerWeatherPage: React.FC = () => {
               <IslamicClockDial
                 now={now}
                 variant={prefs.dialVariant}
-                sizeClass="w-40 h-40 sm:w-44 sm:h-44"
+                sizeClass="w-28 h-28 sm:w-32 sm:h-32"
               />
 
               <div className="flex-1 text-center sm:text-left space-y-3 min-w-0">

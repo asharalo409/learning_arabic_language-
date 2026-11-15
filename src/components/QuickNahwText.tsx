@@ -1,8 +1,16 @@
-import React, { useMemo, useState } from 'react';
-import { BookOpen, GitBranch, Sparkles, X } from 'lucide-react';
-import { matchNahwTipForToken, NahwQuickTip } from '../data/nahwQuickTips';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { BookOpen, GitBranch, Link2, X } from 'lucide-react';
+import { useApp } from '../context/AppContext';
+import {
+  analyzeSentenceTarkib,
+  matchNahwTipForToken,
+  NahwQuickTip,
+  SentenceTarkibWord,
+} from '../data/nahwQuickTips';
+import { formatGrammarTerm, localizeGrammarLabel } from '../utils/grammarTerminology';
 import { AudioButton } from './AudioButton';
-import { SentenceTarkibCard } from './SentenceTarkibCard';
+import { computePortalPopoverCoords, FloatingAnchor, FloatingWordPortal } from './FloatingWordPortal';
+import { TarkibVisualizer } from './TarkibVisualizer';
 
 interface QuickNahwTextProps {
   text: string;
@@ -14,8 +22,11 @@ interface QuickNahwTextProps {
 interface ParsedToken {
   raw: string;
   isSpace: boolean;
+  wordPos: number;
   tip: NahwQuickTip | null;
 }
+
+// Positioning delegated to computePortalPopoverCoords inside FloatingWordPortal
 
 export const QuickNahwText: React.FC<QuickNahwTextProps> = ({
   text,
@@ -23,8 +34,23 @@ export const QuickNahwText: React.FC<QuickNahwTextProps> = ({
   className = '',
   showSentenceTarkibButton = true,
 }) => {
-  const [selected, setSelected] = useState<{ idx: number; word: string; tip: NahwQuickTip } | null>(null);
+  const { grammarTerminologyMode } = useApp();
+  const isArabicMode = grammarTerminologyMode === 'arabic';
+
+  const [selected, setSelected] = useState<{
+    idx: number;
+    wordPos: number;
+    word: string;
+    tip: NahwQuickTip;
+    anchor: FloatingAnchor;
+  } | null>(null);
   const [showFullTarkib, setShowFullTarkib] = useState(false);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+
+  const tarkibResult = useMemo(
+    () => (enabled && text ? analyzeSentenceTarkib(text) : null),
+    [enabled, text]
+  );
 
   const { tokens, arabicWordCount } = useMemo<{ tokens: ParsedToken[]; arabicWordCount: number }>(() => {
     if (!text) return { tokens: [], arabicWordCount: 0 };
@@ -36,7 +62,7 @@ export const QuickNahwText: React.FC<QuickNahwTextProps> = ({
 
     const parsed = parts.map((part, idx) => {
       if (!part || /^\s+$/.test(part)) {
-        return { raw: part, isSpace: true, tip: null };
+        return { raw: part, isSpace: true, wordPos: -1, tip: null };
       }
       const posInWords = nonSpaceIndices.indexOf(idx);
       const prevWord = posInWords > 0 ? parts[nonSpaceIndices[posInWords - 1]] : undefined;
@@ -46,19 +72,67 @@ export const QuickNahwText: React.FC<QuickNahwTextProps> = ({
           : undefined;
 
       const tip = enabled ? matchNahwTipForToken(part, prevWord, nextWord, text, posInWords) : null;
-      return { raw: part, isSpace: false, tip };
+      return { raw: part, isSpace: false, wordPos: posInWords, tip };
     });
 
     const count = nonSpaceIndices.filter((i) => /[\u0621-\u064A]/.test(parts[i])).length;
     return { tokens: parsed, arabicWordCount: count };
   }, [text, enabled]);
 
+  const activeTarkibWord: SentenceTarkibWord | undefined =
+    selected && tarkibResult && selected.wordPos >= 0
+      ? tarkibResult.words[selected.wordPos]
+      : undefined;
+
+  const linkedWordPositions = useMemo(
+    () => new Set(activeTarkibWord?.linkedIndices || []),
+    [activeTarkibWord]
+  );
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelected(null);
+    };
+    const onDocClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setSelected(null);
+      }
+    };
+    const onScroll = () => setSelected(null);
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('click', onDocClick);
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('click', onDocClick);
+      window.removeEventListener('scroll', onScroll, { capture: true });
+    };
+  }, [selected]);
+
   const cleanSelectedWord = selected
     ? selected.word.replace(/[؟،.!:,;"'«»()\[\]{}]/g, '')
     : '';
 
+  const activeRoleLabel = activeTarkibWord
+    ? isArabicMode
+      ? activeTarkibWord.tarkibRoleAr
+      : activeTarkibWord.tarkibRoleBn
+    : selected?.tip.tarkibRoleBn
+    ? localizeGrammarLabel(selected.tip.tarkibRoleBn, grammarTerminologyMode)
+    : '';
+
+  const activeRoleSecondary = activeTarkibWord
+    ? isArabicMode
+      ? activeTarkibWord.tarkibRoleBn
+      : activeTarkibWord.tarkibRoleAr
+    : '';
+
+  const activePosMeta = activeTarkibWord ? formatGrammarTerm(activeTarkibWord.roleKey, grammarTerminologyMode) : null;
+
   return (
-    <div className="space-y-3" data-nahw-managed="true">
+    <div className="space-y-2.5" data-nahw-managed="true">
       <div className="space-y-2">
         <p className={className} dir="rtl">
           {tokens.map((tok, idx) => {
@@ -69,6 +143,14 @@ export const QuickNahwText: React.FC<QuickNahwTextProps> = ({
               return <span key={idx}>{tok.raw}</span>;
             }
             const isActive = selected?.idx === idx;
+            const isLinkedPartner = !isActive && tok.wordPos >= 0 && linkedWordPositions.has(tok.wordPos);
+            const wordObj = tarkibResult?.words[tok.wordPos];
+            const hoverTitle = wordObj
+              ? isArabicMode
+                ? `${wordObj.tarkibRoleAr} (${wordObj.tarkibRoleBn})`
+                : `${wordObj.tarkibRoleBn} (${wordObj.tarkibRoleAr})`
+              : tok.tip.titleBn;
+
             return (
               <button
                 key={idx}
@@ -78,14 +160,23 @@ export const QuickNahwText: React.FC<QuickNahwTextProps> = ({
                   if (isActive) {
                     setSelected(null);
                   } else {
-                    setSelected({ idx, word: tok.raw, tip: tok.tip! });
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setSelected({
+                      idx,
+                      wordPos: tok.wordPos,
+                      word: tok.raw,
+                      tip: tok.tip!,
+                      anchor: computePortalPopoverCoords(rect),
+                    });
                   }
                 }}
-                title={`ব্যাকরণ ও তারকিব: ${tok.tip.titleBn}`}
-                className={`inline rounded-md px-0.5 transition-all cursor-pointer border-b-2 border-dotted focus:outline-none ${
+                title={hoverTitle}
+                className={`inline rounded px-0.5 transition-colors cursor-pointer focus:outline-none ${
                   isActive
-                    ? 'bg-[var(--accent)]/18 border-[var(--accent)] text-[var(--accent)]'
-                    : 'border-[var(--accent)]/60 hover:bg-[var(--emerald-highlight)] hover:border-[var(--accent)]'
+                    ? 'bg-[var(--accent)]/18 text-[var(--accent)] underline decoration-2 underline-offset-4'
+                    : isLinkedPartner
+                    ? 'bg-amber-500/18 text-amber-800 dark:text-amber-200 underline decoration-dotted underline-offset-4'
+                    : 'hover:bg-[var(--emerald-highlight)]'
                 }`}
               >
                 {tok.raw}
@@ -109,115 +200,134 @@ export const QuickNahwText: React.FC<QuickNahwTextProps> = ({
               }`}
             >
               <GitBranch className="w-3.5 h-3.5" />
-              <span>{showFullTarkib ? 'বাক্যের তারকিব লুকান' : 'সম্পূর্ণ বাক্যের তারকিব'}</span>
+              <span>
+                {showFullTarkib
+                  ? 'তারকিব ট্রি লুকান'
+                  : isArabicMode
+                  ? 'شَجَرَةُ التَّرْكِيبِ'
+                  : 'বাক্যের তারকিব ট্রি'}
+              </span>
             </button>
           </div>
         )}
       </div>
 
-      {/* Gemini-Style Spacious Word Grammar + Word Tarkib Sheet */}
+      {/* Portal-Rendered Absolute Floating Popover (never disrupts parent grid) */}
       {enabled && selected && (
-        <div
-          dir="ltr"
-          className="surface-card border border-[var(--border-strong)] rounded-3xl p-5 sm:p-6 shadow-lg text-left space-y-4 animate-in fade-in duration-150"
+        <FloatingWordPortal
+          anchor={selected.anchor}
+          popoverRef={popoverRef}
+          dataAttrs={{ 'data-nahw-managed': 'true', 'data-global-grammar-ignore': 'true' }}
+          onContainerClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between gap-3 pb-3 border-b border-[var(--border-subtle)]">
-            <div className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-[var(--accent)]">
-                <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                <span>ব্যাকরণ ও তারকিব বিশ্লেষণ · {selected.tip.categoryBn}</span>
-              </div>
-              <div className="flex flex-wrap items-baseline gap-3">
-                <span className="font-arabic text-3xl text-[var(--accent)]" dir="rtl">
+          <div className="flex items-start justify-between gap-2 pb-1.5 border-b border-[var(--border-subtle)]">
+            <div className="min-w-0 space-y-0.5">
+              <div className="flex flex-wrap items-baseline gap-1.5">
+                <span className="font-arabic text-xl font-bold text-[var(--accent)]" dir="rtl">
                   {cleanSelectedWord}
                 </span>
-                <span className="text-base sm:text-lg font-extrabold text-[var(--text-primary)]">
-                  {selected.tip.titleBn}
-                </span>
+                {activeTarkibWord && (
+                  <span
+                    title={activePosMeta?.tooltipBn || activeRoleSecondary}
+                    className={`text-[11px] font-bold text-[var(--accent)] ${
+                      isArabicMode ? 'font-arabic text-xs' : ''
+                    }`}
+                  >
+                    · {isArabicMode ? activeTarkibWord.posShortAr : activeTarkibWord.posShortBn}
+                  </span>
+                )}
               </div>
-              {selected.tip.meaningBn && (
-                <div className="text-sm font-semibold text-[var(--text-primary)]">
-                  অর্থ: {selected.tip.meaningBn}
-                </div>
-              )}
-              {selected.tip.rootOrFormBn && (
-                <div className="text-xs sm:text-sm text-[var(--text-muted)] font-arabic-ui">
-                  {selected.tip.rootOrFormBn}
-                </div>
-              )}
+              <p className="text-[11px] font-bold text-[var(--text-primary)] leading-snug">
+                {localizeGrammarLabel(selected.tip.titleBn, grammarTerminologyMode)}
+                {selected.tip.meaningBn ? (
+                  <span className="font-normal text-[var(--text-secondary)]"> — {selected.tip.meaningBn}</span>
+                ) : null}
+              </p>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               <AudioButton text={cleanSelectedWord} compact showSlow={false} />
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                className="p-2 rounded-full btn-secondary text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                className="p-1 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-alt)]"
                 aria-label="বন্ধ করুন"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          {/* Dedicated Word Tarkib Role Highlight */}
-          {selected.tip.tarkibRoleBn && (
-            <div className="rounded-2xl bg-[var(--emerald-highlight)] border border-[var(--accent)]/30 p-3.5 space-y-1">
-              <div className="flex items-center gap-1.5 text-xs font-extrabold text-[var(--accent)]">
-                <GitBranch className="w-3.5 h-3.5 shrink-0" />
-                <span>এই বাক্যে তারকিব (শব্দটির ভূমিকা): {selected.tip.tarkibRoleBn}</span>
+          {activeRoleLabel && (
+            <div className="space-y-0.5 text-[11px]" title={activeRoleSecondary}>
+              <div className="flex flex-wrap items-baseline justify-between gap-1">
+                <span className={`font-extrabold text-[var(--accent)] ${isArabicMode ? 'font-arabic text-xs' : ''}`}>
+                  {activeRoleLabel}
+                </span>
+                {activeRoleSecondary && (
+                  <span className="text-[10px] text-[var(--text-muted)]">{activeRoleSecondary}</span>
+                )}
               </div>
-              {selected.tip.tarkibReasonBn && (
-                <p className="text-sm text-[var(--text-primary)] leading-relaxed">
-                  {selected.tip.tarkibReasonBn}
-                </p>
+              {activeTarkibWord?.relationshipLabelAr && linkedWordPositions.size > 0 && tarkibResult && (
+                <div className="flex flex-wrap items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 font-semibold">
+                  <Link2 className="w-3 h-3 shrink-0" />
+                  <span className={isArabicMode ? 'font-arabic text-[11px]' : ''}>
+                    {isArabicMode
+                      ? activeTarkibWord.relationshipLabelAr
+                      : activeTarkibWord.relationshipLabelBn}
+                    :
+                  </span>
+                  {activeTarkibWord.linkedIndices.map((li) => {
+                    const p = tarkibResult.words[li];
+                    return p ? (
+                      <span key={li} className="font-arabic font-bold underline decoration-dotted" dir="rtl">
+                        {p.clean}
+                      </span>
+                    ) : null;
+                  })}
+                </div>
               )}
             </div>
           )}
 
-          <div className="space-y-2 text-sm sm:text-[15px] leading-relaxed">
+          <div className="pt-1.5 border-t border-[var(--border-subtle)] space-y-1 text-[11px] leading-snug">
             <p className="text-[var(--text-primary)]">
-              <strong className="text-[var(--accent)]">কায়দা ও পরিচয়: </strong>
-              {selected.tip.ruleBn}
+              <strong className="text-[var(--accent)]">কায়দা: </strong>
+              {localizeGrammarLabel(selected.tip.ruleBn, grammarTerminologyMode)}
             </p>
             <p className="text-[var(--text-secondary)]">
-              <strong className="text-[var(--accent)]">ই‘রাব ও অবস্থান: </strong>
-              {selected.tip.irabEffectBn}
+              <strong className="text-[var(--accent)]">ই‘রাব: </strong>
+              {localizeGrammarLabel(selected.tip.irabEffectBn, grammarTerminologyMode)}
             </p>
           </div>
 
-          <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0 space-y-0.5 flex-1">
-              <div className="flex items-center gap-1 text-xs font-semibold text-[var(--text-muted)]">
-                <BookOpen className="w-3.5 h-3.5 text-[var(--accent)]" />
-                <span>উদাহরণ:</span>
-              </div>
-              <p className="font-arabic text-xl text-[var(--accent)]" dir="rtl">
-                {selected.tip.exampleAr}
-              </p>
-              <p className="text-sm text-[var(--text-secondary)]">{selected.tip.exampleBn}</p>
+          <div className="pt-1.5 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] min-w-0 truncate">
+              <BookOpen className="w-3 h-3 text-[var(--accent)] shrink-0" />
+              <span className="truncate">{selected.tip.exampleBn}</span>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {arabicWordCount >= 2 && (
-                <button
-                  type="button"
-                  onClick={() => setShowFullTarkib((v) => !v)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold btn-secondary"
-                >
-                  <GitBranch className="w-3.5 h-3.5 text-[var(--accent)]" />
-                  <span>{showFullTarkib ? 'তারকিব লুকান' : 'পূর্ণ বাক্যের তারকিব'}</span>
-                </button>
-              )}
-              <AudioButton text={selected.tip.exampleAr} compact showSlow={false} />
-            </div>
+            {arabicWordCount >= 2 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFullTarkib(true);
+                  setSelected(null);
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold btn-primary shrink-0"
+              >
+                <GitBranch className="w-3 h-3" />
+                <span>তারকিব ট্রি</span>
+              </button>
+            )}
           </div>
-        </div>
+        </FloatingWordPortal>
       )}
 
-      {/* Expandable Full Sentence Tarkib Card */}
+      {/* Expandable Full Sentence Tarkib Tree Visualizer */}
       {enabled && showFullTarkib && arabicWordCount >= 2 && (
-        <SentenceTarkibCard
+        <TarkibVisualizer
           sentenceAr={text}
+          initialSelectedIndex={Math.max(0, selected?.wordPos ?? 0)}
           onClose={() => setShowFullTarkib(false)}
         />
       )}

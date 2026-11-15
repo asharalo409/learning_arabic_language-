@@ -8,11 +8,17 @@ import {
   DetailedLesson,
   ExamHistoryEntry,
   ExamQuestion,
+  GrammarTerminologyMode,
   InterfaceLang,
+  RootVariantSuggestion,
+  SpeechEngineMode,
   StudentProgress,
+  SyncStatus,
   ThemeMode,
+  VocabDeckStatus,
   VocabItem,
   WeeklyDayActivity,
+  WeeklyVelocityPoint,
 } from '../types/academy';
 import { I18N, Translations } from '../data/i18n';
 import { CURRICULUM_CHAPTERS } from '../data/curriculum';
@@ -24,6 +30,7 @@ import { setPreferredVoiceGender } from '../utils/speech';
 import { normalizeArabicTokenKey } from '../utils/lessonVocabDedupe';
 import {
   buildSegmentsFromDetailedLesson,
+  detectUnlearnedRootVariants,
   extractMissingWordsFromSegments,
   ReadingSegmentInput,
   scheduleBackgroundVocabWork,
@@ -53,6 +60,11 @@ const STORAGE_KEYS = {
   welcomeSeen: 'aaa_welcome_seen_forever_v1',
   dailyStudyLog: 'aaa_daily_study_log_v1',
   weeklyActivity: 'aaa_weekly_activity_v1',
+  grammarTerminology: 'aaa_grammar_terminology_mode_v1',
+  speechEngine: 'aaa_speech_engine_v1',
+  lastPractice: 'aaa_last_practice_iso_v1',
+  pendingSync: 'aaa_pending_sync_v1',
+  lastSyncedAt: 'aaa_last_synced_at_v1',
 };
 
 type WeeklyActivityStore = Record<string, { minutesStudied: number; vocabLearned: number }>;
@@ -184,6 +196,8 @@ export function getDefaultProgress(name = 'প্রিয় শিক্ষার
     ],
     unlockedBadgeIds: ['starter-niyyah'],
     personalVocab: [],
+    lessonCompletionDates: {},
+    favoriteLessonIds: [],
   };
 }
 
@@ -398,9 +412,14 @@ interface AppContextValue {
   adminContent: AdminCustomContent;
   awardXp: (amount: number, activity: Omit<ActivityLogEntry, 'id' | 'timestampIso' | 'xpEarned'>) => void;
   completeLesson: (lessonId: string, lessonTitleBn: string, lessonTitleEn: string) => void;
+  toggleFavoriteLesson: (lessonId: string) => void;
+  recordLastLesson: (lessonId: string) => void;
   completeGrammarTopic: (topicId: string, titleBn: string, titleEn: string) => void;
   reviewVocabWord: (wordId: string, quality: Sm2Quality) => void;
+  setVocabStatus: (wordId: string, status: VocabDeckStatus) => void;
   toggleFavoriteVocab: (wordId: string) => void;
+  lastPracticeIso: string;
+  recordDailyPracticeTouch: () => void;
   recordExamResult: (entry: Omit<ExamHistoryEntry, 'id' | 'dateIso'>) => void;
   completeDailyChallenge: (score: number, total: number) => void;
   updateProfile: (
@@ -414,6 +433,26 @@ interface AppContextValue {
   syncMissingVocabFromSegments: (segments: ReadingSegmentInput[]) => void;
   globalGrammarEnabled: boolean;
   setGlobalGrammarEnabled: (enabled: boolean) => void;
+  grammarTerminologyMode: GrammarTerminologyMode;
+  setGrammarTerminologyMode: (mode: GrammarTerminologyMode) => void;
+  speechEngine: SpeechEngineMode;
+  setSpeechEngine: (mode: SpeechEngineMode) => void;
+  rootSuggestions: RootVariantSuggestion[];
+  acceptRootSuggestion: (id: string) => void;
+  dismissRootSuggestion: (id: string) => void;
+  isOnline: boolean;
+  syncStatus: SyncStatus;
+  pendingSyncCount: number;
+  lastSyncedAt: string | null;
+  syncNoticeBn: string | null;
+  dismissSyncNotice: () => void;
+  syncNow: () => Promise<void>;
+  weeklyLessonVelocity: WeeklyVelocityPoint[];
+  quickGrammarOpen: boolean;
+  setQuickGrammarOpen: (open: boolean) => void;
+  toggleQuickGrammar: () => void;
+  instantLookupOpen: boolean;
+  setInstantLookupOpen: (open: boolean) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -510,6 +549,69 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const [grammarTerminologyMode, setGrammarTerminologyModeState] = useState<GrammarTerminologyMode>(() => {
+    if (typeof window === 'undefined') return 'arabic';
+    const saved = localStorage.getItem(STORAGE_KEYS.grammarTerminology);
+    return saved === 'bengali' ? 'bengali' : 'arabic';
+  });
+
+  const setGrammarTerminologyMode = useCallback((mode: GrammarTerminologyMode) => {
+    setGrammarTerminologyModeState(mode);
+    try {
+      localStorage.setItem(STORAGE_KEYS.grammarTerminology, mode);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const [speechEngine, setSpeechEngineState] = useState<SpeechEngineMode>(() => {
+    if (typeof window === 'undefined') return 'auto';
+    const saved = localStorage.getItem(STORAGE_KEYS.speechEngine);
+    return saved === 'gemini-tts' || saved === 'native' ? saved : 'auto';
+  });
+
+  const setSpeechEngine = useCallback((mode: SpeechEngineMode) => {
+    setSpeechEngineState(mode);
+    try {
+      localStorage.setItem(STORAGE_KEYS.speechEngine, mode);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const [rootSuggestions, setRootSuggestions] = useState<RootVariantSuggestion[]>([]);
+  const dismissedRootIdsRef = useRef<Set<string>>(new Set());
+
+  const [quickGrammarOpen, setQuickGrammarOpen] = useState<boolean>(false);
+  const toggleQuickGrammar = useCallback(() => setQuickGrammarOpen((v) => !v), []);
+  const [instantLookupOpen, setInstantLookupOpen] = useState<boolean>(false);
+
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine
+  );
+  const [pendingSyncCount, setPendingSyncCount] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    try {
+      const raw = Number(localStorage.getItem(STORAGE_KEYS.pendingSync) || '0');
+      return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return localStorage.getItem(STORAGE_KEYS.lastSyncedAt);
+    } catch {
+      return null;
+    }
+  });
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() =>
+    typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'online'
+  );
+  const [syncNoticeBn, setSyncNoticeBn] = useState<string | null>(null);
+  const dismissSyncNotice = useCallback(() => setSyncNoticeBn(null), []);
+
   const [soundEnabled, setSoundEnabledState] = useState<boolean>(() => isSoundEnabled());
   const [notifications, setNotifications] = useState<AcademyNotification[]>(() => getStoredNotifications());
   const [activeToast, setActiveToast] = useState<AcademyNotification | null>(null);
@@ -549,6 +651,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [weeklyActivityMap, setWeeklyActivityMap] = useState<WeeklyActivityStore>(() =>
     readWeeklyActivityMap(readTodayMinutes())
   );
+
+  const [lastPracticeIso, setLastPracticeIso] = useState<string>(() => {
+    if (typeof window === 'undefined') return new Date().toISOString();
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.lastPractice);
+      if (stored && !Number.isNaN(Date.parse(stored))) return stored;
+      const rawProg = localStorage.getItem(STORAGE_KEYS.progress);
+      if (rawProg) {
+        const parsed = JSON.parse(rawProg) as Partial<StudentProgress>;
+        if (parsed.lastActiveDate && parsed.lastActiveDate < todayDateKey()) {
+          const derived = `${parsed.lastActiveDate}T09:00:00.000Z`;
+          localStorage.setItem(STORAGE_KEYS.lastPractice, derived);
+          return derived;
+        }
+      }
+      const nowIso = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEYS.lastPractice, nowIso);
+      return nowIso;
+    } catch {
+      return new Date().toISOString();
+    }
+  });
+
+  const recordDailyPracticeTouch = useCallback(() => {
+    const nowIso = new Date().toISOString();
+    setLastPracticeIso(nowIso);
+    try {
+      localStorage.setItem(STORAGE_KEYS.lastPractice, nowIso);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const recordWeeklyDelta = useCallback((deltaMinutes: number, deltaVocab: number) => {
     const today = todayDateKey();
@@ -620,34 +754,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  // Debounced cloud/account progress sync whenever signed-in progress updates
-  useEffect(() => {
-    if (!user) return;
-    if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
-    syncTimeoutRef.current = window.setTimeout(() => {
-      void syncProgressToAccount(progress);
-    }, 900);
-    return () => {
-      if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
-    };
-  }, [progress, user, syncProgressToAccount]);
-
-  const triggerSound = useCallback(
-    (type: SoundEffectType, force = false) => {
-      if (!force && !soundEnabled) return false;
-      return playSound(type, force);
-    },
-    [soundEnabled]
-  );
-
-  const setSoundEnabled = useCallback((enabled: boolean) => {
-    setSoundEnabledState(enabled);
-    setSoundEnabledPref(enabled);
-    if (enabled) {
-      playSound('success', true);
-    }
-  }, []);
-
   const dismissToast = useCallback(() => {
     setActiveToast(null);
     if (toastTimerRef.current) {
@@ -685,6 +791,150 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [soundEnabled]
   );
+
+  // Debounced cloud/account progress sync & offline pending tracker
+  const hasMountedProgressSyncRef = useRef(false);
+  const pendingCountRef = useRef<number>(pendingSyncCount);
+  pendingCountRef.current = pendingSyncCount;
+  const syncStatusResetTimerRef = useRef<number | null>(null);
+
+  const performServerSync = useCallback(
+    async (snap: StudentProgress, fromOfflineQueue: boolean) => {
+      const queuedItems = pendingCountRef.current;
+      setSyncStatus('syncing');
+      try {
+        // Confirm server connectivity + sync account progress snapshot if logged in
+        try {
+          await fetch('/api/health', { method: 'GET', cache: 'no-store' });
+        } catch {
+          // Even if background health ping fails briefly on flaky network, let syncProgressToAccount try
+        }
+        if (user) {
+          await syncProgressToAccount(snap);
+        }
+        const nowIso = new Date().toISOString();
+        setPendingSyncCount(0);
+        setLastSyncedAt(nowIso);
+        try {
+          localStorage.setItem(STORAGE_KEYS.pendingSync, '0');
+          localStorage.setItem(STORAGE_KEYS.lastSyncedAt, nowIso);
+        } catch {
+          // ignore
+        }
+
+        if (fromOfflineQueue || queuedItems > 0) {
+          const msg =
+            queuedItems > 0
+              ? `অফলাইনে করা ${queuedItems}টি অগ্রগতি সার্ভারে সিঙ্ক হয়েছে!`
+              : 'অফলাইনে করা অগ্রগতি সার্ভারে সিঙ্ক হয়েছে!';
+          setSyncNoticeBn(msg);
+          setSyncStatus('synced');
+          pushNotification(
+            {
+              titleBn: 'অফলাইন অগ্রগতি সার্ভারে সিঙ্ক হয়েছে',
+              titleEn: 'Offline Progress Synced to Server',
+              bodyBn: msg,
+              bodyEn: 'Progress recorded while offline has been pushed to the server.',
+              category: 'system',
+            },
+            false
+          );
+          if (syncStatusResetTimerRef.current) {
+            window.clearTimeout(syncStatusResetTimerRef.current);
+          }
+          syncStatusResetTimerRef.current = window.setTimeout(() => {
+            setSyncStatus('online');
+            setSyncNoticeBn(null);
+          }, 6000);
+        } else {
+          setSyncStatus('online');
+        }
+      } catch {
+        setSyncStatus(navigator.onLine ? 'pending' : 'offline');
+      }
+    },
+    [pushNotification, syncProgressToAccount, user]
+  );
+
+  const syncNow = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setIsOnline(false);
+      setSyncStatus('offline');
+      return;
+    }
+    await performServerSync(progressRef.current, pendingCountRef.current > 0);
+  }, [performServerSync]);
+
+  // Monitor browser online/offline transitions
+  useEffect(() => {
+    const handleOffline = () => {
+      setIsOnline(false);
+      setSyncStatus('offline');
+    };
+    const handleOnline = () => {
+      setIsOnline(true);
+      const hadPending = pendingCountRef.current > 0;
+      void performServerSync(progressRef.current, hadPending);
+    };
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+      if (syncStatusResetTimerRef.current) {
+        window.clearTimeout(syncStatusResetTimerRef.current);
+      }
+    };
+  }, [performServerSync]);
+
+  // On progress update: queue if offline, or debounce cloud sync when online
+  useEffect(() => {
+    if (!hasMountedProgressSyncRef.current) {
+      hasMountedProgressSyncRef.current = true;
+      return;
+    }
+    const currentlyOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+    if (!currentlyOnline) {
+      setIsOnline(false);
+      setSyncStatus('offline');
+      setPendingSyncCount((prev) => {
+        const next = prev + 1;
+        try {
+          localStorage.setItem(STORAGE_KEYS.pendingSync, String(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+      return;
+    }
+
+    if (!user && pendingCountRef.current === 0) return;
+
+    if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
+    syncTimeoutRef.current = window.setTimeout(() => {
+      void performServerSync(progress, pendingCountRef.current > 0);
+    }, 900);
+    return () => {
+      if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
+    };
+  }, [progress, user, performServerSync]);
+
+  const triggerSound = useCallback(
+    (type: SoundEffectType, force = false) => {
+      if (!force && !soundEnabled) return false;
+      return playSound(type, force);
+    },
+    [soundEnabled]
+  );
+
+  const setSoundEnabled = useCallback((enabled: boolean) => {
+    setSoundEnabledState(enabled);
+    setSoundEnabledPref(enabled);
+    if (enabled) {
+      playSound('success', true);
+    }
+  }, []);
 
   const markAllNotificationsRead = useCallback(() => {
     setNotifications((prev) => {
@@ -917,6 +1167,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
       recordWeeklyDelta(safeMins, 0);
+      recordDailyPracticeTouch();
       setProgress((prev) => ({
         ...prev,
         xp: prev.xp + safeMins * 2,
@@ -925,7 +1176,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }));
       triggerSound('success');
     },
-    [progress.dailyTargetMinutes, pushNotification, recordWeeklyDelta, triggerSound]
+    [progress.dailyTargetMinutes, pushNotification, recordDailyPracticeTouch, recordWeeklyDelta, triggerSound]
   );
 
   // Daily streak check (+ badge evaluation)
@@ -984,6 +1235,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const awardXp = useCallback(
     (amount: number, activity: Omit<ActivityLogEntry, 'id' | 'timestampIso' | 'xpEarned'>) => {
       triggerSound('success');
+      recordDailyPracticeTouch();
       updateWithBadges((prev) => ({
         ...prev,
         xp: prev.xp + amount,
@@ -999,22 +1251,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ].slice(0, 20),
       }));
     },
-    [triggerSound, updateWithBadges]
+    [recordDailyPracticeTouch, triggerSound, updateWithBadges]
   );
 
   const completeLesson = useCallback(
     (lessonId: string, lessonTitleBn: string, lessonTitleEn: string) => {
       triggerSound('success');
+      recordDailyPracticeTouch();
+      const today = todayDateKey();
       const alreadyDone = progress.completedLessonIds.includes(lessonId);
       recordWeeklyDelta(0, alreadyDone ? 1 : 5);
       updateWithBadges((prev) => {
         const done = prev.completedLessonIds.includes(lessonId);
         const xpGain = done ? 10 : 50;
+        const prevDateMap = prev.lessonCompletionDates || {};
         return {
           ...prev,
           xp: prev.xp + xpGain,
-          lastActiveDate: todayDateKey(),
+          lastActiveDate: today,
           completedLessonIds: done ? prev.completedLessonIds : [...prev.completedLessonIds, lessonId],
+          lessonCompletionDates: {
+            ...prevDateMap,
+            [today]: (prevDateMap[today] || 0) + 1,
+          },
           recentActivities: [
             {
               id: `act-${Date.now()}`,
@@ -1029,12 +1288,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [progress.completedLessonIds, recordWeeklyDelta, triggerSound, updateWithBadges]
+    [progress.completedLessonIds, recordDailyPracticeTouch, recordWeeklyDelta, triggerSound, updateWithBadges]
   );
+
+  const toggleFavoriteLesson = useCallback(
+    (lessonId: string) => {
+      triggerSound('click');
+      setProgress((prev) => {
+        const current = prev.favoriteLessonIds || [];
+        const exists = current.includes(lessonId);
+        const nextFavorites = exists
+          ? current.filter((id) => id !== lessonId)
+          : [lessonId, ...current];
+        return {
+          ...prev,
+          favoriteLessonIds: nextFavorites,
+        };
+      });
+    },
+    [triggerSound]
+  );
+
+  const recordLastLesson = useCallback((lessonId: string) => {
+    setProgress((prev) => {
+      if (prev.lastLessonId === lessonId) return prev;
+      return {
+        ...prev,
+        lastLessonId: lessonId,
+        lastLessonVisitedAt: new Date().toISOString(),
+      };
+    });
+  }, []);
 
   const completeGrammarTopic = useCallback(
     (topicId: string, titleBn: string, titleEn: string) => {
       triggerSound('success');
+      recordDailyPracticeTouch();
       updateWithBadges((prev) => {
         const alreadyDone = prev.completedGrammarIds.includes(topicId);
         const xpGain = alreadyDone ? 5 : 35;
@@ -1056,12 +1345,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [triggerSound, updateWithBadges]
+    [recordDailyPracticeTouch, triggerSound, updateWithBadges]
   );
 
   const reviewVocabWord = useCallback(
     (wordId: string, quality: Sm2Quality) => {
       triggerSound(quality === 'again' ? 'click' : 'success');
+      recordDailyPracticeTouch();
       recordWeeklyDelta(0, 1);
       updateWithBadges((prev) => {
         const existing = prev.vocabProgress[wordId] || {
@@ -1076,6 +1366,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         const nextDate = new Date();
         nextDate.setDate(nextDate.getDate() + sm2.intervalDays);
+
+        const derivedStatus: VocabDeckStatus =
+          quality === 'again'
+            ? 'review'
+            : sm2.intervalDays >= 3
+            ? 'mastered'
+            : 'learning';
 
         const xpMap: Record<Sm2Quality, number> = {
           again: 3,
@@ -1095,12 +1392,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               intervalDays: sm2.intervalDays,
               repetitions: sm2.repetitions,
               nextReviewIso: nextDate.toISOString(),
+              status: derivedStatus,
             },
           },
         };
       });
     },
-    [recordWeeklyDelta, triggerSound, updateWithBadges]
+    [recordDailyPracticeTouch, recordWeeklyDelta, triggerSound, updateWithBadges]
+  );
+
+  const setVocabStatus = useCallback(
+    (wordId: string, status: VocabDeckStatus) => {
+      triggerSound('click');
+      recordDailyPracticeTouch();
+      updateWithBadges((prev) => {
+        const existing = prev.vocabProgress[wordId] || {
+          wordId,
+          ease: 2.5,
+          intervalDays: 0,
+          nextReviewIso: new Date().toISOString(),
+          repetitions: 0,
+          favorite: false,
+        };
+        const nextDate = new Date();
+        let nextInterval = existing.intervalDays;
+        if (status === 'mastered') {
+          nextInterval = Math.max(7, existing.intervalDays);
+          nextDate.setDate(nextDate.getDate() + nextInterval);
+        } else if (status === 'review') {
+          nextInterval = 0;
+        } else {
+          nextInterval = Math.max(1, Math.min(existing.intervalDays || 1, 2));
+          nextDate.setDate(nextDate.getDate() + 1);
+        }
+
+        return {
+          ...prev,
+          vocabProgress: {
+            ...prev.vocabProgress,
+            [wordId]: {
+              ...existing,
+              intervalDays: nextInterval,
+              repetitions: Math.max(1, existing.repetitions),
+              nextReviewIso: nextDate.toISOString(),
+              status,
+            },
+          },
+        };
+      });
+    },
+    [recordDailyPracticeTouch, triggerSound, updateWithBadges]
   );
 
   const toggleFavoriteVocab = useCallback(
@@ -1130,6 +1471,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const recordExamResult = useCallback(
     (entry: Omit<ExamHistoryEntry, 'id' | 'dateIso'>) => {
       triggerSound(entry.percentage >= 60 ? 'badge' : 'click');
+      recordDailyPracticeTouch();
       updateWithBadges((prev) => {
         const xpGain = Math.max(15, Math.round(entry.percentage * 0.6));
         const newEntry: ExamHistoryEntry = {
@@ -1155,12 +1497,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [triggerSound, updateWithBadges]
+    [recordDailyPracticeTouch, triggerSound, updateWithBadges]
   );
 
   const completeDailyChallenge = useCallback(
     (score: number, total: number) => {
       triggerSound('badge');
+      recordDailyPracticeTouch();
       const today = todayDateKey();
       updateWithBadges((prev) => {
         const already = prev.dailyChallengeCompletedDates.includes(today);
@@ -1185,7 +1528,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     },
-    [triggerSound, updateWithBadges]
+    [recordDailyPracticeTouch, triggerSound, updateWithBadges]
   );
 
   const updateProfile = useCallback(
@@ -1263,10 +1606,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const allVocabRef = useRef<VocabItem[]>(allVocabulary);
   allVocabRef.current = allVocabulary;
+  const progressRef = useRef<StudentProgress>(progress);
+  progressRef.current = progress;
 
   const syncMissingVocabFromSegments = useCallback((segments: ReadingSegmentInput[]) => {
     if (!segments || segments.length === 0) return;
     scheduleBackgroundVocabWork(() => {
+      const currentSnap = progressRef.current;
+      const existingPoolSnap = [
+        ...(currentSnap.personalVocab || []),
+        ...allVocabRef.current,
+      ];
+
+      const detected = detectUnlearnedRootVariants(
+        segments,
+        existingPoolSnap,
+        currentSnap.vocabProgress,
+        dismissedRootIdsRef.current,
+        3
+      );
+      if (detected.length > 0) {
+        setRootSuggestions((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id));
+          const merged = [...prev];
+          for (const item of detected) {
+            if (!existingIds.has(item.id) && !dismissedRootIdsRef.current.has(item.id)) {
+              merged.push(item);
+            }
+          }
+          return merged.slice(-4);
+        });
+      }
+
       setProgress((prev) => {
         const existingPool = [
           ...(prev.personalVocab || []),
@@ -1286,6 +1657,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       });
     });
+  }, []);
+
+  const acceptRootSuggestion = useCallback(
+    (id: string) => {
+      const target = rootSuggestions.find((s) => s.id === id);
+      if (!target) return;
+      dismissedRootIdsRef.current.add(id);
+      setRootSuggestions((prev) => prev.filter((s) => s.id !== id));
+      triggerSound('success');
+      updateWithBadges((prev) => {
+        const currentPersonal = prev.personalVocab || [];
+        if (currentPersonal.some((v) => v.id === target.id)) return prev;
+        const newVocab: VocabItem = {
+          id: target.id,
+          arabic: target.matchedMasdarAr,
+          pronunciationBn: target.masdarPronunciationBn,
+          meaningBn: target.meaningBn,
+          meaningEn: target.meaningEn,
+          category: `${target.babNameBn} (মাদ্দাহ: ${target.rootLetters})`,
+          root: `${target.rootLetters} · মাদি: ${target.madiAr} · মুদারি: ${target.mudariAr}`,
+          exampleAr: `${target.madiAr} — ${target.mudariAr} — ${target.matchedMasdarAr}`,
+          exampleBn: `পাঠে প্রাপ্ত রূপ: "${target.encounteredWordAr}" (${target.sourceLabelBn})`,
+          exampleEn: `Encountered form: ${target.encounteredWordAr}`,
+          chapterTitleBn: target.sourceLabelBn,
+        };
+        return {
+          ...prev,
+          xp: prev.xp + 15,
+          personalVocab: [newVocab, ...currentPersonal].slice(0, 600),
+          recentActivities: [
+            {
+              id: `act-root-${Date.now()}`,
+              timestampIso: new Date().toISOString(),
+              titleBn: `মূলধাতুসহ মাসদার যোগ: ${target.matchedMasdarAr} (${target.rootLetters})`,
+              titleEn: `Added root masdar: ${target.matchedMasdarAr} (${target.rootLetters})`,
+              xpEarned: 15,
+              type: 'vocab' as const,
+            },
+            ...prev.recentActivities,
+          ].slice(0, 20),
+        };
+      });
+    },
+    [rootSuggestions, triggerSound, updateWithBadges]
+  );
+
+  const dismissRootSuggestion = useCallback((id: string) => {
+    dismissedRootIdsRef.current.add(id);
+    setRootSuggestions((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
   const saveCustomLesson = useCallback(
@@ -1349,6 +1769,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [todayMinutesLearned, weeklyActivityMap]);
 
+  const weeklyLessonVelocity = useMemo<WeeklyVelocityPoint[]>(() => {
+    const completionDates = progress.lessonCompletionDates || {};
+    const combinedByDate: Record<string, number> = { ...completionDates };
+
+    // Merge recentActivities lesson completions if date map doesn't yet include them
+    if (Object.keys(completionDates).length === 0) {
+      for (const act of progress.recentActivities) {
+        if (act.type === 'lesson' && !act.id.startsWith('init-')) {
+          const dayKey = act.timestampIso.slice(0, 10);
+          combinedByDate[dayKey] = (combinedByDate[dayKey] || 0) + 1;
+        }
+      }
+      if (Object.keys(combinedByDate).length === 0 && progress.completedLessonIds.length > 0) {
+        const today = todayDateKey();
+        combinedByDate[today] = progress.completedLessonIds.length;
+      }
+    }
+
+    const weeks: WeeklyVelocityPoint[] = [];
+    for (let w = 5; w >= 0; w--) {
+      const endOffset = w * 7;
+      const startOffset = endOffset + 6;
+      const startDateKey = dateKeyDaysAgo(startOffset);
+      const endDateKey = dateKeyDaysAgo(endOffset);
+      let count = 0;
+      for (let d = endOffset; d <= startOffset; d++) {
+        const key = dateKeyDaysAgo(d);
+        count += combinedByDate[key] || 0;
+      }
+      const startD = new Date(`${startDateKey}T00:00:00`);
+      const endD = new Date(`${endDateKey}T00:00:00`);
+      const rangeLabel = `${startD.getDate()}/${startD.getMonth() + 1}–${endD.getDate()}/${endD.getMonth() + 1}`;
+      weeks.push({
+        weekKey: `w-${w}`,
+        weekLabel:
+          w === 0
+            ? lang === 'en'
+              ? 'This Wk'
+              : 'এই সপ্তাহ'
+            : w === 1
+            ? lang === 'en'
+              ? 'Last Wk'
+              : 'গত সপ্তাহ'
+            : lang === 'en'
+            ? `${w}w ago`
+            : `${w}স. আগে`,
+        rangeLabel,
+        lessonsCompleted: count,
+        target: 3,
+      });
+    }
+    return weeks;
+  }, [lang, progress.completedLessonIds.length, progress.lessonCompletionDates, progress.recentActivities]);
+
   const value: AppContextValue = {
     theme: effectiveTheme,
     setTheme,
@@ -1391,9 +1865,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     adminContent,
     awardXp,
     completeLesson,
+    toggleFavoriteLesson,
+    recordLastLesson,
     completeGrammarTopic,
     reviewVocabWord,
+    setVocabStatus,
     toggleFavoriteVocab,
+    lastPracticeIso,
+    recordDailyPracticeTouch,
     recordExamResult,
     completeDailyChallenge,
     updateProfile,
@@ -1405,6 +1884,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     syncMissingVocabFromSegments,
     globalGrammarEnabled,
     setGlobalGrammarEnabled,
+    grammarTerminologyMode,
+    setGrammarTerminologyMode,
+    speechEngine,
+    setSpeechEngine,
+    rootSuggestions,
+    acceptRootSuggestion,
+    dismissRootSuggestion,
+    isOnline,
+    syncStatus,
+    pendingSyncCount,
+    lastSyncedAt,
+    syncNoticeBn,
+    dismissSyncNotice,
+    syncNow,
+    weeklyLessonVelocity,
+    quickGrammarOpen,
+    setQuickGrammarOpen,
+    toggleQuickGrammar,
+    instantLookupOpen,
+    setInstantLookupOpen,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

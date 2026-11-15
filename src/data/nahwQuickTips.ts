@@ -1254,16 +1254,25 @@ export interface SentenceTarkibWord {
   raw: string;
   clean: string;
   norm: string;
+  roleKey: string;
   posShortBn: string;
+  posShortAr: string;
   tarkibRoleBn: string;
+  tarkibRoleAr: string;
   tarkibDetailBn: string;
   meaningBn?: string;
+  linkedIndices: number[];
+  relationshipLabelAr?: string;
+  relationshipLabelBn?: string;
 }
 
 export interface SentenceTarkibPhrase {
   arabicChunk: string;
   roleBn: string;
+  roleAr: string;
   explanationBn: string;
+  wordIndices: number[];
+  relationshipKey?: string;
 }
 
 export interface SentenceTarkibResult {
@@ -1491,59 +1500,110 @@ export function analyzeSentenceTarkib(sentenceAr: string): SentenceTarkibResult 
       (/^(ب|ل|ك)ال/.test(norm) && norm.length >= 5) ||
       (norm.startsWith('لل') && norm.length >= 4);
 
+    let roleKey = 'ism';
     let roleBn = 'ইসম (বাক্যাংশের পদ)';
+    let roleAr = 'اِسْم';
     let detailBn = 'বাক্যের প্রাসঙ্গিক অর্থ পূরণে অংশগ্রহণ করেছে।';
     let posShortBn = tip?.categoryBn.split('·')[0].trim() || 'ইসম';
+    let posShortAr =
+      tag === 'verb'
+        ? 'فِعْل'
+        : tag === 'naqis'
+        ? 'فِعْل نَاقِص'
+        : tag === 'jar'
+        ? 'حَرْف جَرّ'
+        : tag === 'nida'
+        ? 'حَرْف نِدَاء'
+        : tag === 'atif'
+        ? 'حَرْف عَطْف'
+        : tag === 'inna'
+        ? 'حَرْف مُشَبَّه'
+        : tag === 'pronoun'
+        ? 'ضَمِير / إِشَارَة'
+        : 'اِسْم';
 
     if (i === consumedByPairIdx) {
-      // Role already paired by preceding particle; generate exact matching label
       if (posTags[i - 1] === 'jar') {
+        roleKey = 'majrur';
         roleBn = 'মাজরূর (মুতা‘আল্লিক বিল-ফেল / খবর)';
+        roleAr = 'مَجْرُور';
         detailBn = `পূর্ববর্তী হরফে জার "${prevClean}"-এর কারণে মাজরূর হয়ে "${prevClean} ${clean}" — জার ও মাজরূর গঠন করেছে।`;
       } else if (posTags[i - 1] === 'nida') {
+        roleKey = 'munada';
         roleBn = 'মুনাদা (সম্বোধিত পদ)';
+        roleAr = 'مُنَادَى';
         detailBn = `পূর্ববর্তী হরফে নিদা "${prevClean}" দ্বারা ডাকায় মুনাদা হয়েছে; উভয়ে মিলে নিদা ও মুনাদা।`;
       } else if (posTags[i - 1] === 'verb-nasb') {
+        roleKey = 'mudari_mansub';
         roleBn = 'ফেলে মুদারি মানসুব (মাফঊল/মাসদার স্থানীয়)';
+        roleAr = 'فِعْل مُضَارِع مَنْصُوب';
+        posShortAr = 'فِعْل مُضَارِع';
         detailBn = `পূর্ববর্তী "${prevClean}"-এর প্রভাবে মানসুব হয়েছে ও পূর্ববর্তী ক্রিয়ার উদ্দেশ্য/কর্ম হিসেবে বসেছে।`;
       } else if (posTags[i - 1] === 'verb-jazm') {
+        roleKey = 'mudari_majzum';
         roleBn = 'ফেলে মুদারি মাজযূম';
+        roleAr = 'فِعْل مُضَارِع مَجْزُوم';
+        posShortAr = 'فِعْل مُضَارِع';
         detailBn = `পূর্ববর্তী "${prevClean}"-এর প্রভাবে জযম (সুকূন) গ্রহণ করেছে এবং অতীত/নিষেধের ক্রিয়া হয়েছে।`;
       }
     } else if (hasAttachedJarPrefix) {
+      roleKey = 'jar_majrur';
       roleBn = 'জার ও মাজরূর (মুতা‘আল্লিক বিল-ফেল / খবর)';
+      roleAr = 'جَارّ وَمَجْرُور';
+      posShortAr = 'حَرْف + اِسْم';
       detailBn = `শব্দের শুরুতে সংযুক্ত হরফে জার (بِـ / لِـ / كَـ) থাকায় পুরো পদটি জার ও মাজরূর হয়ে ক্রিয়া বা খবরের সাথে সম্পর্কিত (মুতা‘আল্লিক) হয়েছে।`;
       phrases.push({
         arabicChunk: clean,
         roleBn: 'মুরাক্কাবে জারী (জার + মাজরূর)',
+        roleAr: 'جَارّ وَمَجْرُور',
         explanationBn: `সংযুক্ত হরফে জারসহ ইসমটি মাজরূর অবস্থায় মুতা‘আল্লিক বিল-ফেল বা খবর হিসেবে কাজ করছে।`,
+        wordIndices: [i],
+        relationshipKey: 'jar_majrur',
       });
     } else if (tag === 'atif') {
+      roleKey = 'harf_atf';
       roleBn = 'হরফে আতফ (সংযোজক অব্যয়)';
+      roleAr = 'حَرْف عَطْف';
       detailBn = `পূর্ববর্তী ও পরবর্তী পদ বা বাক্যাংশকে সংযুক্ত করেছে; পরবর্তী পদ এর মাধ্যমে 'মা‘তূফ' হয়।`;
     } else if (tag === 'interrog') {
       if (norm === 'هل') {
+        roleKey = 'istifham';
         roleBn = 'হরফে ইস্তিফহাম (প্রশ্নবোধক অব্যয়)';
+        roleAr = 'حَرْف اسْتِفْهَام';
+        posShortAr = 'حَرْف';
         detailBn = 'হ্যাঁ/না বোধক প্রশ্ন তৈরি করেছে; বাক্যের মূল ই‘রাবে এর স্বতন্ত্র স্থান নেই।';
       } else if ((norm === 'ماذا' || norm === 'ما') && nextTag === 'verb') {
-        roleBn = 'ইসমে ইস্তিফহাম — মাফঊলে বিহী মুকাদ্দাম (অগ্রবর্তী কর্ম)';
+        roleKey = 'maful_bihi';
+        roleBn = 'ইসমে ইস্তিফহাম — মাফঊলে বিহী মুকাদ্দাম';
+        roleAr = 'مَفْعُول بِهِ مُقَدَّم';
+        posShortAr = 'اِسْم اسْتِفْهَام';
         detailBn = `"${nextClean}" ক্রিয়ার কর্ম (কী করছ/কী পড়ছ) হিসেবে বাক্যের শুরুতে অবস্থান নিয়েছে।`;
         phrases.push({
           arabicChunk: clean,
           roleBn: 'মাফঊলে বিহী মুকাদ্দাম (প্রশ্নবোধক)',
+          roleAr: 'مَفْعُول بِهِ مُقَدَّم',
           explanationBn: 'প্রশ্নবোধক সর্বনামটি ক্রিয়ার অগ্রবর্তী কর্ম (Object) হিসেবে ব্যবহৃত হয়েছে।',
+          wordIndices: nextTag === 'verb' ? [i, i + 1] : [i],
+          relationshipKey: 'verb_object',
         });
       } else {
-        roleBn = 'ইসমে ইস্তিফহাম — খবর মুকাদ্দাম / মুতা‘আল্লিক';
+        roleKey = 'istifham';
+        roleBn = 'ইসমে ইস্তিফহাম — খবর মুকাদ্দাম';
+        roleAr = 'خَبَر مُقَدَّم (اسْتِفْهَام)';
+        posShortAr = 'اِسْم اسْتِفْهَام';
         detailBn = 'বাক্যের শুরুতে প্রশ্নবোধক ইসম হিসেবে অবস্থান, সময়, বা অবস্থা নির্দেশ করছে।';
         phrases.push({
           arabicChunk: clean,
           roleBn: 'খবর মুকাদ্দাম / ইসমে ইস্তিফহাম',
+          roleAr: 'خَبَر مُقَدَّم',
           explanationBn: 'বাক্যের শুরুতে বসে প্রশ্ন জিজ্ঞাসা করছে।',
+          wordIndices: [i],
         });
       }
     } else if (tag === 'nida') {
+      roleKey = 'harf_nida';
       roleBn = 'হরফে নিদা (সম্বোধন অব্যয়)';
+      roleAr = 'حَرْف نِدَاء';
       detailBn = nextClean
         ? `পরবর্তী পদ "${nextClean}"-কে আহ্বান করেছে (সম্বোধনমূলক অব্যয়)।`
         : 'কোনো ব্যক্তিকে ডাকার জন্য ব্যবহৃত সম্বোধন অব্যয়।';
@@ -1552,11 +1612,16 @@ export function analyzeSentenceTarkib(sentenceAr: string): SentenceTarkibResult 
         phrases.push({
           arabicChunk: `${clean} ${nextClean}`,
           roleBn: 'হরফে নিদা + মুনাদা (সম্বোধন খণ্ড)',
+          roleAr: 'حَرْف نِدَاء + مُنَادَى',
           explanationBn: `"${clean}" হরফে নিদা এবং "${nextClean}" মুনাদা (সম্বোধিত ব্যক্তি/বস্তু)।`,
+          wordIndices: [i, i + 1],
+          relationshipKey: 'nida_munada',
         });
       }
     } else if (tag === 'jar') {
+      roleKey = 'harf_jarr';
       roleBn = 'হরফে জার (পদান্বয়ী অব্যয়)';
+      roleAr = 'حَرْف جَرّ';
       detailBn = nextClean
         ? `পরবর্তী ইসম "${nextClean}"-কে মাজরূর (যেরযুক্ত) করে জার-মাজরূর গঠন করেছে।`
         : 'পরবর্তী ইসমকে যের প্রদান করে।';
@@ -1565,13 +1630,19 @@ export function analyzeSentenceTarkib(sentenceAr: string): SentenceTarkibResult 
         phrases.push({
           arabicChunk: `${clean} ${nextClean}`,
           roleBn: 'জার ও মাজরূর (মুতা‘আল্লিক)',
+          roleAr: 'جَارّ وَمَجْرُور',
           explanationBn: `"${clean}" হরফে জার এবং "${nextClean}" মাজরূর — উভয়ে মিলে ${
             seenVerb || hasMainVerb ? 'মুতা‘আল্লিক বিল-ফেল (ক্রিয়ার সম্পূরক)' : 'খবরে মুতা‘আল্লিক (বিধেয়)'
           }।`,
+          wordIndices: [i, i + 1],
+          relationshipKey: 'jar_majrur',
         });
       }
     } else if (tag === 'verb-nasb') {
+      roleKey = 'harf_nasb';
       roleBn = 'হরফে নাসিবাহ (ফেল-সংযোজক)';
+      roleAr = 'حَرْف نَاصِب';
+      posShortAr = 'حَرْف';
       detailBn = nextClean
         ? `পরবর্তী ফেলে মুদারি "${nextClean}"-কে মানসুব (যবরযুক্ত) করে মাসদারের অর্থে পরিণত করেছে।`
         : 'পরবর্তী মুদারি ক্রিয়াকে নসব প্রদান করে।';
@@ -1580,11 +1651,17 @@ export function analyzeSentenceTarkib(sentenceAr: string): SentenceTarkibResult 
         phrases.push({
           arabicChunk: `${clean} ${nextClean}`,
           roleBn: 'মাসদারে মুআউওয়াল (أَنْ + ক্রিয়া)',
+          roleAr: 'مَصْدَر مُؤَوَّل',
           explanationBn: `"${clean} ${nextClean}" মিলে একটি ক্রিয়ামূলের অর্থ দেয় ও পূর্ববর্তী ক্রিয়ার মাফঊলে বিহী (কর্ম) স্থানীয় হয়।`,
+          wordIndices: [i, i + 1],
+          relationshipKey: 'nasb_verb',
         });
       }
     } else if (tag === 'verb-jazm') {
+      roleKey = 'harf_jazm';
       roleBn = 'হরফে জাযিমাহ (জযমদানকারী)';
+      roleAr = 'حَرْف جَازِم';
+      posShortAr = 'حَرْف';
       detailBn = nextClean
         ? `পরবর্তী মুদারি ক্রিয়া "${nextClean}"-কে মাজযূম (সুকূনযুক্ত) করেছে।`
         : 'মুদারি ক্রিয়ায় জযম দেয়।';
@@ -1593,19 +1670,26 @@ export function analyzeSentenceTarkib(sentenceAr: string): SentenceTarkibResult 
         phrases.push({
           arabicChunk: `${clean} ${nextClean}`,
           roleBn: 'নাফী/নাহী ও মাজযূম ক্রিয়া',
+          roleAr: 'نَفْي + مَجْزُوم',
           explanationBn: `"${clean}" অব্যয় "${nextClean}" ক্রিয়াটিকে জযম দিয়ে না-বোধক অর্থ গঠন করেছে।`,
+          wordIndices: [i, i + 1],
+          relationshipKey: 'jazm_verb',
         });
       }
     } else if (tag === 'inna') {
       seenInna = true;
       seenInnaIsm = false;
+      roleKey = 'harf_mushabbah';
       roleBn = 'হরফে মুশাব্বাহ বিল-ফেল';
+      roleAr = 'حَرْف مُشَبَّه بِالْفِعْل';
       detailBn = 'জুমলা ইসমিয়াহ-কে নিশ্চিত করতে এসেছে; এর ইসম মানসুব (যবর) এবং খবর মারফু (পেশ) হয়।';
     } else if (tag === 'naqis') {
       seenKana = true;
       seenKanaIsm = false;
       seenVerb = true;
+      roleKey = 'fil_naqis';
       roleBn = 'ফেলে নাকিছ (অসম্পূর্ণ ক্রিয়া)';
+      roleAr = 'فِعْل نَاقِص';
       detailBn = 'বাক্যের ইসমকে মারফু (পেশ) এবং খবরকে মানসুব (যবর) রূপে গ্রহণ করে।';
     } else if (tag === 'verb') {
       seenVerb = true;
@@ -1613,60 +1697,86 @@ export function analyzeSentenceTarkib(sentenceAr: string): SentenceTarkibResult 
         nextTag === 'noun' && !clean.endsWith('تُ') && !clean.startsWith('أ') && !clean.startsWith('ن') &&
         !(nextClean.endsWith('َ') || nextClean.endsWith('ً') || nextClean.endsWith('ِ'));
       const hiddenHint = getHiddenPronounHint(clean, norm);
+      roleKey = 'fil';
       if (nextCanBeExplicitFail) {
         roleBn = 'ফেল (মূল ক্রিয়াপদ)';
+        roleAr = 'فِعْل';
         detailBn = `বাক্যের ক্রিয়া (মুসনাদ); এর পরবর্তী প্রকাশ্য মারফু ইসমটির কর্তা (ফায়েল) হওয়ার সম্ভাবনা রয়েছে।`;
         phrases.push({
           arabicChunk: clean,
           roleBn: 'ফেল (ক্রিয়া)',
+          roleAr: 'فِعْل',
           explanationBn: `বাক্যের মূল ক্রিয়া হিসেবে কাজ করছে।`,
+          wordIndices: [i],
         });
       } else {
         roleBn = `ফেল ও ফায়েল (উহ্য সর্বনাম ${hiddenHint})`;
+        roleAr = 'فِعْل + ضَمِير مُسْتَتِر';
         detailBn = `ক্রিয়া এবং এর সাথে অন্তর্নিহিত কর্তা 'দমীরে মুস্তাতির' ${hiddenHint} যুক্ত রয়েছে।`;
         phrases.push({
           arabicChunk: clean,
           roleBn: 'ফেল + দমীরে মুস্তাতির (ফায়েল)',
+          roleAr: 'فِعْل + فَاعِل مُسْتَتِر',
           explanationBn: `"${clean}" ক্রিয়া ও এর উহ্য ফায়েল ${hiddenHint} মিলে জুমলা ফি‘লিয়ার ভিত্তি।`,
+          wordIndices: [i],
         });
         seenExplicitFail = true;
       }
     } else if (seenInna && !seenInnaIsm) {
       seenInnaIsm = true;
+      roleKey = 'ism_inna';
       roleBn = 'ইসমু ইন্না / হরফে মুশাব্বাহ-র ইসম (মানসুব)';
+      roleAr = 'اِسْم إِنَّ';
       detailBn = 'পূর্ববর্তী হরফে মুশাব্বাহ বিল-ফেল (إِنَّ/أَنَّ)-এর প্রভাবের কারণে ইসম হিসেবে মানসুব হয়েছে।';
       phrases.push({
         arabicChunk: clean,
         roleBn: 'ইসমু হরফে মুশাব্বাহ (মানসুব)',
+        roleAr: 'اِسْم إِنَّ',
         explanationBn: 'إِنَّ বা তার ভগিনীর ইসম হিসেবে যবরযুক্ত হয়েছে।',
+        wordIndices: [i],
+        relationshipKey: 'inna_group',
       });
     } else if (seenInna && seenInnaIsm && isMarfuEnd) {
+      roleKey = 'khabar_inna';
       roleBn = 'খবরু ইন্না (মারফু বিধেয়)';
+      roleAr = 'خَبَر إِنَّ';
       detailBn = 'ইন্না-র ইসম সম্পর্কে মূল সংবাদ/বিধেয় প্রদান করছে এবং মারফু (পেশযুক্ত) রয়েছে।';
       phrases.push({
         arabicChunk: clean,
         roleBn: 'খবরু হরফে মুশাব্বাহ (মারফু)',
+        roleAr: 'خَبَر إِنَّ',
         explanationBn: 'বাক্যের বিধেয় অংশ পূরণ করেছে।',
+        wordIndices: [i],
+        relationshipKey: 'inna_group',
       });
     } else if (seenKana && !seenKanaIsm) {
       seenKanaIsm = true;
+      roleKey = 'ism_kana';
       roleBn = 'ইসমু কানা / লাইসা (মারফু)';
+      roleAr = 'اِسْم كَانَ';
       detailBn = 'ফেলে নাকিছ-এর উদ্দেশ্য বা কর্তা হিসেবে মারফু (পেশযুক্ত) রয়েছে।';
       phrases.push({
         arabicChunk: clean,
         roleBn: 'ইসমু কানা (মারফু)',
+        roleAr: 'اِسْم كَانَ',
         explanationBn: 'كَانَ বা তার ভগিনীর ইসম হিসেবে পেশযুক্ত।',
+        wordIndices: [i],
+        relationshipKey: 'kana_group',
       });
     } else if (seenKana && seenKanaIsm && (isMansubEnd || lastChar === 'ً')) {
+      roleKey = 'khabar_kana';
       roleBn = 'খবরু কানা / লাইসা (মানসুব বিধেয়)';
+      roleAr = 'خَبَر كَانَ';
       detailBn = 'كَانَ / لَيْسَ-এর প্রভাবের কারণে বিধেয় (খবর) হিসেবে মানসুব (যবরযুক্ত) হয়েছে।';
       phrases.push({
         arabicChunk: clean,
         roleBn: 'খবরু কানা (মানসুব)',
+        roleAr: 'خَبَر كَانَ',
         explanationBn: 'كَانَ-এর বিধেয় হিসেবে যবরযুক্ত হয়েছে।',
+        wordIndices: [i],
+        relationshipKey: 'kana_group',
       });
     } else if (seenVerb) {
-      // Inside a verbal sentence (after verb)
       const prevWasDefiniteNoun =
         i > 0 &&
         posTags[i - 1] === 'noun' &&
@@ -1674,73 +1784,109 @@ export function analyzeSentenceTarkib(sentenceAr: string): SentenceTarkibResult 
         words[i - 1]?.tarkibRoleBn.includes('মাওসূফ');
 
       if (prevNorm.startsWith('ال') && norm.startsWith('ال') && posTags[i - 1] === 'noun' && !EXACT_TOKEN_MAP[norm]) {
+        roleKey = 'sifat';
         roleBn = 'সিফাত / না‘ত (গুণবাচক বিশেষণ)';
+        roleAr = 'صِفَة';
         detailBn = `পূর্ববর্তী নির্দিষ্ট ইসম "${prevClean}" (মাওসূফ)-এর গুণ বা বৈশিষ্ট্য বর্ণনা করে তার ই‘রাব অনুসরণ করেছে।`;
         if (words[i - 1]) {
           words[i - 1].tarkibRoleBn = `${words[i - 1].tarkibRoleBn} (ও মাওসূফ)`;
+          words[i - 1].tarkibRoleAr = `${words[i - 1].tarkibRoleAr} · مَوْصُوف`;
         }
         phrases.push({
           arabicChunk: `${prevClean} ${clean}`,
           roleBn: 'মাওসূফ + সিফাত (মুরাক্কাবে তাওসীফী)',
+          roleAr: 'مَوْصُوف + صِفَة',
           explanationBn: `"${prevClean}" বিশেষ্য (মাওসূফ) এবং "${clean}" বিশেষণ (সিফাত) মিলে একক বিশেষ্য খণ্ড গঠন করেছে।`,
+          wordIndices: [i - 1, i],
+          relationshipKey: 'mawsuf_sifat',
         });
       } else if (isMajrurEnd && posTags[i - 1] === 'noun' && !prevNorm.startsWith('ال')) {
+        roleKey = 'mudaf_ilayh';
         roleBn = 'মুদাফ ইলাইহি (মাজরূর — সম্বন্ধীয় দ্বিতীয় পদ)';
+        roleAr = 'مُضَاف إِلَيْهِ';
         detailBn = `পূর্ববর্তী মুদাফ "${prevClean}"-এর সাথে সম্বন্ধযুক্ত হয়ে যের (কাসরা) গ্রহণ করেছে।`;
         if (words[i - 1]) {
           words[i - 1].tarkibRoleBn = `${words[i - 1].tarkibRoleBn} · মুদাফ`;
+          words[i - 1].tarkibRoleAr = `${words[i - 1].tarkibRoleAr} · مُضَاف`;
         }
         phrases.push({
           arabicChunk: `${prevClean} ${clean}`,
           roleBn: 'মুদাফ + মুদাফ ইলাইহি (মুরাক্কাবে ইযাফী)',
+          roleAr: 'مُضَاف + مُضَاف إِلَيْهِ',
           explanationBn: `উভয়ে মিলে সম্বন্ধবাচক পদগুচ্ছ (যেমন: "আল্লাহর কিতাব" / "...এর ...") গঠন করেছে।`,
+          wordIndices: [i - 1, i],
+          relationshipKey: 'mudaf_ilayh',
         });
       } else if (!seenExplicitFail && !isMansubEnd && !isMajrurEnd) {
         seenExplicitFail = true;
+        roleKey = 'fail';
         roleBn = 'ফায়েল (ক্রিয়ার কর্তা — মারফু)';
+        roleAr = 'فَاعِل';
         detailBn = 'বাক্যে ক্রিয়া সম্পাদনকারী মূল কর্তা (Subject) হিসেবে মারফু (পেশযুক্ত) রয়েছে।';
         phrases.push({
           arabicChunk: clean,
           roleBn: 'ফায়েল (কর্তা)',
+          roleAr: 'فَاعِل',
           explanationBn: `"${clean}" পদটি ক্রিয়া সম্পাদনকারী হিসেবে ফায়েল।`,
+          wordIndices: [i],
+          relationshipKey: 'verb_subject',
         });
       } else if (clean.endsWith('ًا') || lastChar === 'ً') {
+        roleKey = 'hal';
         roleBn = 'মাফঊল / হাল বা যরফ (মানসুব তানবীন)';
+        roleAr = 'حَال / مَفْعُول';
         detailBn = 'বাক্যে ক্রিয়ার কর্ম, অবস্থা (হাল) অথবা সময়-স্থান (মাফঊলে ফীহ) হিসেবে মানসুব হয়েছে।';
         phrases.push({
           arabicChunk: clean,
           roleBn: 'মাফঊল / হাল (মানসুব)',
+          roleAr: 'مَفْعُول / حَال',
           explanationBn: 'দুই যবরযুক্ত হয়ে ক্রিয়ার অবস্থা বা কর্ম প্রকাশ করছে।',
+          wordIndices: [i],
         });
       } else if (isMansubEnd) {
+        roleKey = 'maful_bihi';
         roleBn = 'মাফঊলে বিহী (ক্রিয়ার কর্ম — মানসুব)';
+        roleAr = 'مَفْعُول بِهِ';
         detailBn = 'যার ওপর ক্রিয়ার কাজ পতিত হয়েছে (Direct Object), তাই মানসুব (যবরযুক্ত) হয়েছে।';
         phrases.push({
           arabicChunk: clean,
           roleBn: 'মাফঊলে বিহী (কর্ম)',
+          roleAr: 'مَفْعُول بِهِ',
           explanationBn: `"${clean}" পদটি ক্রিয়ার প্রত্যক্ষ কর্ম হিসেবে যবর পেয়েছে।`,
+          wordIndices: [i],
+          relationshipKey: 'verb_object',
         });
       } else if (isMarfuEnd && !prevWasDefiniteNoun) {
+        roleKey = seenExplicitFail ? 'badal' : 'fail';
         roleBn = seenExplicitFail ? 'তাবে‘ / বদল বা খবর (মারফু)' : 'ফায়েল (কর্তা — মারফু)';
+        roleAr = seenExplicitFail ? 'بَدَل / تَابِع' : 'فَاعِل';
         seenExplicitFail = true;
         detailBn = 'পেশযুক্ত (মারফু) অবস্থায় বাক্যের প্রধান নামপদ হিসেবে ব্যবহৃত হয়েছে।';
       } else if (posTags[i - 1] === 'atif') {
+        roleKey = 'matuf';
         roleBn = 'মা‘তূফ (সংযুক্ত পদ)';
+        roleAr = 'مَعْطُوف';
         detailBn = `পূর্ববর্তী হরফে আতফ "${prevClean}"-এর মাধ্যমে আগের পদের ই‘রাব অনুযায়ী যুক্ত হয়েছে।`;
       }
     } else {
-      // Nominal Sentence (Jumla Ismiyah) before any main verb
       if (posTags[i - 1] === 'atif') {
+        roleKey = 'matuf';
         roleBn = 'মা‘তূফ (সংযুক্ত পদ)';
+        roleAr = 'مَعْطُوف';
         detailBn = `পূর্ববর্তী হরফে আতফ "${prevClean}"-এর মাধ্যমে আগের পদের সাথে যুক্ত হয়েছে।`;
       } else if (!seenMubtada) {
         seenMubtada = true;
+        roleKey = 'mubtada';
         roleBn = tag === 'pronoun' ? 'মুবতাদা (সর্বনাম / ইশারা — মাবনি ফি মাহাল্লি রাফ‘)' : 'মুবতাদা (বাক্যের উদ্দেশ্য — মারফু)';
+        roleAr = 'مُبْتَدَأ';
         detailBn = 'নামবাচক বাক্যের সূচনাকারী উদ্দেশ্য (Subject), যার সম্পর্কে পরবর্তী পদে সংবাদ দেওয়া হচ্ছে।';
         phrases.push({
           arabicChunk: clean,
           roleBn: 'মুবতাদা (উদ্দেশ্য)',
+          roleAr: 'مُبْتَدَأ',
           explanationBn: `"${clean}" হলো বাক্যের মূল উদ্দেশ্য (যাকে কেন্দ্র করে বক্তব্য বলা হয়েছে)।`,
+          wordIndices: [i],
+          relationshipKey: 'mubtada_khabar',
         });
       } else if (
         prevNorm.startsWith('ال') &&
@@ -1748,15 +1894,21 @@ export function analyzeSentenceTarkib(sentenceAr: string): SentenceTarkibResult 
         posTags[i - 1] === 'noun' &&
         !EXACT_TOKEN_MAP[norm]
       ) {
+        roleKey = 'sifat';
         roleBn = 'সিফাত / না‘ত (গুণবাচক বিশেষণ)';
+        roleAr = 'صِفَة';
         detailBn = `পূর্ববর্তী নির্দিষ্ট ইসম "${prevClean}" (মাওসূফ)-এর সিফাত হয়ে একই ই‘রাব গ্রহণ করেছে।`;
         if (words[i - 1]) {
           words[i - 1].tarkibRoleBn = `${words[i - 1].tarkibRoleBn} · মাওসূফ`;
+          words[i - 1].tarkibRoleAr = `${words[i - 1].tarkibRoleAr} · مَوْصُوف`;
         }
         phrases.push({
           arabicChunk: `${prevClean} ${clean}`,
           roleBn: 'মাওসূফ + সিফাত (মুরাক্কাবে তাওসীফী)',
+          roleAr: 'مَوْصُوف + صِفَة',
           explanationBn: `"${prevClean}" মাওসূফ এবং "${clean}" সিফাত মিলে একক অর্থবোধক খণ্ড গঠন করেছে।`,
+          wordIndices: [i - 1, i],
+          relationshipKey: 'mawsuf_sifat',
         });
       } else if (
         !prevNorm.startsWith('ال') &&
@@ -1765,34 +1917,51 @@ export function analyzeSentenceTarkib(sentenceAr: string): SentenceTarkibResult 
         i >= 2 &&
         words[i - 1]?.tarkibRoleBn.includes('খবর')
       ) {
+        roleKey = 'sifat';
         roleBn = 'সিফাত (খবরের বিশেষণ)';
+        roleAr = 'صِفَة';
         detailBn = `পূর্ববর্তী অনির্দিষ্ট খবর "${prevClean}" (মাওসূফ)-এর গুণ বর্ণনাকারী সিফাত।`;
         if (words[i - 1]) {
           words[i - 1].tarkibRoleBn = 'খবর ও মাওসূফ';
+          words[i - 1].tarkibRoleAr = 'خَبَر · مَوْصُوف';
         }
         phrases.push({
           arabicChunk: `${prevClean} ${clean}`,
           roleBn: 'খবর (মাওসূফ + সিফাত)',
+          roleAr: 'خَبَر (مَوْصُوف + صِفَة)',
           explanationBn: `"${prevClean} ${clean}" মাওসূফ-সিফাত মিলে মুবতাদার খবর হয়েছে।`,
+          wordIndices: [i - 1, i],
+          relationshipKey: 'mawsuf_sifat',
         });
       } else if (isMajrurEnd && posTags[i - 1] === 'noun' && !prevNorm.startsWith('ال')) {
+        roleKey = 'mudaf_ilayh';
         roleBn = 'মুদাফ ইলাইহি (মাজরূর — সম্বন্ধীয় পদ)';
+        roleAr = 'مُضَاف إِلَيْهِ';
         detailBn = `পূর্ববর্তী মুদাফ "${prevClean}"-এর সাথে সম্বন্ধযুক্ত হয়ে যেরযুক্ত হয়েছে।`;
         if (words[i - 1]) {
           words[i - 1].tarkibRoleBn = `${words[i - 1].tarkibRoleBn} · মুদাফ`;
+          words[i - 1].tarkibRoleAr = `${words[i - 1].tarkibRoleAr} · مُضَاف`;
         }
         phrases.push({
           arabicChunk: `${prevClean} ${clean}`,
           roleBn: 'মুদাফ + মুদাফ ইলাইহি (মুরাক্কাবে ইযাফী)',
+          roleAr: 'مُضَاف + مُضَاف إِلَيْهِ',
           explanationBn: `দুটি ইসমের সম্বন্ধীয় গঠন (মুদাফ + মুদাফ ইলাইহি)।`,
+          wordIndices: [i - 1, i],
+          relationshipKey: 'mudaf_ilayh',
         });
       } else {
+        roleKey = 'khabar';
         roleBn = 'খবর (বাক্যের বিধেয় — মারফু)';
+        roleAr = 'خَبَر';
         detailBn = 'মুবতাদা (উদ্দেশ্য) সম্পর্কে মূল সংবাদ বা বিধেয় (Predicate) প্রকাশ করে বাক্য সম্পূর্ণ করেছে।';
         phrases.push({
           arabicChunk: clean,
           roleBn: 'খবর (বিধেয়)',
+          roleAr: 'خَبَر',
           explanationBn: `"${clean}" মুবতাদার সম্পর্কে তথ্য দিয়ে নামবাচক বাক্য সম্পূর্ণ করেছে।`,
+          wordIndices: [i],
+          relationshipKey: 'mubtada_khabar',
         });
       }
     }
@@ -1802,11 +1971,70 @@ export function analyzeSentenceTarkib(sentenceAr: string): SentenceTarkibResult 
       raw,
       clean,
       norm,
+      roleKey,
       posShortBn,
+      posShortAr,
       tarkibRoleBn: roleBn,
+      tarkibRoleAr: roleAr,
       tarkibDetailBn: detailBn,
       meaningBn: tip?.meaningBn,
+      linkedIndices: [],
     });
+  }
+
+  // Compute bidirectional Tarkib dependency links (e.g., Mudaf <-> Mudaf Ilayh, Jar <-> Majrur, Mawsuf <-> Sifat, Mubtada <-> Khabar, Fil <-> Fail)
+  const linkPair = (a: number, b: number, labelAr: string, labelBn: string) => {
+    if (a < 0 || b < 0 || a === b || !words[a] || !words[b]) return;
+    if (!words[a].linkedIndices.includes(b)) words[a].linkedIndices.push(b);
+    if (!words[b].linkedIndices.includes(a)) words[b].linkedIndices.push(a);
+    if (!words[a].relationshipLabelAr) {
+      words[a].relationshipLabelAr = labelAr;
+      words[a].relationshipLabelBn = labelBn;
+    }
+    if (!words[b].relationshipLabelAr) {
+      words[b].relationshipLabelAr = labelAr;
+      words[b].relationshipLabelBn = labelBn;
+    }
+  };
+
+  for (const ph of phrases) {
+    if (ph.wordIndices.length >= 2) {
+      const [first, second] = ph.wordIndices;
+      linkPair(first, second, ph.roleAr, ph.roleBn);
+    }
+  }
+
+  const mubtadaIdx = words.findIndex((w) => w.roleKey === 'mubtada');
+  const khabarIdx = words.findIndex((w) => w.roleKey === 'khabar');
+  if (mubtadaIdx >= 0 && khabarIdx >= 0) {
+    linkPair(mubtadaIdx, khabarIdx, 'مُبْتَدَأ + خَبَر', 'মুবতাদা ও খবর (মূল নামবাচক জুটি)');
+  }
+
+  const filIdx = words.findIndex((w) => w.roleKey === 'fil' || w.roleKey === 'fil_naqis');
+  const failIdx = words.findIndex((w) => w.roleKey === 'fail' || w.roleKey === 'ism_kana');
+  const mafulIdx = words.findIndex((w) => w.roleKey === 'maful_bihi' || w.roleKey === 'khabar_kana');
+  if (filIdx >= 0 && failIdx >= 0) {
+    linkPair(filIdx, failIdx, 'فِعْل + فَاعِل', 'ফেল ও ফায়েল (ক্রিয়া ও কর্তা)');
+  }
+  if (filIdx >= 0 && mafulIdx >= 0) {
+    linkPair(filIdx, mafulIdx, 'فِعْل + مَفْعُول بِهِ', 'ফেল ও মাফঊলে বিহী (ক্রিয়া ও কর্ম)');
+  }
+
+  const innaIdx = words.findIndex((w) => w.roleKey === 'harf_mushabbah');
+  const ismInnaIdx = words.findIndex((w) => w.roleKey === 'ism_inna');
+  const khabarInnaIdx = words.findIndex((w) => w.roleKey === 'khabar_inna');
+  if (innaIdx >= 0 && ismInnaIdx >= 0) {
+    linkPair(innaIdx, ismInnaIdx, 'إِنَّ + اِسْمُهَا', 'হরফে মুশাব্বাহ ও তার ইসম');
+  }
+  if (ismInnaIdx >= 0 && khabarInnaIdx >= 0) {
+    linkPair(ismInnaIdx, khabarInnaIdx, 'اِسْم إِنَّ + خَبَرُهَا', 'ইসমু ইন্না ও খবরু ইন্না');
+  }
+
+  for (let i = 1; i < words.length - 1; i++) {
+    if (words[i].roleKey === 'harf_atf') {
+      linkPair(i - 1, i + 1, 'مَعْطُوف عَلَيْهِ + مَعْطُوف', 'আতফ দ্বারা সংযুক্ত পদযুগল');
+      linkPair(i, i + 1, 'حَرْف عَطْف + مَعْطُوف', 'হরফে আতফ ও মা‘তূফ');
+    }
   }
 
   const structureSummaryBn =

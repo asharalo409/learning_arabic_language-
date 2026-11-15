@@ -456,3 +456,483 @@ export async function runAiTeacherRequest(payload: {
     },
   };
 }
+
+function wrapPcmAsWav(pcmBytes: Buffer, sampleRate = 24000, numChannels = 1, bitsPerSample = 16): Buffer {
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const dataSize = pcmBytes.length;
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(dataSize, 40);
+  return Buffer.concat([header, pcmBytes]);
+}
+
+export async function runGeminiTtsRequest(payload: {
+  text?: string;
+  voiceGender?: 'male' | 'female';
+  langCode?: string;
+  style?: string;
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const rawText = typeof payload.text === 'string' ? payload.text.trim() : '';
+  if (!rawText) {
+    return { status: 400, body: { error: 'অডিও তৈরি করার জন্য টেক্সট প্রয়োজন।' } };
+  }
+
+  const ai = getGeminiClient();
+  if (!ai) {
+    return { status: 503, body: { error: 'GEMINI_API_KEY কনফিগার করা নেই।' } };
+  }
+
+  const voiceName = payload.voiceGender === 'female' ? 'Kore' : 'Charon';
+  const clippedText = rawText.slice(0, 1400);
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash-lite-tts',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: clippedText,
+              speechMetadata: {
+                style:
+                  payload.style ||
+                  (payload.langCode?.startsWith('ar')
+                    ? 'Clear, articulate, natural Modern Standard Arabic teacher voice with crisp vowel pronunciation'
+                    : 'Warm, clear, natural Bengali and Arabic teacher voice'),
+              },
+            },
+          ],
+        },
+      ],
+      config: {
+        responseModalities: ['AUDIO'],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName },
+          },
+        },
+      },
+    });
+
+    const audioPart = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+    const base64Data = audioPart?.inlineData?.data;
+    const rawMime = (audioPart?.inlineData?.mimeType || 'audio/wav').toLowerCase();
+
+    if (!base64Data) {
+      return { status: 502, body: { error: 'TTS মডেল থেকে কোনো অডিও পাওয়া যায়নি।' } };
+    }
+
+    const buf = Buffer.from(base64Data, 'base64');
+    const isRiffWav = buf.length >= 4 && buf.subarray(0, 4).toString('ascii') === 'RIFF';
+
+    if (isRiffWav) {
+      return {
+        status: 200,
+        body: {
+          audioBase64: base64Data,
+          mimeType: 'audio/wav',
+          voiceName,
+        },
+      };
+    }
+
+    if (rawMime.includes('l16') || rawMime.includes('pcm')) {
+      const wavBuf = wrapPcmAsWav(buf, 24000, 1, 16);
+      return {
+        status: 200,
+        body: {
+          audioBase64: wavBuf.toString('base64'),
+          mimeType: 'audio/wav',
+          voiceName,
+        },
+      };
+    }
+
+    return {
+      status: 200,
+      body: {
+        audioBase64: base64Data,
+        mimeType: rawMime || 'audio/wav',
+        voiceName,
+      },
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'TTS generation failed';
+    console.warn('Gemini TTS error:', msg);
+    return {
+      status: isTransientError(err) ? 503 : 500,
+      body: { error: msg },
+    };
+  }
+}
+
+export type PdfFormatterCategory =
+  | 'ar-bn-harakat'
+  | 'ar-only-harakat'
+  | 'bn-only'
+  | 'kitabi-bilingual';
+
+const PDF_FORMAT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    titleAr: { type: Type.STRING, description: 'Document main title in Arabic with complete Harakat.' },
+    titleBn: { type: Type.STRING, description: 'Document main title in Bengali (empty string if ar-only-harakat).' },
+    subtitleBn: { type: Type.STRING, description: 'Short subtitle, exam years, or concise header description.' },
+    category: {
+      type: Type.STRING,
+      enum: ['ar-bn-harakat', 'ar-only-harakat', 'bn-only', 'kitabi-bilingual'],
+    },
+    sections: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          headingAr: { type: Type.STRING, description: 'Arabic section heading with full Harakat (e.g. أَوَّلًا: ..., ثَانِيًا: ...) or empty for bn-only.' },
+          headingBn: { type: Type.STRING, description: 'Bengali section heading (e.g. প্রথমত: ...) or empty for ar-only-harakat.' },
+          introBn: { type: Type.STRING, description: 'Concise Bengali summary/synthesis line or question summary note placed at the section banner or bottom summary.' },
+          layout: { type: Type.STRING, enum: ['cards', 'grid-3', 'table', 'prose', 'flow', 'quotes'] },
+          accentTheme: { type: Type.STRING, enum: ['emerald', 'blue', 'violet', 'rose', 'slate', 'amber'] },
+          items: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                kind: { type: Type.STRING, enum: ['card', 'table-row', 'prose', 'step', 'quote'] },
+                badgeNumber: { type: Type.STRING, description: 'Number, year pill like ٢٠٢٥ / ২০২৫, or short badge label.' },
+                labelAr: { type: Type.STRING, description: 'Short Arabic sub-heading or table right-column term with full Harakat.' },
+                labelBn: { type: Type.STRING, description: 'Short Bengali sub-heading or label.' },
+                arabic: { type: Type.STRING, description: 'Arabic content with complete, accurate Harakat (Tashkeel).' },
+                bengali: { type: Type.STRING, description: 'Clear, proofread Bengali meaning or explanation.' },
+                reference: { type: Type.STRING, description: 'Surah/Ayah, Hadith collection, or book citation if present in source.' },
+                highlightColor: { type: Type.STRING, enum: ['emerald', 'sky', 'amber', 'violet', 'rose', 'slate'] },
+              },
+              required: ['kind', 'arabic', 'bengali'],
+            },
+          },
+        },
+        required: ['id', 'layout', 'items'],
+      },
+    },
+    footerNote: { type: Type.STRING },
+  },
+  required: ['titleAr', 'titleBn', 'subtitleBn', 'category', 'sections'],
+};
+
+function buildPdfCategoryPrompt(category: PdfFormatterCategory, userInstructions?: string): string {
+  const extra = userInstructions?.trim() ? `\nAdditional formatting instruction from user: ${userInstructions.trim()}` : '';
+  switch (category) {
+    case 'ar-only-harakat':
+      return `Target Output Category: ar-only-harakat (Pure Arabic Kitabi Document with Complete Harakat / التشْكِيلُ الكَامِلُ).
+Rules:
+- Preserve or accurately translate/expand the input into eloquent Classical / Modern Standard Arabic with COMPLETE Harakat (فتحة، كسرة، ضمة، سكون، شدة، تنوين) on EVERY Arabic word.
+- Silently fix any missing Harakat, Arabic spelling typos, or grammatical slips present in the raw input.
+- Vary section layouts cleanly ('table' for لُغَةً/اصْطِلَاحًا comparisons, 'grid-3' for grouped classifications, 'flow' for sequential stages, 'quotes' for Qur'an/Hadith verses, 'cards' & 'prose' for questions/explanations) and assign tasteful accentTheme values ('emerald', 'blue', 'violet', 'amber').
+- Keep "bengali", "titleBn", "headingBn", and "labelBn" fields as empty strings "" unless needed for a short metadata tag, because the user selected Arabic-only output.${extra}`;
+    case 'bn-only':
+      return `Target Output Category: bn-only (Pure Bengali Academic Study Document).
+Rules:
+- Convert/translate/organize all content from the text, image, or PDF cleanly into natural, scholarly, error-free Bengali.
+- Organize into crisp sections using 'cards', 'grid-3', 'table', 'flow', 'quotes', and 'prose' with varied accentTheme values ('emerald', 'blue', 'violet', 'amber', 'slate').
+- Keep "arabic" fields empty strings "" and set Arabic headings empty unless a short foundational term must appear in brackets.${extra}`;
+    case 'kitabi-bilingual':
+      return `Target Output Category: kitabi-bilingual (Classical Madrasa / University Kitabi A4 Handout).
+Rules:
+- Design the document to look like a printed classical-modern bilingual study sheet:
+  1. Rich top cover title: Arabic titleAr (complete Harakat) + Bengali titleBn + concise subtitleBn (years/topic summary).
+  2. Vary section "accentTheme" logically across sections ('emerald' for primary definitions, 'blue' for secondary classifications/questions, 'violet' for comparisons/relations, 'amber' or 'rose' for proofs/adab).
+  3. Choose the BEST layout per section:
+     - layout="table": for definitions (لُغَةً vs اصْطِلَاحًا), word-type comparisons (الْعُلُومُ / الْقُرْآنُ / عُلُومُ الْقُرْآنِ), or pair lists. Put the right column term in "labelAr" (Arabic) + "labelBn" (Bengali), Arabic explanation in "arabic", and Bengali explanation in "bengali". Put any section-bottom synthesis inside "introBn" if appropriate.
+     - layout="grid-3": for groups of 3, 6, or 9 concise points, pillars, scholars, or categories (3 balanced compact cards per row).
+     - layout="cards": for 2-column numbered question cards, year-tagged board questions (use badgeNumber like "২০২৫", "২০২৪", "بدون"), or dual principles.
+     - layout="flow": for sequential stages, derivation steps, or chronological progressions (renders connected arrow flow boxes).
+     - layout="quotes": for Qur'an verses ﴿...﴾ or Hadith proofs with direct Bengali translation and citation in "reference".
+     - layout="prose": for continuous paragraphs, definitions, or bulleted exam notes paired right beneath Arabic.
+  4. Never fabricate Qur'an verses or Hadith references; only cite references present in the input or completely certain authentic citations.${extra}`;
+    case 'ar-bn-harakat':
+    default:
+      return `Target Output Category: ar-bn-harakat (Arabic with Full Harakat + Clear Proofread Bengali Meaning).
+Rules:
+- Produce clean structured bilingual A4 sections where EVERY Arabic sentence/line has COMPLETE Harakat (التشكيل الكامل) AND is paired cleanly with accurate, typo-free Bengali meaning.
+- Smartly mix "prose", "cards", "grid-3", "table", "flow", and "quotes" layouts with balanced "accentTheme" colors so every A4 page looks dense, structured, and easy to study — never one monotonous wall of text.${extra}`;
+  }
+}
+
+interface PreparedPdfRequest {
+  ai: GoogleGenAI;
+  systemInstruction: string;
+  userParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>;
+}
+
+function preparePdfFormatRequest(payload: {
+  text?: string;
+  attachments?: AiAttachmentInput[];
+  category?: PdfFormatterCategory;
+  userInstructions?: string;
+  chunkIndex?: number;
+  totalChunks?: number;
+}): { error?: { status: number; message: string }; prepared?: PreparedPdfRequest } {
+  const rawText = typeof payload.text === 'string' ? payload.text.trim() : '';
+  const chunkIndex = typeof payload.chunkIndex === 'number' && payload.chunkIndex > 0 ? payload.chunkIndex : 1;
+  const totalChunks = typeof payload.totalChunks === 'number' && payload.totalChunks > 0 ? payload.totalChunks : 1;
+  const category: PdfFormatterCategory =
+    payload.category === 'ar-only-harakat' ||
+    payload.category === 'bn-only' ||
+    payload.category === 'kitabi-bilingual'
+      ? payload.category
+      : 'ar-bn-harakat';
+
+  const validAttachments = Array.isArray(payload.attachments)
+    ? payload.attachments
+        .slice(0, 5)
+        .filter((att) => att && typeof att.mimeType === 'string' && typeof att.base64Data === 'string')
+        .map((att) => {
+          const normalizedMime = att.mimeType.toLowerCase() === 'image/jpg' ? 'image/jpeg' : att.mimeType.toLowerCase();
+          const cleanBase64 = att.base64Data.replace(/^data:[^;]+;base64,/i, '').trim();
+          return {
+            mimeType: normalizedMime,
+            data: cleanBase64,
+          };
+        })
+        .filter((att) => ALLOWED_ATTACHMENT_MIME_TYPES.has(att.mimeType) && att.data.length > 0)
+    : [];
+
+  if (!rawText && validAttachments.length === 0) {
+    return {
+      error: {
+        status: 400,
+        message: 'PDF তৈরি করতে অনুগ্রহ করে আরবি/বাংলা লেখা লিখুন অথবা ছবি/PDF আপলোড করুন।',
+      },
+    };
+  }
+
+  const ai = getGeminiClient();
+  if (!ai) {
+    return {
+      error: {
+        status: 503,
+        message: 'GEMINI_API_KEY সেট করা নেই। অনুগ্রহ করে Server Secrets-এ GEMINI_API_KEY যুক্ত করুন।',
+      },
+    };
+  }
+
+  const batchContextNote =
+    totalChunks > 1
+      ? chunkIndex === 1
+        ? `\nBATCH INFO: This is Part 1 of ${totalChunks}. Provide the main document titleAr/titleBn/subtitleBn AND format EVERY single item in this Part 1 completely.`
+        : `\nBATCH INFO: This is Part ${chunkIndex} of ${totalChunks} of the SAME document. Continue straight into sections/items seamlessly without repeating cover introductions, and DO NOT skip any paragraph, point, question, or line in this chunk.`
+      : '';
+
+  const systemInstruction = `You are a master Arabic & Bengali Islamic/Academic document typesetter, proofreader, and bilingual scholar.
+Your job is to transform raw user notes, Bengali or Arabic passages, book photos, screenshots, or PDFs into a richly structured Kitabi A4 document JSON matching the requested output category.
+CRITICAL ZERO-OMISSION & PROOFREADING RULES:
+- Include 100% of ALL content, questions, year markers, answers, numbered points, paragraphs, verses, hadith, and notes present in the input text/images/PDF pages.
+- NEVER summarize, abridge, skip, merge-away, or drop any sentence, point, or page from the input! Every line/section from the source must appear in "sections".
+- SILENT PROOFREADING & HARAKAT RESTORATION: Automatically correct any missing/wrong Arabic Harakat, Arabic spelling/grammar typos, and Bengali spelling errors silently while preserving full fidelity to the source meaning.
+- Put complete, accurate Arabic Harakat (التشكيل الكامل) on EVERY Arabic word unless the category is "bn-only".
+- Preserve scholarly accuracy and never fabricate Quran verses or Hadith.
+- Return ONLY valid JSON adhering strictly to the schema.${batchContextNote}
+${buildPdfCategoryPrompt(category, payload.userInstructions)}`;
+
+  const userParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+    ...validAttachments.map((att) => ({
+      inlineData: { mimeType: att.mimeType, data: att.data },
+    })),
+    {
+      text:
+        rawText ||
+        `সংযুক্ত ছবি বা PDF অংশটি (${chunkIndex}/${totalChunks}) শুরু থেকে শেষ পর্যন্ত একটি লাইন বা পয়েন্টও বাদ না দিয়ে সম্পূর্ণভাবে প্রুফরিডিং ও হারাকাতসহ নির্বাচিত ক্যাটাগরিতে রূপান্তর ও ফরম্যাট করুন।`,
+    },
+  ];
+
+  return {
+    prepared: { ai, systemInstruction, userParts },
+  };
+}
+
+export async function runFormatPdfRequest(payload: {
+  text?: string;
+  attachments?: AiAttachmentInput[];
+  category?: PdfFormatterCategory;
+  userInstructions?: string;
+  chunkIndex?: number;
+  totalChunks?: number;
+}): Promise<{ status: number; body: Record<string, unknown> }> {
+  const prep = preparePdfFormatRequest(payload);
+  if (prep.error || !prep.prepared) {
+    return {
+      status: prep.error?.status || 400,
+      body: { error: prep.error?.message || 'অবৈধ ইনপুট।' },
+    };
+  }
+
+  const { ai, systemInstruction, userParts } = prep.prepared;
+
+  const attempts: { model: string; thinkingLevel?: ThinkingLevel; delayMs: number }[] = [
+    { model: 'gemini-4-hydrogen', thinkingLevel: ThinkingLevel.LOW, delayMs: 0 },
+    { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayMs: 500 },
+  ];
+
+  let lastError: unknown = null;
+  for (const attempt of attempts) {
+    if (attempt.delayMs > 0) await sleep(attempt.delayMs);
+    try {
+      const response = await ai.models.generateContent({
+        model: attempt.model,
+        contents: [{ role: 'user', parts: userParts }],
+        config: {
+          systemInstruction,
+          maxOutputTokens: 16384,
+          responseMimeType: 'application/json',
+          responseSchema: PDF_FORMAT_SCHEMA,
+          ...(attempt.thinkingLevel ? { thinkingConfig: { thinkingLevel: attempt.thinkingLevel } } : {}),
+        },
+      });
+      const jsonText = response.text?.trim();
+      if (jsonText) {
+        const doc = JSON.parse(jsonText) as Record<string, unknown>;
+        return {
+          status: 200,
+          body: {
+            document: doc,
+            model: attempt.model,
+          },
+        };
+      }
+      lastError = new Error('Empty response returned from document formatter.');
+    } catch (err: unknown) {
+      lastError = err;
+      console.warn(`PDF format attempt failed (${attempt.model}):`, err instanceof Error ? err.message : err);
+      if (!isTransientError(err)) break;
+    }
+  }
+
+  return {
+    status: isTransientError(lastError) ? 503 : 500,
+    body: {
+      error:
+        lastError instanceof Error
+          ? lastError.message
+          : 'PDF ডকুমেন্ট ফরম্যাট করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
+    },
+  };
+}
+
+export type PdfStreamEvent =
+  | { type: 'progress'; charsReceived: number; model: string }
+  | { type: 'result'; document: Record<string, unknown>; model: string }
+  | { type: 'error'; status: number; error: string };
+
+export async function streamFormatPdfRequest(
+  payload: {
+    text?: string;
+    attachments?: AiAttachmentInput[];
+    category?: PdfFormatterCategory;
+    userInstructions?: string;
+    chunkIndex?: number;
+    totalChunks?: number;
+  },
+  onEvent: (event: PdfStreamEvent) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const prep = preparePdfFormatRequest(payload);
+  if (prep.error || !prep.prepared) {
+    onEvent({
+      type: 'error',
+      status: prep.error?.status || 400,
+      error: prep.error?.message || 'অবৈধ ইনপুট।',
+    });
+    return;
+  }
+
+  const { ai, systemInstruction, userParts } = prep.prepared;
+
+  const attempts: { model: string; thinkingLevel?: ThinkingLevel; delayMs: number }[] = [
+    { model: 'gemini-4-hydrogen', thinkingLevel: ThinkingLevel.LOW, delayMs: 0 },
+    { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayMs: 500 },
+  ];
+
+  let lastError: unknown = null;
+
+  for (const attempt of attempts) {
+    if (signal?.aborted) return;
+    if (attempt.delayMs > 0) await sleep(attempt.delayMs);
+
+    try {
+      const stream = await ai.models.generateContentStream({
+        model: attempt.model,
+        contents: [{ role: 'user', parts: userParts }],
+        config: {
+          systemInstruction,
+          maxOutputTokens: 16384,
+          responseMimeType: 'application/json',
+          responseSchema: PDF_FORMAT_SCHEMA,
+          ...(attempt.thinkingLevel ? { thinkingConfig: { thinkingLevel: attempt.thinkingLevel } } : {}),
+        },
+      });
+
+      let fullText = '';
+      let lastReported = 0;
+
+      for await (const chunk of stream) {
+        if (signal?.aborted) return;
+        const delta = chunk.text || '';
+        if (delta) {
+          fullText += delta;
+          if (fullText.length - lastReported >= 180) {
+            lastReported = fullText.length;
+            onEvent({
+              type: 'progress',
+              charsReceived: fullText.length,
+              model: attempt.model,
+            });
+          }
+        }
+      }
+
+      const trimmed = fullText.trim();
+      if (trimmed) {
+        const doc = JSON.parse(trimmed) as Record<string, unknown>;
+        onEvent({
+          type: 'progress',
+          charsReceived: trimmed.length,
+          model: attempt.model,
+        });
+        onEvent({
+          type: 'result',
+          document: doc,
+          model: attempt.model,
+        });
+        return;
+      }
+      lastError = new Error('Empty stream returned from document formatter.');
+    } catch (err: unknown) {
+      if (signal?.aborted) return;
+      lastError = err;
+      console.warn(`PDF stream attempt failed (${attempt.model}):`, err instanceof Error ? err.message : err);
+      if (!isTransientError(err)) break;
+    }
+  }
+
+  onEvent({
+    type: 'error',
+    status: isTransientError(lastError) ? 503 : 500,
+    error:
+      lastError instanceof Error
+        ? lastError.message
+        : 'PDF ডকুমেন্ট স্ট্রিমিং ফরম্যাটে ত্রুটি হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
+  });
+}

@@ -168,7 +168,7 @@ export const MuslimCompanionStrip: React.FC<{ compact?: boolean }> = ({ compact 
 
   return (
     <div
-      className="rounded-3xl p-4 sm:p-6 text-white shadow-xl border border-white/25 relative overflow-hidden"
+      className={`rounded-2xl ${compact ? 'p-3 sm:p-4' : 'p-4 sm:p-5'} text-white shadow-lg border border-white/25 relative overflow-hidden`}
       style={{
         background:
           prefs.dialVariant === 'calligraphy'
@@ -179,23 +179,23 @@ export const MuslimCompanionStrip: React.FC<{ compact?: boolean }> = ({ compact 
       {/* Subtle Ambient Sky Glow */}
       <div
         aria-hidden="true"
-        className="absolute -top-16 -right-16 w-60 h-60 rounded-full bg-white/12 blur-2xl pointer-events-none"
+        className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-white/12 blur-2xl pointer-events-none"
       />
 
-      <div className="relative z-10 space-y-4">
+      <div className="relative z-10 space-y-2.5">
         {/* Top Control Row: City Location + Switchable Clock Dial Pills */}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-[11px] font-semibold">
-            <MapPin className="w-3.5 h-3.5 text-amber-300" />
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 backdrop-blur-md text-[11px] font-semibold">
+            <MapPin className="w-3 h-3 text-amber-300" />
             <span>{locationMeta.nameBn}</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div className="inline-flex p-0.5 rounded-full bg-black/20 border border-white/15 text-[11px]">
+            <div className="inline-flex p-0.5 rounded-full bg-black/20 border border-white/15 text-[10.5px]">
               <button
                 type="button"
                 onClick={() => handleToggleDial('sky')}
-                className={`px-2.5 py-1 rounded-full font-semibold transition-all ${
+                className={`px-2 py-0.5 rounded-full font-semibold transition-all ${
                   prefs.dialVariant === 'sky' ? 'bg-white text-sky-900 shadow' : 'text-white/80 hover:text-white'
                 }`}
               >
@@ -204,7 +204,7 @@ export const MuslimCompanionStrip: React.FC<{ compact?: boolean }> = ({ compact 
               <button
                 type="button"
                 onClick={() => handleToggleDial('calligraphy')}
-                className={`px-2.5 py-1 rounded-full font-semibold transition-all ${
+                className={`px-2 py-0.5 rounded-full font-semibold transition-all ${
                   prefs.dialVariant === 'calligraphy' ? 'bg-white text-slate-950 shadow' : 'text-white/80 hover:text-white'
                 }`}
               >
@@ -215,36 +215,36 @@ export const MuslimCompanionStrip: React.FC<{ compact?: boolean }> = ({ compact 
             <button
               type="button"
               onClick={() => playAdhanPreview(next.nameAr)}
-              className="p-2 rounded-full bg-white/15 hover:bg-white/25 transition-colors"
+              className="p-1.5 rounded-full bg-white/15 hover:bg-white/25 transition-colors"
               title="আজান শুনুন"
               aria-label="আজান শুনুন"
             >
-              <Volume2 className="w-3.5 h-3.5 text-amber-200" />
+              <Volume2 className="w-3 h-3 text-amber-200" />
             </button>
           </div>
         </div>
 
-        {/* Center Hero Stage: Left Analog Clock Dial | Right Big Digital Time & Weather */}
-        <div className={`flex ${compact ? 'flex-col sm:flex-row' : 'flex-col sm:flex-row'} items-center justify-between gap-5`}>
-          <div className="flex items-center gap-4 sm:gap-6">
+        {/* Center Hero Stage: Compact Analog Clock Dial | Digital Time & Weather */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-4">
             <IslamicClockDial
               now={now}
               variant={prefs.dialVariant}
-              sizeClass="w-32 h-32 sm:w-36 sm:h-36"
+              sizeClass={compact ? 'w-20 h-20 sm:w-24 sm:h-24' : 'w-24 h-24 sm:w-28 sm:h-28'}
             />
 
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <div className="flex items-baseline gap-1.5">
-                <span className="text-4xl sm:text-5xl font-extrabold font-mono-num tracking-tight">
+                <span className={`${compact ? 'text-2xl sm:text-3xl' : 'text-3xl sm:text-4xl'} font-extrabold font-mono-num tracking-tight`}>
                   {hour12}:{minStr}
                 </span>
                 <div className="flex flex-col leading-none">
-                  <span className="text-sm sm:text-base font-bold font-mono-num text-amber-300">:{secStr}</span>
-                  <span className="text-xs font-bold text-white/90 mt-0.5">{banglaPeriod}</span>
+                  <span className="text-xs sm:text-sm font-bold font-mono-num text-amber-300">:{secStr}</span>
+                  <span className="text-[10px] font-bold text-white/90 mt-0.5">{banglaPeriod}</span>
                 </div>
               </div>
 
-              <div className="text-xs text-white/85 font-medium">
+              <div className="text-[11px] text-white/85 font-medium">
                 {now.toLocaleDateString('bn-BD', {
                   weekday: 'long',
                   day: 'numeric',
@@ -252,8 +252,8 @@ export const MuslimCompanionStrip: React.FC<{ compact?: boolean }> = ({ compact 
                 })}
               </div>
 
-              <div className="inline-flex items-center gap-1.5 pt-1 text-xs font-semibold text-amber-100">
-                <CloudSun className="w-4 h-4 text-amber-300" />
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-100">
+                <CloudSun className="w-3.5 h-3.5 text-amber-300" />
                 <span className="font-mono-num">{weather ? `${weather.temperatureC}°C` : '২৮°C'}</span>
                 <span>·</span>
                 <span>{weather ? weather.conditionBn : 'উজ্জ্বল আকাশ'}</span>
@@ -263,43 +263,43 @@ export const MuslimCompanionStrip: React.FC<{ compact?: boolean }> = ({ compact 
 
           <Link
             to="/prayer-weather"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white text-slate-900 font-bold text-xs shadow-lg hover:bg-sky-50 transition-colors shrink-0"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-slate-900 font-bold text-[11px] shadow-md hover:bg-sky-50 transition-colors shrink-0"
           >
-            <Sparkles className="w-4 h-4 text-amber-500" />
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
             <span>৫ ওয়াক্ত, কিবলা ও আবহাওয়া</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
 
-        {/* Bottom 3 Colorful Pills (Bangla Date | Hijri Date | Orange Next Prayer Countdown) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-          <div className="rounded-2xl px-3.5 py-2.5 bg-emerald-500/28 border border-emerald-300/35 flex items-center gap-2.5">
-            <Calendar className="w-4 h-4 text-emerald-200 shrink-0" />
+        {/* Bottom 3 Compact Info Strips */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+          <div className="rounded-xl px-3 py-1.5 bg-emerald-500/28 border border-emerald-300/35 flex items-center gap-2">
+            <Calendar className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
             <div className="min-w-0">
-              <div className="text-[10px] text-emerald-100/80">বঙ্গাব্দ</div>
-              <div className="text-xs font-bold truncate">{banglaDate}</div>
+              <div className="text-[9.5px] text-emerald-100/80">বঙ্গাব্দ</div>
+              <div className="text-[11px] font-bold truncate">{banglaDate}</div>
             </div>
           </div>
 
-          <div className="rounded-2xl px-3.5 py-2.5 bg-white/15 border border-white/25 flex items-center gap-2.5">
-            <MoonStar className="w-4 h-4 text-amber-200 shrink-0" />
+          <div className="rounded-xl px-3 py-1.5 bg-white/15 border border-white/25 flex items-center gap-2">
+            <MoonStar className="w-3.5 h-3.5 text-amber-200 shrink-0" />
             <div className="min-w-0">
-              <div className="text-[10px] text-white/75">হিজরি তারিখ</div>
-              <div className="text-xs font-bold truncate">{hijriDate}</div>
+              <div className="text-[9.5px] text-white/75">হিজরি তারিখ</div>
+              <div className="text-[11px] font-bold truncate">{hijriDate}</div>
             </div>
           </div>
 
           <Link
             to="/prayer-weather"
-            className="rounded-2xl px-3.5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md flex items-center justify-between gap-2 hover:brightness-105 transition"
+            className="rounded-xl px-3 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm flex items-center justify-between gap-2 hover:brightness-105 transition"
           >
             <div className="min-w-0">
-              <div className="text-[10px] text-amber-50/90 font-semibold">পরবর্তী ওয়াক্ত · {next.nameBn}</div>
-              <div className="text-xs font-extrabold font-mono-num truncate">
+              <div className="text-[9.5px] text-amber-50/90 font-semibold">পরবর্তী ওয়াক্ত · {next.nameBn}</div>
+              <div className="text-[11px] font-extrabold font-mono-num truncate">
                 {next.formattedTime} · -{formatCountdown(remainingSeconds)}
               </div>
             </div>
-            <ArrowRight className="w-4 h-4 shrink-0" />
+            <ArrowRight className="w-3.5 h-3.5 shrink-0" />
           </Link>
         </div>
       </div>

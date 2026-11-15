@@ -1,37 +1,41 @@
-import { VoiceGender } from '../types/academy';
+import { SpeechEngineMode, VoiceGender } from '../types/academy';
 
 const VOICE_GENDER_STORAGE_KEY = 'aaa_voice_gender_v1';
 const SPEECH_TUNING_STORAGE_KEY = 'aaa_speech_tuning_v1';
+const SPEECH_ENGINE_STORAGE_KEY = 'aaa_speech_engine_v1';
 
 export type VoiceEmotion = 'formal' | 'friendly' | 'encouraging';
 
 export interface SpeechTuning {
-  rateMultiplier: number; // 0.65 to 1.40
-  pitchOffset: number; // -0.35 to +0.35
+  rateMultiplier: number; // 0.70 to 1.35
+  pitchOffset: number; // -0.20 to +0.20
   emotion: VoiceEmotion;
 }
 
 export const VOICE_EMOTION_PRESETS: Record<
   VoiceEmotion,
-  { labelBn: string; descBn: string; pitchDelta: number; rateFactor: number }
+  { labelBn: string; descBn: string; pitchDelta: number; rateFactor: number; ttsStyle: string }
 > = {
   formal: {
     labelBn: 'প্রামাণিক শিক্ষক (Formal)',
-    descBn: 'গম্ভীর, ধীরস্থির ও কিতাবি স্পষ্ট উচ্চারণ',
-    pitchDelta: -0.05,
-    rateFactor: 0.94,
+    descBn: 'ধীরস্থির, পরিশীলিত ও স্পষ্ট কিতাবি উচ্চারণ',
+    pitchDelta: -0.02,
+    rateFactor: 0.96,
+    ttsStyle: 'Calm, scholarly, crisp and authoritative Arabic & Bengali teacher',
   },
   friendly: {
     labelBn: 'বন্ধুত্বপূর্ণ সংলাপ (Friendly)',
     descBn: 'স্বাভাবিক, উষ্ণ ও প্রাণবন্ত কথোপকথন',
-    pitchDelta: 0.08,
-    rateFactor: 1.04,
+    pitchDelta: 0.04,
+    rateFactor: 1.03,
+    ttsStyle: 'Warm, friendly, engaging and natural bilingual conversation partner',
   },
   encouraging: {
     labelBn: 'কোমল ও উৎসাহদায়ক (Gentle)',
     descBn: 'ধৈর্যশীল, কোমল ও শিক্ষানবিস-বান্ধব সুর',
-    pitchDelta: 0.04,
-    rateFactor: 0.9,
+    pitchDelta: 0.02,
+    rateFactor: 0.92,
+    ttsStyle: 'Gentle, patient, warm and deeply encouraging tutor',
   },
 };
 
@@ -41,8 +45,32 @@ export interface SpeechSupportInfo {
   sttSupported: boolean;
 }
 
-// Global token so stopping speech cancels multi-chunk bilingual playback immediately
+// Global token + audio controller so stopping speech immediately cancels everything
 let activeSpeechToken = 0;
+let activeAudioEl: HTMLAudioElement | null = null;
+let activeTtsAbort: AbortController | null = null;
+
+// In-memory LRU cache of base64 data URLs from /api/tts for zero-latency replays
+const TTS_CACHE_LIMIT = 40;
+const ttsDataUrlCache = new Map<string, string>();
+
+function getCachedTts(key: string): string | undefined {
+  const hit = ttsDataUrlCache.get(key);
+  if (hit) {
+    ttsDataUrlCache.delete(key);
+    ttsDataUrlCache.set(key, hit);
+  }
+  return hit;
+}
+
+function setCachedTts(key: string, dataUrl: string): void {
+  if (ttsDataUrlCache.has(key)) ttsDataUrlCache.delete(key);
+  ttsDataUrlCache.set(key, dataUrl);
+  if (ttsDataUrlCache.size > TTS_CACHE_LIMIT) {
+    const oldest = ttsDataUrlCache.keys().next().value;
+    if (oldest) ttsDataUrlCache.delete(oldest);
+  }
+}
 
 export function getPreferredVoiceGender(): VoiceGender {
   if (typeof window === 'undefined') return 'male';
@@ -63,6 +91,25 @@ export function setPreferredVoiceGender(gender: VoiceGender): void {
   }
 }
 
+export function getSpeechEngine(): SpeechEngineMode {
+  if (typeof window === 'undefined') return 'auto';
+  try {
+    const saved = localStorage.getItem(SPEECH_ENGINE_STORAGE_KEY);
+    return saved === 'gemini-tts' || saved === 'native' ? saved : 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+export function setSpeechEngine(mode: SpeechEngineMode): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(SPEECH_ENGINE_STORAGE_KEY, mode);
+  } catch {
+    // ignore
+  }
+}
+
 export function getSpeechTuning(): SpeechTuning {
   if (typeof window === 'undefined') {
     return { rateMultiplier: 1.0, pitchOffset: 0, emotion: 'formal' };
@@ -74,8 +121,8 @@ export function getSpeechTuning(): SpeechTuning {
     const emotion: VoiceEmotion =
       parsed.emotion === 'friendly' || parsed.emotion === 'encouraging' ? parsed.emotion : 'formal';
     return {
-      rateMultiplier: Math.max(0.65, Math.min(1.4, Number(parsed.rateMultiplier) || 1.0)),
-      pitchOffset: Math.max(-0.35, Math.min(0.35, Number(parsed.pitchOffset) || 0)),
+      rateMultiplier: Math.max(0.7, Math.min(1.35, Number(parsed.rateMultiplier) || 1.0)),
+      pitchOffset: Math.max(-0.2, Math.min(0.2, Number(parsed.pitchOffset) || 0)),
       emotion,
     };
   } catch {
@@ -113,8 +160,29 @@ export function getSpeechSupport(): SpeechSupportInfo {
   return { ttsSupported, hasArabicTtsVoice, sttSupported };
 }
 
+function stopActiveAudioPlayback(): void {
+  if (activeTtsAbort) {
+    try {
+      activeTtsAbort.abort();
+    } catch {
+      // ignore
+    }
+    activeTtsAbort = null;
+  }
+  if (activeAudioEl) {
+    try {
+      activeAudioEl.pause();
+      activeAudioEl.src = '';
+    } catch {
+      // ignore
+    }
+    activeAudioEl = null;
+  }
+}
+
 export function stopArabicSpeech(): void {
   activeSpeechToken += 1;
+  stopActiveAudioPlayback();
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
@@ -134,7 +202,6 @@ const MALE_VOICE_HINTS = [
   'pradeep',
   'tanvir',
   'bashkar',
-  'nabanita-male',
   'daniel',
   'david',
   'mark',
@@ -144,6 +211,10 @@ const MALE_VOICE_HINTS = [
   'ryan',
   'guy',
   'andrew',
+  'ar-xa-x-arc',
+  'ar-xa-x-ard',
+  'bn-bd-x-bdp',
+  'bn-in-x-bnm',
 ];
 
 const FEMALE_VOICE_HINTS = [
@@ -165,7 +236,21 @@ const FEMALE_VOICE_HINTS = [
   'sonia',
   'victoria',
   'karen',
+  'ar-xa-x-arz',
+  'ar-xa-x-are',
+  'bn-bd-x-ban',
+  'bn-in-x-bnf',
 ];
+
+function scoreVoiceQuality(v: SpeechSynthesisVoice): number {
+  const hay = `${v.name} ${v.voiceURI}`.toLowerCase();
+  if (hay.includes('espeak')) return -50;
+  let score = 0;
+  if (hay.includes('natural') || hay.includes('neural') || hay.includes('online')) score += 20;
+  if (hay.includes('google') || hay.includes('microsoft') || hay.includes('apple')) score += 10;
+  if (!v.localService) score += 5;
+  return score;
+}
 
 function selectVoiceByGender(
   voices: SpeechSynthesisVoice[],
@@ -175,11 +260,14 @@ function selectVoiceByGender(
   const prefix = langCode.split('-')[0].toLowerCase();
   const exactPool = voices.filter((v) => v.lang.toLowerCase() === langCode.toLowerCase());
   const prefixPool = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
-  const pool = exactPool.length > 0 ? exactPool : prefixPool;
+  const rawPool = exactPool.length > 0 ? exactPool : prefixPool;
 
-  if (pool.length === 0) {
+  if (rawPool.length === 0) {
     return { voice: undefined, matchedRequestedGender: false };
   }
+
+  // Prefer natural/neural non-espeak voices first
+  const pool = [...rawPool].sort((a, b) => scoreVoiceQuality(b) - scoreVoiceQuality(a));
 
   const targetHints = gender === 'male' ? MALE_VOICE_HINTS : FEMALE_VOICE_HINTS;
   const oppositeHints = gender === 'male' ? FEMALE_VOICE_HINTS : MALE_VOICE_HINTS;
@@ -227,32 +315,135 @@ function createConfiguredUtterance(
 
   const tuning = getSpeechTuning();
   const emotionPreset = VOICE_EMOTION_PRESETS[tuning.emotion || 'formal'];
-  const baseRate = rateOverride ?? (langCode.startsWith('ar') ? 0.92 : 1.0);
+  const baseRate = rateOverride ?? (langCode.startsWith('ar') ? 0.94 : 1.0);
   const scaledRate = baseRate * tuning.rateMultiplier * emotionPreset.rateFactor;
-  utterance.rate = Math.max(0.55, Math.min(1.55, gender === 'male' ? scaledRate - 0.03 : scaledRate));
+  utterance.rate = Math.max(0.6, Math.min(1.45, scaledRate));
 
+  // Keep pitch strictly in clean natural bounds (0.86..1.20) to prevent raspy/distorted audio
   const basePitch =
     gender === 'male'
       ? matchedRequestedGender
-        ? 0.92
-        : 0.76
+        ? 0.96
+        : 0.90
       : matchedRequestedGender
-      ? 1.08
-      : 1.22;
+      ? 1.06
+      : 1.12;
   utterance.pitch = Math.max(
-    0.5,
-    Math.min(1.65, basePitch + tuning.pitchOffset + emotionPreset.pitchDelta)
+    0.85,
+    Math.min(1.22, basePitch + tuning.pitchOffset * 0.5 + emotionPreset.pitchDelta)
   );
 
   return utterance;
 }
 
-export function speakText(
+function cleanSpeechMarkdown(raw: string): string {
+  return raw
+    .replace(/[*_`#>~|]/g, ' ')
+    .replace(/\[[^\]]+\]/g, ' ')
+    .replace(/[-]{2,}/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function tryPlayGeminiTts(
   text: string,
-  langCode: 'ar-SA' | 'bn-BD' | 'en-US' = 'ar-SA',
+  langCode: string,
+  desiredGender: VoiceGender,
+  token: number,
   options?: {
     rate?: number;
-    voiceGender?: VoiceGender;
+    onStart?: () => void;
+    onEnd?: () => void;
+  }
+): Promise<boolean> {
+  if (typeof window === 'undefined' || !navigator.onLine) return false;
+  const cleanText = cleanSpeechMarkdown(text).slice(0, 1400);
+  if (!cleanText) return false;
+
+  const tuning = getSpeechTuning();
+  const emotionPreset = VOICE_EMOTION_PRESETS[tuning.emotion || 'formal'];
+  const cacheKey = `${desiredGender}|${langCode}|${tuning.emotion}|${cleanText}`;
+
+  try {
+    let dataUrl = getCachedTts(cacheKey);
+    if (!dataUrl) {
+      const controller = new AbortController();
+      activeTtsAbort = controller;
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          text: cleanText,
+          voiceGender: desiredGender,
+          langCode,
+          style: emotionPreset.ttsStyle,
+        }),
+      });
+      if (token !== activeSpeechToken) return false;
+      if (!res.ok) return false;
+      const data = (await res.json()) as { audioBase64?: string; mimeType?: string };
+      if (!data.audioBase64) return false;
+      dataUrl = `data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`;
+      setCachedTts(cacheKey, dataUrl);
+    }
+
+    if (token !== activeSpeechToken) return false;
+
+    const audio = new Audio(dataUrl);
+    activeAudioEl = audio;
+    const baseRate = options?.rate ?? 1.0;
+    audio.playbackRate = Math.max(0.65, Math.min(1.4, baseRate * tuning.rateMultiplier));
+
+    return await new Promise<boolean>((resolve) => {
+      let started = false;
+      audio.onplay = () => {
+        if (token !== activeSpeechToken) {
+          audio.pause();
+          resolve(true);
+          return;
+        }
+        if (!started) {
+          started = true;
+          options?.onStart?.();
+        }
+      };
+      audio.onended = () => {
+        if (activeAudioEl === audio) activeAudioEl = null;
+        if (token === activeSpeechToken) {
+          options?.onEnd?.();
+        }
+        resolve(true);
+      };
+      audio.onerror = () => {
+        if (activeAudioEl === audio) activeAudioEl = null;
+        resolve(false);
+      };
+      audio
+        .play()
+        .then(() => {
+          if (!started && token === activeSpeechToken) {
+            started = true;
+            options?.onStart?.();
+          }
+        })
+        .catch(() => {
+          if (activeAudioEl === audio) activeAudioEl = null;
+          resolve(false);
+        });
+    });
+  } catch {
+    return false;
+  }
+}
+
+function speakNativeText(
+  text: string,
+  langCode: 'ar-SA' | 'bn-BD' | 'en-US',
+  desiredGender: VoiceGender,
+  token: number,
+  options?: {
+    rate?: number;
     onStart?: () => void;
     onEnd?: () => void;
     onError?: (msg: string) => void;
@@ -264,11 +455,7 @@ export function speakText(
   }
 
   try {
-    activeSpeechToken += 1;
-    const token = activeSpeechToken;
     window.speechSynthesis.cancel();
-
-    const desiredGender = options?.voiceGender || getPreferredVoiceGender();
     const utterance = createConfiguredUtterance(text, langCode, desiredGender, options?.rate);
 
     utterance.onstart = () => {
@@ -293,6 +480,48 @@ export function speakText(
   }
 }
 
+export function speakText(
+  text: string,
+  langCode: 'ar-SA' | 'bn-BD' | 'en-US' = 'ar-SA',
+  options?: {
+    rate?: number;
+    voiceGender?: VoiceGender;
+    onStart?: () => void;
+    onEnd?: () => void;
+    onError?: (msg: string) => void;
+  }
+): boolean {
+  if (typeof window === 'undefined') return false;
+
+  activeSpeechToken += 1;
+  const token = activeSpeechToken;
+  stopActiveAudioPlayback();
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  const desiredGender = options?.voiceGender || getPreferredVoiceGender();
+  const engine = getSpeechEngine();
+
+  if (engine === 'native' || !navigator.onLine) {
+    return speakNativeText(text, langCode, desiredGender, token, options);
+  }
+
+  // Trigger start feedback immediately and use natural Gemini Studio TTS with seamless native fallback
+  void (async () => {
+    const played = await tryPlayGeminiTts(text, langCode, desiredGender, token, {
+      rate: options?.rate,
+      onStart: options?.onStart,
+      onEnd: options?.onEnd,
+    });
+    if (!played && token === activeSpeechToken) {
+      speakNativeText(text, langCode, desiredGender, token, options);
+    }
+  })();
+
+  return true;
+}
+
 export function speakArabic(
   text: string,
   options?: {
@@ -314,15 +543,6 @@ interface BilingualSegment {
 const ARABIC_CHAR_RE = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
 const BENGALI_CHAR_RE = /[\u0980-\u09FF]/;
 
-function cleanSpeechMarkdown(raw: string): string {
-  return raw
-    .replace(/[*_`#>~|]/g, ' ')
-    .replace(/\[[^\]]+\]/g, ' ')
-    .replace(/[-]{2,}/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 export function splitBilingualSegments(
   rawText: string,
   fallbackLang: 'bn-BD' | 'en-US' = 'bn-BD'
@@ -330,7 +550,6 @@ export function splitBilingualSegments(
   const cleaned = cleanSpeechMarkdown(rawText);
   if (!cleaned) return [];
 
-  // Split around continuous Arabic spans while keeping punctuation grouped neatly
   const parts = cleaned.split(
     /([\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF][\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\s،؟.!؛:«»ـ]*)/g
   );
@@ -352,16 +571,12 @@ export function splitBilingualSegments(
   return segments.slice(0, 14);
 }
 
-/**
- * Speaks mixed Arabic + Bengali AI responses sequentially in native voices so
- * BOTH the Arabic expressions AND Bengali explanations are heard naturally.
- */
-export function speakBilingualText(
-  rawText: string,
+function speakNativeBilingual(
+  segments: BilingualSegment[],
+  desiredGender: VoiceGender,
+  token: number,
   options?: {
-    fallbackLang?: 'bn-BD' | 'en-US';
     rate?: number;
-    voiceGender?: VoiceGender;
     onStart?: () => void;
     onEnd?: () => void;
     onError?: (msg: string) => void;
@@ -372,17 +587,7 @@ export function speakBilingualText(
     return false;
   }
 
-  const segments = splitBilingualSegments(rawText, options?.fallbackLang || 'bn-BD');
-  if (segments.length === 0) {
-    options?.onEnd?.();
-    return false;
-  }
-
-  activeSpeechToken += 1;
-  const token = activeSpeechToken;
   window.speechSynthesis.cancel();
-
-  const desiredGender = options?.voiceGender || getPreferredVoiceGender();
   let started = false;
 
   const playAt = (index: number) => {
@@ -422,6 +627,59 @@ export function speakBilingualText(
   return true;
 }
 
+/**
+ * Speaks mixed Arabic + Bengali AI responses smoothly with consistent speaker gender
+ * (Gemini Studio TTS locks Charon/Kore across both Arabic & Bengali; falls back cleanly to tuned Web Speech).
+ */
+export function speakBilingualText(
+  rawText: string,
+  options?: {
+    fallbackLang?: 'bn-BD' | 'en-US';
+    rate?: number;
+    voiceGender?: VoiceGender;
+    onStart?: () => void;
+    onEnd?: () => void;
+    onError?: (msg: string) => void;
+  }
+): boolean {
+  if (typeof window === 'undefined') return false;
+
+  const segments = splitBilingualSegments(rawText, options?.fallbackLang || 'bn-BD');
+  if (segments.length === 0) {
+    options?.onEnd?.();
+    return false;
+  }
+
+  activeSpeechToken += 1;
+  const token = activeSpeechToken;
+  stopActiveAudioPlayback();
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  const desiredGender = options?.voiceGender || getPreferredVoiceGender();
+  const engine = getSpeechEngine();
+
+  if (engine === 'native' || !navigator.onLine) {
+    return speakNativeBilingual(segments, desiredGender, token, options);
+  }
+
+  const combinedBilingual = segments.map((s) => s.text).join(' . ');
+
+  void (async () => {
+    const played = await tryPlayGeminiTts(combinedBilingual, 'bn-BD', desiredGender, token, {
+      rate: options?.rate,
+      onStart: options?.onStart,
+      onEnd: options?.onEnd,
+    });
+    if (!played && token === activeSpeechToken) {
+      speakNativeBilingual(segments, desiredGender, token, options);
+    }
+  })();
+
+  return true;
+}
+
 export type SpeechRecLang = 'ar-SA' | 'bn-BD' | 'en-US';
 
 export interface RecognitionHandle {
@@ -456,12 +714,6 @@ function getSpeechRecConstructor(): (new () => BrowserSpeechRecognition) | null 
   return win.SpeechRecognition || win.webkitSpeechRecognition || null;
 }
 
-/**
- * High-quality Continuous Web Speech API Speech-to-Text.
- * Supports natural long-form speaking in both Bengali (bn-BD) and Arabic (ar-SA)
- * with continuous=true, interimResults=true, automatic recovery from idle browser timeouts,
- * and optional natural-pause firing for hands-free conversational AI.
- */
 export function startContinuousSpeechRecognition(
   langCode: SpeechRecLang,
   callbacks: {
@@ -531,7 +783,6 @@ export function startContinuousSpeechRecognition(
         let interimSeg = '';
         const startIdx = typeof event.resultIndex === 'number' ? event.resultIndex : 0;
 
-        // Reconstruct cleanly from 0 to avoid Android Chrome duplicate result loops
         for (let i = 0; i < event.results.length; i++) {
           const res = event.results[i];
           const text = res && res[0] ? res[0].transcript.trim() : '';
@@ -543,7 +794,6 @@ export function startContinuousSpeechRecognition(
           }
         }
 
-        // Preserve any prior restarted chunk plus current session's transcript
         void startIdx;
         sessionCommitted = finalSeg;
         const combinedFinal = [accumulatedFinal, sessionCommitted].filter(Boolean).join(' ').trim();
@@ -576,7 +826,6 @@ export function startContinuousSpeechRecognition(
           callbacks.onEnd?.();
           return;
         }
-        // Recoverable transient codes ('no-speech', 'network', 'aborted') handled gracefully by onend auto-restart
       };
 
       rec.onend = () => {

@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Award,
   BarChart3,
+  Bookmark,
   BookOpen,
   Calendar,
   CheckCircle2,
@@ -14,8 +15,7 @@ import {
   Layers,
   Lock,
   LogIn,
-  Minus,
-  Plus,
+  Play,
   Sparkles,
   Target,
   Trophy,
@@ -33,10 +33,14 @@ import {
 } from 'recharts';
 import { AppShell } from '../components/AppShell';
 import { CurriculumProgressGauge } from '../components/CurriculumProgressGauge';
+import { DailyGoalTracker } from '../components/DailyGoalTracker';
+import { GrammarMasteryRadar } from '../components/GrammarMasteryRadar';
+import { LearningVelocityChart } from '../components/LearningVelocityChart';
 import { MuslimCompanionStrip } from '../components/MuslimCompanionStrip';
 import { BADGE_DEFINITIONS, useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { CURRICULUM_LEVELS } from '../data/curriculum';
+import { computeVocabDeckSummary } from '../utils/vocabStatus';
 
 const WEEKDAYS_BN = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
 
@@ -47,10 +51,14 @@ export const DashboardPage: React.FC = () => {
     progress,
     todayMinutesLearned,
     weeklyActivity,
+    weeklyLessonVelocity,
     logStudyMinutes,
     currentLevelNumber,
     allChapters,
+    allVocabulary,
+    grammarTerminologyMode,
     updateProfile,
+    toggleFavoriteLesson,
     triggerSound,
   } = useApp();
   const { user, supabaseConnected } = useAuth();
@@ -59,11 +67,84 @@ export const DashboardPage: React.FC = () => {
   const [chartTab, setChartTab] = useState<'levels' | 'skills'>('levels');
   const [activeBarIdx, setActiveBarIdx] = useState<number>(0);
 
-  const dailyGoalPct = Math.min(
-    100,
-    Math.round((todayMinutesLearned / Math.max(1, progress.dailyTargetMinutes)) * 100)
+  const vocabDeckSummary = useMemo(
+    () => computeVocabDeckSummary(allVocabulary, progress.vocabProgress),
+    [allVocabulary, progress.vocabProgress]
   );
-  const dailyGoalReached = todayMinutesLearned >= progress.dailyTargetMinutes;
+
+  // Resolve last lesson worked on for direct 'Continue Learning' button
+  const continueTarget = useMemo(() => {
+    const parseLessonId = (lid?: string) => {
+      if (!lid) return null;
+      const m = /^ch(\d+)-l(\d+)$/.exec(lid);
+      if (!m) return null;
+      const chNum = Number(m[1]);
+      const lsNum = Number(m[2]);
+      const chapter = allChapters.find((c) => c.chapterNumber === chNum);
+      const lesson = chapter?.lessons.find((l) => l.lessonNumber === lsNum);
+      if (!chapter || !lesson) return null;
+      return {
+        chapterNumber: chNum,
+        lessonNumber: lsNum,
+        titleBn: lesson.titleBn,
+        titleEn: lesson.titleEn,
+        isResume: true,
+      };
+    };
+
+    const fromSaved = parseLessonId(progress.lastLessonId);
+    if (fromSaved) return fromSaved;
+
+    for (const ch of allChapters) {
+      for (const ls of ch.lessons) {
+        const lid = `ch${ch.chapterNumber}-l${ls.lessonNumber}`;
+        if (!progress.completedLessonIds.includes(lid)) {
+          return {
+            chapterNumber: ch.chapterNumber,
+            lessonNumber: ls.lessonNumber,
+            titleBn: ls.titleBn,
+            titleEn: ls.titleEn,
+            isResume: false,
+          };
+        }
+      }
+    }
+
+    const firstCh = allChapters[0];
+    const firstLs = firstCh?.lessons[0];
+    return {
+      chapterNumber: firstCh?.chapterNumber || 1,
+      lessonNumber: firstLs?.lessonNumber || 1,
+      titleBn: firstLs?.titleBn || 'প্রথম পাঠ',
+      titleEn: firstLs?.titleEn || 'Lesson 1',
+      isResume: false,
+    };
+  }, [allChapters, progress.completedLessonIds, progress.lastLessonId]);
+
+  const favoriteLessons = useMemo(() => {
+    const ids = progress.favoriteLessonIds || [];
+    return ids
+      .map((lid) => {
+        const m = /^ch(\d+)-l(\d+)$/.exec(lid);
+        if (!m) return null;
+        const chNum = Number(m[1]);
+        const lsNum = Number(m[2]);
+        const chapter = allChapters.find((c) => c.chapterNumber === chNum);
+        const lesson = chapter?.lessons.find((l) => l.lessonNumber === lsNum);
+        if (!chapter || !lesson) return null;
+        return {
+          lessonId: lid,
+          chapterNumber: chNum,
+          lessonNumber: lsNum,
+          titleBn: lesson.titleBn,
+          titleEn: lesson.titleEn,
+          titleAr: lesson.titleAr,
+          grammarFocus: lesson.grammarFocus,
+          isDone: progress.completedLessonIds.includes(lid),
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  }, [allChapters, progress.completedLessonIds, progress.favoriteLessonIds]);
 
   const avgQuizScore =
     progress.examHistory.length > 0
@@ -333,7 +414,7 @@ export const DashboardPage: React.FC = () => {
       subtitle={`আসসালামু আলাইকুম, ${progress.studentName} — আপনার ব্যক্তিগত শেখার বিশ্লেষণ`}
     >
       <div className="space-y-6">
-        {/* Top Greeting + Horizontal 7-Day Streak Strip (Mindflow + Prodex style) */}
+        {/* Top Greeting + Dedicated Header Daily Streak Counter + 7-Day Strip */}
         <div className="surface-card rounded-3xl p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--accent)]">
@@ -344,16 +425,39 @@ export const DashboardPage: React.FC = () => {
                   : 'গেস্ট মোড · সব ডিভাইসে সেভ রাখতে লগইন করুন'}
               </span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold">
-              স্বাগতম, {progress.studentName}
-            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-xl sm:text-2xl font-bold">
+                স্বাগতম, {progress.studentName}
+              </h2>
+              {/* Dashboard Header Daily Streak Counter */}
+              <div
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300"
+                title="টানা অধ্যয়নের দিন (Consecutive Days of Study)"
+              >
+                <Flame className="w-4 h-4 text-amber-500 shrink-0" />
+                <span className="text-sm font-extrabold font-mono-num">{progress.streakDays} দিন</span>
+                <span className="text-[11px] font-semibold">টানা স্ট্রিক</span>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2.5 pt-1">
               <Link
-                to="/courses"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold btn-primary shadow-sm"
+                to={`/courses/lesson/${continueTarget.chapterNumber}/${continueTarget.lessonNumber}`}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold btn-primary shadow-sm"
+                title={lang === 'bn' ? continueTarget.titleBn : continueTarget.titleEn}
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>শেখা চালিয়ে যান</span>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>
+                  {continueTarget.isResume
+                    ? `পড়া চালিয়ে যান: অধ্যায় ${continueTarget.chapterNumber} · পাঠ ${continueTarget.lessonNumber}`
+                    : `শেখা শুরু করুন: অধ্যায় ${continueTarget.chapterNumber} · পাঠ ${continueTarget.lessonNumber}`}
+                </span>
+              </Link>
+              <Link
+                to="/courses"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold btn-secondary"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+                <span>সব ১০০ অধ্যায়</span>
               </Link>
               {!user && (
                 <Link
@@ -367,7 +471,7 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 7-Day Horizontal Calendar Pill Strip (Image 2 style) */}
+          {/* 7-Day Horizontal Calendar Pill Strip */}
           <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
             {weekStrip.map((d, i) => (
               <div
@@ -432,101 +536,15 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Daily Target Counter */}
-          <div className="surface-card rounded-3xl p-5 border border-emerald-500/35 bg-gradient-to-br from-emerald-500/12 via-transparent to-teal-500/5 flex flex-col justify-between gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3.5">
-                <div className="relative w-12 h-12 shrink-0 flex items-center justify-center">
-                  <svg viewBox="0 0 48 48" className="w-full h-full -rotate-90">
-                    <circle cx="24" cy="24" r="20" fill="none" stroke="var(--bg-surface-alt)" strokeWidth="5" />
-                    <circle
-                      cx="24"
-                      cy="24"
-                      r="20"
-                      fill="none"
-                      stroke={dailyGoalReached ? '#10b981' : '#0ea5e9'}
-                      strokeWidth="5"
-                      strokeLinecap="round"
-                      strokeDasharray={2 * Math.PI * 20}
-                      strokeDashoffset={2 * Math.PI * 20 * (1 - dailyGoalPct / 100)}
-                      className="transition-all duration-500"
-                    />
-                  </svg>
-                  <span className="absolute text-[10px] font-bold font-mono-num">{dailyGoalPct}%</span>
-                </div>
-                <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-300">
-                    {lang === 'bn' ? 'দৈনিক লক্ষ্য কাউন্টার (Daily Target)' : 'Daily Target Counter'}
-                  </div>
-                  <div className="flex items-baseline gap-1.5 mt-0.5">
-                    <span className="text-3xl font-extrabold font-mono-num">{todayMinutesLearned}</span>
-                    <span className="text-sm font-semibold text-[var(--text-secondary)] font-mono-num">
-                      / {progress.dailyTargetMinutes} মি.
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateProfile({ dailyTargetMinutes: Math.max(5, progress.dailyTargetMinutes - 5) })
-                  }
-                  className="p-1.5 rounded-lg btn-secondary"
-                  title="দৈনিক লক্ষ্য ৫ মিনিট কমান"
-                  aria-label="Decrease daily target"
-                >
-                  <Minus className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateProfile({ dailyTargetMinutes: Math.min(180, progress.dailyTargetMinutes + 5) })
-                  }
-                  className="p-1.5 rounded-lg btn-secondary"
-                  title="দৈনিক লক্ষ্য ৫ মিনিট বাড়ান"
-                  aria-label="Increase daily target"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="h-2.5 rounded-full bg-[var(--bg-surface-alt)] overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    dailyGoalReached ? 'bg-emerald-500' : 'bg-gradient-to-r from-sky-500 to-emerald-500'
-                  }`}
-                  style={{ width: `${dailyGoalPct}%` }}
-                />
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="text-[var(--text-secondary)] font-medium">
-                  {dailyGoalReached
-                    ? 'মাশাআল্লাহ! আজকের লক্ষ্য পূর্ণ হয়েছে'
-                    : `আজকের লক্ষ্য পূরণে আরও ${Math.max(0, progress.dailyTargetMinutes - todayMinutesLearned)} মি. বাকি`}
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => logStudyMinutes(5)}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold btn-secondary"
-                  >
-                    +৫ মি. চর্চা
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => logStudyMinutes(10)}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold btn-primary"
-                  >
-                    +১০ মি. চর্চা
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Daily Goal Tracker with SVG Progress Ring */}
+          <DailyGoalTracker
+            todayMinutesLearned={todayMinutesLearned}
+            dailyTargetMinutes={progress.dailyTargetMinutes}
+            streakDays={progress.streakDays}
+            lang={lang}
+            onAdjustTarget={(nextTarget) => updateProfile({ dailyTargetMinutes: nextTarget })}
+            onLogMinutes={logStudyMinutes}
+          />
         </div>
 
         {/* 4-Column Prodex KPI Cards */}
@@ -559,6 +577,166 @@ export const DashboardPage: React.FC = () => {
           completedLessonIds={progress.completedLessonIds}
           lang={lang}
           onCelebrateSound={triggerSound}
+        />
+
+        {/* Favorite / Bookmarked Lessons Quick Access */}
+        <section className="surface-card rounded-3xl p-5 sm:p-6 space-y-4 border border-amber-500/25">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <Bookmark className="w-4 h-4 text-amber-500 fill-amber-500" />
+                <span>
+                  {lang === 'en' ? 'Favorite Lessons (Bookmarks)' : 'পছন্দের পাঠসমূহ (Favorites)'}
+                </span>
+              </h3>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                গুরুত্বপূর্ণ পাঠগুলো বুকমার্ক করে রাখলে এখান থেকে সরাসরি এক ক্লিকে খুলতে পারবেন
+              </p>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-amber-500/12 text-amber-700 dark:text-amber-300 text-xs font-mono-num font-bold">
+              {favoriteLessons.length}টি সংরক্ষিত
+            </span>
+          </div>
+
+          {favoriteLessons.length === 0 ? (
+            <div className="rounded-2xl surface-alt border border-[var(--border-subtle)] p-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-[var(--text-secondary)]">
+                এখনো কোনো পাঠ পছন্দের তালিকায় সংরক্ষণ করা হয়নি। যেকোনো পাঠের ভেতর থেকে <strong>“পছন্দের তালিকায়”</strong> বাটনে চাপ দিন।
+              </p>
+              <Link
+                to={`/courses/lesson/${continueTarget.chapterNumber}/${continueTarget.lessonNumber}`}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold btn-secondary"
+              >
+                <span>পাঠ খুলুন</span>
+                <ArrowRight className="w-3.5 h-3.5 text-[var(--accent)]" />
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {favoriteLessons.map((fav) => (
+                <div
+                  key={fav.lessonId}
+                  className="rounded-2xl surface-alt border border-[var(--border-subtle)] hover:border-amber-500/45 p-3.5 flex flex-col justify-between gap-2.5 transition-all"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono-num font-bold text-[var(--accent)]">
+                        <span>অধ্যায় {fav.chapterNumber} · পাঠ {fav.lessonNumber}</span>
+                        {fav.isDone && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 text-[10px]">
+                            সম্পন্ন ✓
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-arabic text-base text-[var(--accent)] truncate" dir="rtl">
+                        {fav.titleAr}
+                      </p>
+                      <div className="text-sm font-bold text-[var(--text-primary)] line-clamp-1">
+                        {lang === 'bn' ? fav.titleBn : fav.titleEn}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleFavoriteLesson(fav.lessonId)}
+                      title="পছন্দের তালিকা থেকে সরান"
+                      aria-label="Remove favorite lesson"
+                      className="p-1.5 rounded-full bg-amber-500/15 text-amber-500 hover:bg-amber-500/25 shrink-0"
+                    >
+                      <Bookmark className="w-3.5 h-3.5 fill-current" />
+                    </button>
+                  </div>
+
+                  <div className="pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-[var(--text-muted)] truncate">{fav.grammarFocus}</span>
+                    <Link
+                      to={`/courses/lesson/${fav.chapterNumber}/${fav.lessonNumber}`}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-[var(--accent)] hover:underline shrink-0"
+                    >
+                      <span>খুলুন</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Vocabulary Deck Status Summary (Learning / Mastered / Review) + Grammar Mastery Radar */}
+        <div className="surface-card rounded-3xl p-5 sm:p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <Layers className="w-4 h-4 text-[var(--accent)]" />
+                <span>
+                  {lang === 'en'
+                    ? 'Vocabulary Deck Summary'
+                    : 'ভোকাবুলারি ডেক সারাংশ (Learning · Mastered · Review)'}
+                </span>
+              </h3>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                মোট {vocabDeckSummary.totalDeck}টি শব্দের মধ্যে {vocabDeckSummary.trackedTotal}টি আপনার সক্রিয় ডেকে যুক্ত আছে
+              </p>
+            </div>
+            <Link
+              to="/vocabulary"
+              className="inline-flex items-center gap-1 text-xs font-bold text-[var(--accent)] hover:underline"
+            >
+              <span>ডেক খুলুন</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-3 divide-x divide-[var(--border-subtle)] text-center py-2">
+            <div className="px-2">
+              <div className="text-xl sm:text-2xl font-extrabold font-mono-num text-sky-600 dark:text-sky-400">
+                {vocabDeckSummary.learning}
+              </div>
+              <div className="text-xs font-bold text-[var(--text-primary)] mt-0.5">Learning</div>
+              <div className="text-[10px] text-[var(--text-muted)]">শিখছেন</div>
+            </div>
+            <div className="px-2">
+              <div className="text-xl sm:text-2xl font-extrabold font-mono-num text-emerald-600 dark:text-emerald-400">
+                {vocabDeckSummary.mastered}
+              </div>
+              <div className="text-xs font-bold text-[var(--text-primary)] mt-0.5">Mastered</div>
+              <div className="text-[10px] text-[var(--text-muted)]">আয়ত্তকৃত</div>
+            </div>
+            <div className="px-2">
+              <div className="text-xl sm:text-2xl font-extrabold font-mono-num text-amber-600 dark:text-amber-400">
+                {vocabDeckSummary.review}
+              </div>
+              <div className="text-xs font-bold text-[var(--text-primary)] mt-0.5">Review</div>
+              <div className="text-[10px] text-[var(--text-muted)]">পুনর্বিবেচনা</div>
+            </div>
+          </div>
+
+          <div className="h-2 rounded-full bg-[var(--bg-surface-alt)] overflow-hidden flex">
+            {vocabDeckSummary.trackedTotal > 0 ? (
+              <>
+                <div
+                  className="bg-emerald-500 h-full transition-all"
+                  style={{ width: `${(vocabDeckSummary.mastered / vocabDeckSummary.trackedTotal) * 100}%` }}
+                />
+                <div
+                  className="bg-sky-500 h-full transition-all"
+                  style={{ width: `${(vocabDeckSummary.learning / vocabDeckSummary.trackedTotal) * 100}%` }}
+                />
+                <div
+                  className="bg-amber-500 h-full transition-all"
+                  style={{ width: `${(vocabDeckSummary.review / vocabDeckSummary.trackedTotal) * 100}%` }}
+                />
+              </>
+            ) : (
+              <div className="bg-[var(--border-subtle)] h-full w-full" />
+            )}
+          </div>
+        </div>
+
+        <GrammarMasteryRadar
+          progress={progress}
+          lang={lang}
+          grammarTerminologyMode={grammarTerminologyMode}
         />
 
         {/* Live Muslim Companion Strip */}
@@ -680,6 +858,9 @@ export const DashboardPage: React.FC = () => {
             </ResponsiveContainer>
           </div>
         </div>
+
+        {/* Weekly Learning Velocity Chart (Recharts: Lessons Completed per Week) */}
+        <LearningVelocityChart data={weeklyLessonVelocity} lang={lang} />
 
         {/* Middle 2-Column Analytics: Bar Chart + Donut Ring (Image 1 Prodex style) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

@@ -17,6 +17,7 @@ import { ListeningPage } from './pages/ListeningPage';
 import { SpeakingPage } from './pages/SpeakingPage';
 import { GrammarPage } from './pages/GrammarPage';
 import { QuranicArabicPage } from './pages/QuranicArabicPage';
+import { SurahReaderPage } from './pages/SurahReaderPage';
 import { VocabularyPage } from './pages/VocabularyPage';
 import { QuizPage } from './pages/QuizPage';
 import { PracticePage } from './pages/PracticePage';
@@ -34,6 +35,9 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { ThemeBackdrop } from './components/ThemeBackdrop';
 import { SplashScreen } from './components/SplashScreen';
 import { GlobalGrammarMonitor } from './components/GlobalGrammarMonitor';
+import { InactivityReminderModal } from './components/InactivityReminderModal';
+import { InstantLookupModal } from './components/InstantLookupWidget';
+import { QuickGrammarReferenceModal } from './components/QuickGrammarReferenceModal';
 
 function AppRoutesWrapper() {
   const location = useLocation();
@@ -55,10 +59,18 @@ function AppRoutesWrapper() {
           <Route path="/daily-lessons" element={<Navigate to="/courses" replace />} />
           <Route path="/bayna-yadayk" element={<Navigate to="/courses" replace />} />
           <Route path="/safwatul-masadir" element={<SafwatulMasadirPage />} />
+          <Route path="/safwatul-masadir/bab/:babId" element={<SafwatulMasadirPage />} />
+          <Route path="/safwatul-masadir/aqsam/:aqsamKey" element={<SafwatulMasadirPage />} />
+          <Route path="/safwatul-masadir/word/:masdarId" element={<SafwatulMasadirPage />} />
+          <Route path="/safwatul-masadir/ism" element={<SafwatulMasadirPage />} />
+          <Route path="/safwatul-masadir/ism/:catId" element={<SafwatulMasadirPage />} />
+          <Route path="/safwatul-masadir/sifat" element={<SafwatulMasadirPage />} />
+          <Route path="/safwatul-masadir/sifat/:catId" element={<SafwatulMasadirPage />} />
           <Route path="/listening" element={<ListeningPage />} />
           <Route path="/speaking" element={<SpeakingPage />} />
           <Route path="/grammar" element={<GrammarPage />} />
           <Route path="/quranic-arabic" element={<QuranicArabicPage />} />
+          <Route path="/quranic-arabic/:surahNumber" element={<SurahReaderPage />} />
           <Route path="/vocabulary" element={<VocabularyPage />} />
           <Route path="/quiz" element={<QuizPage />} />
           <Route path="/practice" element={<PracticePage />} />
@@ -72,6 +84,9 @@ function AppRoutesWrapper() {
       </div>
       <WelcomeOverlay />
       <OfflineIndicator />
+      <InactivityReminderModal />
+      <QuickGrammarReferenceModal />
+      <InstantLookupModal />
       <GlobalGrammarMonitor />
     </>
   );

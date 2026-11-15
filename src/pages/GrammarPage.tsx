@@ -1,14 +1,25 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Bot, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Bot, CheckCircle2, GitBranch } from 'lucide-react';
 import { AppShell } from '../components/AppShell';
 import { AudioButton } from '../components/AudioButton';
 import { LessonAiPracticePanel } from '../components/LessonAiPracticePanel';
 import { QuickNahwText } from '../components/QuickNahwText';
+import { TarkibVisualizer } from '../components/TarkibVisualizer';
 import { useApp } from '../context/AppContext';
 import { GRAMMAR_TOPICS } from '../data/grammarData';
+import { localizeGrammarLabel } from '../utils/grammarTerminology';
 
 export const GrammarPage: React.FC = () => {
-  const { t, lang, progress, completeGrammarTopic, triggerSound, syncMissingVocabFromSegments } = useApp();
+  const {
+    t,
+    lang,
+    progress,
+    completeGrammarTopic,
+    triggerSound,
+    syncMissingVocabFromSegments,
+    grammarTerminologyMode,
+    setGrammarTerminologyMode,
+  } = useApp();
   const syncedTopicIdsRef = useRef<Set<string>>(new Set());
   const [branchFilter, setBranchFilter] = useState<'all' | 'Nahw' | 'Sarf'>('all');
   const [bookFilter, setBookFilter] = useState<
@@ -23,6 +34,7 @@ export const GrammarPage: React.FC = () => {
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [showScopedAi, setShowScopedAi] = useState(false);
   const [quizChoice, setQuizChoice] = useState<Record<string, number>>({});
+  const [expandedExampleIdx, setExpandedExampleIdx] = useState<number | null>(null);
 
   const visibleTopics = GRAMMAR_TOPICS.filter((topic) => {
     const branchMatch = branchFilter === 'all' || topic.branch === branchFilter;
@@ -62,6 +74,7 @@ export const GrammarPage: React.FC = () => {
   const handleSelectTopic = (id: string) => {
     setSelectedId(id);
     setShowScopedAi(false);
+    setExpandedExampleIdx(null);
     setMobileShowDetail(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -132,15 +145,23 @@ export const GrammarPage: React.FC = () => {
                       : 'surface-card hover:border-[var(--border-strong)]'
                   }`}
                 >
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
-                      <span className="font-semibold text-[var(--accent)]">{topic.branch}</span>
-                      <span className="font-arabic text-sm text-[var(--text-secondary)]">{topic.titleAr}</span>
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                        <span className="font-semibold text-[var(--accent)]">
+                          {grammarTerminologyMode === 'arabic'
+                            ? topic.branch === 'Nahw'
+                              ? 'النَّحْوُ'
+                              : 'الصَّرْفُ'
+                            : topic.branch}
+                        </span>
+                        <span className="font-arabic text-sm text-[var(--text-secondary)]">{topic.titleAr}</span>
+                      </div>
+                      <div className="text-sm font-bold leading-snug">
+                        {lang === 'bn'
+                          ? localizeGrammarLabel(topic.titleBn, grammarTerminologyMode)
+                          : topic.titleEn}
+                      </div>
                     </div>
-                    <div className="text-sm font-bold leading-snug">
-                      {lang === 'bn' ? topic.titleBn : topic.titleEn}
-                    </div>
-                  </div>
                   {done && <CheckCircle2 className="w-4 h-4 text-[var(--success)] shrink-0" />}
                 </button>
               );
@@ -163,7 +184,13 @@ export const GrammarPage: React.FC = () => {
             <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-[var(--border-subtle)]">
               <div className="space-y-1">
                 <div className="text-xs font-bold text-[var(--accent)]">
-                  <span>{activeTopic.branch}</span>
+                  <span>
+                    {grammarTerminologyMode === 'arabic'
+                      ? activeTopic.branch === 'Nahw'
+                        ? 'النَّحْوُ'
+                        : 'الصَّرْفُ'
+                      : activeTopic.branch}
+                  </span>
                   <span aria-hidden="true"> · </span>
                   <span>{activeTopic.sourceBook || 'মাবাদিউল আরাবিয়াহ / হেদায়েতুন নাহু'}</span>
                 </div>
@@ -171,32 +198,71 @@ export const GrammarPage: React.FC = () => {
                   {activeTopic.titleAr}
                 </p>
                 <h2 className="text-xl sm:text-2xl font-extrabold">
-                  {lang === 'bn' ? activeTopic.titleBn : activeTopic.titleEn}
+                  {lang === 'bn'
+                    ? localizeGrammarLabel(activeTopic.titleBn, grammarTerminologyMode)
+                    : activeTopic.titleEn}
                 </h2>
               </div>
 
-              {progress.completedGrammarIds.includes(activeTopic.id) ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[var(--emerald-highlight)] text-[var(--success)]">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>{t.common.completed}</span>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() =>
-                    completeGrammarTopic(activeTopic.id, activeTopic.titleBn, activeTopic.titleEn)
-                  }
-                  className="px-4 py-2 rounded-full text-xs btn-primary font-bold"
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="inline-flex items-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] p-0.5 text-[11px] font-bold"
+                  role="group"
+                  aria-label="Grammar terminology language"
                 >
-                  অধ্যায় সম্পন্ন করুন (+35 XP)
-                </button>
-              )}
+                  <button
+                    type="button"
+                    onClick={() => setGrammarTerminologyMode('arabic')}
+                    className={`px-2.5 py-1 rounded-full transition-colors ${
+                      grammarTerminologyMode === 'arabic'
+                        ? 'bg-[var(--accent)] text-white shadow-xs'
+                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                    title="আরবি পরিভাষা (اسم، فعل، مبتدأ، خبر)"
+                  >
+                    العربية
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGrammarTerminologyMode('bengali')}
+                    className={`px-2.5 py-1 rounded-full transition-colors ${
+                      grammarTerminologyMode === 'bengali'
+                        ? 'bg-[var(--accent)] text-white shadow-xs'
+                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                    title="বাংলা পরিভাষা (ইসম, ফেল, মুবতাদা, খবর)"
+                  >
+                    বাংলা
+                  </button>
+                </div>
+
+                {progress.completedGrammarIds.includes(activeTopic.id) ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[var(--emerald-highlight)] text-[var(--success)]">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{t.common.completed}</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      completeGrammarTopic(activeTopic.id, activeTopic.titleBn, activeTopic.titleEn)
+                    }
+                    className="px-4 py-2 rounded-full text-xs btn-primary font-bold"
+                  >
+                    অধ্যায় সম্পন্ন করুন (+35 XP)
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="space-y-3 pb-4 border-b border-[var(--border-subtle)]">
-              <p className="text-base font-bold text-[var(--text-primary)] leading-[1.8]">{activeTopic.summaryBn}</p>
+              <p className="text-base font-bold text-[var(--text-primary)] leading-[1.8]">
+                {localizeGrammarLabel(activeTopic.summaryBn, grammarTerminologyMode)}
+              </p>
               <p className="text-[15.5px] sm:text-base text-[var(--text-secondary)] leading-[1.85]">
-                {lang === 'bn' ? activeTopic.explanationBn : activeTopic.explanationEn}
+                {lang === 'bn'
+                  ? localizeGrammarLabel(activeTopic.explanationBn, grammarTerminologyMode)
+                  : activeTopic.explanationEn}
               </p>
             </div>
 
@@ -204,7 +270,7 @@ export const GrammarPage: React.FC = () => {
               <div className="text-sm font-extrabold text-[var(--accent)]">মূল নিয়মাবলি:</div>
               <ul className="list-disc ps-5 space-y-2 text-[15.5px] sm:text-base text-[var(--text-primary)] leading-[1.85]">
                 {activeTopic.rulesBn.map((r, i) => (
-                  <li key={i}>{r}</li>
+                  <li key={i}>{localizeGrammarLabel(r, grammarTerminologyMode)}</li>
                 ))}
               </ul>
             </div>
@@ -212,29 +278,55 @@ export const GrammarPage: React.FC = () => {
             <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
               <h3 className="text-base font-extrabold text-[var(--accent)]">উদাহরণ ও পদ-বিশ্লেষণ (হারাকাতসহ):</h3>
               <div className="divide-y divide-[var(--border-subtle)]">
-                {activeTopic.examples.map((ex, idx) => (
-                  <div key={idx} className="py-4 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <QuickNahwText
-                          text={ex.arabic}
-                          className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]"
-                        />
+                {activeTopic.examples.map((ex, idx) => {
+                  const showTarkib = expandedExampleIdx === idx;
+                  return (
+                    <div key={idx} className="py-4 space-y-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <QuickNahwText
+                            text={ex.arabic}
+                            showSentenceTarkibButton={false}
+                            className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <AudioButton text={ex.arabic} compact />
+                          {ex.arabic.trim().split(/\s+/).length >= 2 && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedExampleIdx(showTarkib ? null : idx)}
+                              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                                showTarkib ? 'btn-primary' : 'btn-secondary'
+                              }`}
+                            >
+                              <GitBranch className="w-3.5 h-3.5" />
+                              <span>{showTarkib ? 'ট্রি লুকান' : 'তারকিব ট্রি'}</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <AudioButton text={ex.arabic} compact />
+                      <div className="text-sm text-[var(--text-muted)]">
+                        উচ্চারণ: <span className="font-semibold text-[var(--text-primary)]">{ex.pronunciationBn}</span>
+                      </div>
+                      <div className="text-[15.5px] sm:text-base font-bold text-[var(--text-primary)]">
+                        বাংলা অর্থ: {ex.meaningBn}
+                      </div>
+                      <div className="text-[15px] text-[var(--text-secondary)] leading-[1.8]">
+                        <span className="font-bold text-[var(--accent)]">নাহু/ছরফ বিশ্লেষণ: </span>
+                        {localizeGrammarLabel(ex.analysisBn, grammarTerminologyMode)}
+                      </div>
+                      {showTarkib && (
+                        <TarkibVisualizer
+                          sentenceAr={ex.arabic}
+                          translationBn={ex.meaningBn}
+                          compact
+                          onClose={() => setExpandedExampleIdx(null)}
+                        />
+                      )}
                     </div>
-                    <div className="text-sm text-[var(--text-muted)]">
-                      উচ্চারণ: <span className="font-semibold text-[var(--text-primary)]">{ex.pronunciationBn}</span>
-                    </div>
-                    <div className="text-[15.5px] sm:text-base font-bold text-[var(--text-primary)]">
-                      বাংলা অর্থ: {ex.meaningBn}
-                    </div>
-                    <div className="text-[15px] text-[var(--text-secondary)] leading-[1.8]">
-                      <span className="font-bold text-[var(--accent)]">নাহু/ছরফ বিশ্লেষণ: </span>
-                      {ex.analysisBn}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

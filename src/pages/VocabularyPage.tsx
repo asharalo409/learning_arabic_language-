@@ -25,7 +25,8 @@ import { CelebrationConfetti } from '../components/CelebrationConfetti';
 import { QuickNahwText } from '../components/QuickNahwText';
 import { useApp } from '../context/AppContext';
 import { computeSm2Next, Sm2Quality } from '../data/curriculumVocabDeck';
-import { CurriculumLevelNumber } from '../types/academy';
+import { CurriculumLevelNumber, VocabDeckStatus } from '../types/academy';
+import { computeVocabDeckSummary, resolveVocabStatus } from '../utils/vocabStatus';
 import {
   removeVocabularyOffline,
   saveAllVocabularyOffline,
@@ -47,7 +48,7 @@ const LEVEL_RANGES: { level: CurriculumLevelNumber; labelBn: string; labelEn: st
 ];
 
 export const VocabularyPage: React.FC = () => {
-  const { t, lang, allVocabulary, progress, reviewVocabWord, toggleFavoriteVocab, triggerSound } =
+  const { t, lang, allVocabulary, progress, reviewVocabWord, setVocabStatus, toggleFavoriteVocab, triggerSound } =
     useApp();
   const offlineManifest = useOfflineManifest();
   const [savingVocabOffline, setSavingVocabOffline] = useState(false);
@@ -74,7 +75,7 @@ export const VocabularyPage: React.FC = () => {
   };
 
   const [viewMode, setViewMode] = useState<'flashcards' | 'list'>('flashcards');
-  const [queueFilter, setQueueFilter] = useState<'due' | 'all' | 'favorites'>('due');
+  const [queueFilter, setQueueFilter] = useState<'due' | 'all' | 'favorites' | 'learning' | 'mastered' | 'review'>('due');
   const [levelFilter, setLevelFilter] = useState<CurriculumLevelNumber | 'all'>('all');
   const [search, setSearch] = useState('');
 
@@ -91,33 +92,28 @@ export const VocabularyPage: React.FC = () => {
 
   const isBn = lang === 'bn';
 
+  const deckSummary = useMemo(
+    () => computeVocabDeckSummary(effectiveVocabulary, progress.vocabProgress),
+    [effectiveVocabulary, progress.vocabProgress]
+  );
+
   const srsStats = useMemo(() => {
     const now = Date.now();
     let due = 0;
-    let mastered = 0;
-    let learning = 0;
     effectiveVocabulary.forEach((w) => {
       const rec = progress.vocabProgress[w.id];
-      if (!rec) {
+      if (!rec || new Date(rec.nextReviewIso).getTime() <= now) {
         due += 1;
-        return;
-      }
-      if (new Date(rec.nextReviewIso).getTime() <= now) {
-        due += 1;
-      }
-      if (rec.intervalDays >= 3) {
-        mastered += 1;
-      } else if (rec.repetitions >= 0) {
-        learning += 1;
       }
     });
     return {
       total: effectiveVocabulary.length,
       due,
-      mastered,
-      learning,
+      mastered: deckSummary.mastered,
+      learning: deckSummary.learning,
+      review: deckSummary.review,
     };
-  }, [effectiveVocabulary, progress.vocabProgress]);
+  }, [deckSummary, effectiveVocabulary, progress.vocabProgress]);
 
   const filteredWords = useMemo(() => {
     const now = Date.now();
@@ -127,6 +123,15 @@ export const VocabularyPage: React.FC = () => {
         const rec = progress.vocabProgress[w.id];
         if (queueFilter === 'favorites' && !rec?.favorite) return false;
         if (queueFilter === 'due' && rec && new Date(rec.nextReviewIso).getTime() > now) {
+          return false;
+        }
+        if (queueFilter === 'learning' && (!rec || resolveVocabStatus(rec) !== 'learning')) {
+          return false;
+        }
+        if (queueFilter === 'mastered' && (!rec || resolveVocabStatus(rec) !== 'mastered')) {
+          return false;
+        }
+        if (queueFilter === 'review' && (!rec || resolveVocabStatus(rec) !== 'review')) {
           return false;
         }
         if (search.trim()) {
@@ -479,7 +484,7 @@ export const VocabularyPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Queue Filter Pills */}
+            {/* Queue & Deck Status Filters */}
             <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
@@ -493,6 +498,51 @@ export const VocabularyPage: React.FC = () => {
                 }`}
               >
                 {isBn ? `বাকি রিভিউ (${srsStats.due})` : `Due Queue (${srsStats.due})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setQueueFilter('learning');
+                  setCardIndex(0);
+                  setFlipped(false);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                  queueFilter === 'learning'
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'btn-secondary'
+                }`}
+              >
+                Learning ({srsStats.learning})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setQueueFilter('mastered');
+                  setCardIndex(0);
+                  setFlipped(false);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                  queueFilter === 'mastered'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'btn-secondary'
+                }`}
+              >
+                Mastered ({srsStats.mastered})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setQueueFilter('review');
+                  setCardIndex(0);
+                  setFlipped(false);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                  queueFilter === 'review'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'btn-secondary'
+                }`}
+              >
+                Review ({srsStats.review})
               </button>
               <button
                 type="button"
@@ -668,9 +718,36 @@ export const VocabularyPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Audio Toolbar */}
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                {/* Audio Toolbar & Explicit Deck Status Toggle */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5">
                   <AudioButton text={activeCard.arabic} showSlow />
+
+                  <div className="inline-flex items-center gap-1 p-1 rounded-xl surface-alt border border-[var(--border-subtle)] text-[11px]">
+                    {(['learning', 'mastered', 'review'] as VocabDeckStatus[]).map((st) => {
+                      const currentSt = activeRecord ? resolveVocabStatus(activeRecord) : null;
+                      const isCurrent = currentSt === st;
+                      const activeStyle =
+                        st === 'mastered'
+                          ? 'bg-emerald-600 text-white'
+                          : st === 'review'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-sky-600 text-white';
+                      const label = st === 'mastered' ? 'Mastered' : st === 'review' ? 'Review' : 'Learning';
+                      return (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setVocabStatus(activeCard.id, st)}
+                          className={`px-2.5 py-1 rounded-lg font-bold transition-colors ${
+                            isCurrent ? activeStyle : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
                   <div className="text-[11px] font-mono-num text-[var(--text-muted)]">
                     {activeRecord
                       ? `Ease ${activeRecord.ease.toFixed(2)} · Reps ${activeRecord.repetitions}`
@@ -914,7 +991,7 @@ export const VocabularyPage: React.FC = () => {
                     <p className="text-[15px] text-[var(--text-secondary)]">{word.exampleBn}</p>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-[var(--text-muted)] pt-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)] pt-1">
                     <span className="inline-flex items-center gap-1">
                       {rec ? (
                         <>
@@ -923,7 +1000,7 @@ export const VocabularyPage: React.FC = () => {
                               isDue ? 'text-amber-500' : 'text-emerald-500'
                             }`}
                           />
-                          <span>
+                          <span className="font-mono-num">
                             {isDue
                               ? `রিভিউ বাকি (${rec.repetitions} বার চর্চিত)`
                               : `পরবর্তী রিভিউ: ${rec.intervalDays} দিন পর`}
@@ -933,13 +1010,42 @@ export const VocabularyPage: React.FC = () => {
                         'এখনো রিভিউ করা হয়নি'
                       )}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => reviewVocabWord(word.id, 'good')}
-                      className="text-[var(--accent)] font-bold hover:underline"
-                    >
-                      + মনে আছে (+১০ XP)
-                    </button>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg surface-alt border border-[var(--border-subtle)] text-[11px]">
+                        {(['learning', 'mastered', 'review'] as VocabDeckStatus[]).map((st) => {
+                          const currentSt = rec ? resolveVocabStatus(rec) : null;
+                          const isCurrent = currentSt === st;
+                          const activeStyle =
+                            st === 'mastered'
+                              ? 'bg-emerald-600 text-white'
+                              : st === 'review'
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-sky-600 text-white';
+                          const label = st === 'mastered' ? 'Mastered' : st === 'review' ? 'Review' : 'Learning';
+                          return (
+                            <button
+                              key={st}
+                              type="button"
+                              onClick={() => setVocabStatus(word.id, st)}
+                              className={`px-2 py-0.5 rounded font-bold transition-colors ${
+                                isCurrent ? activeStyle : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => reviewVocabWord(word.id, 'good')}
+                        className="text-[var(--accent)] font-bold hover:underline"
+                      >
+                        + মনে আছে (+১০ XP)
+                      </button>
+                    </div>
                   </div>
                 </article>
               );

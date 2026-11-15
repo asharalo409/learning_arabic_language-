@@ -289,17 +289,17 @@
 }
 
 [data-global-arabic="true"] {
-  text-decoration-line: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  text-underline-offset: 6px;
-  text-decoration-thickness: 1.5px;
   cursor: pointer;
-  transition: text-decoration-color 150ms ease, background-color 150ms ease;
+  border-radius: 0.25rem;
+  transition: background-color 150ms ease, text-decoration-color 150ms ease;
 }
 
 [data-global-arabic="true"]:hover {
-  text-decoration-color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  text-underline-offset: 5px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -311,12 +311,54 @@
   }
 }
 
+.pdf-a4-page {
+  background-color: #ffffff;
+  width: 100%;
+  max-width: 210mm;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .pdf-a4-page {
+    min-height: 297mm;
+  }
+}
+
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 7mm;
+  }
   .no-print {
     display: none !important;
   }
   body {
     background: #ffffff !important;
-    color: #0d241c !important;
+    background-image: none !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .pdf-export-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .pdf-a4-page {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 278mm !important;
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+  .pdf-a4-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 }

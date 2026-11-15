@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
+  Bookmark,
   BookOpen,
   CheckCircle2,
   ChevronRight,
@@ -30,7 +31,7 @@ const LESSON_ACCENTS = [
 
 export const ChapterDetailPage: React.FC = () => {
   const { chapterNumber } = useParams<{ chapterNumber: string }>();
-  const { lang, progress, allChapters, allDetailedLessons, triggerSound } = useApp();
+  const { lang, progress, allChapters, allDetailedLessons, triggerSound, toggleFavoriteLesson } = useApp();
   const offlineManifest = useOfflineManifest();
   const [downloadingChapter, setDownloadingChapter] = useState(false);
 
@@ -166,10 +167,16 @@ export const ChapterDetailPage: React.FC = () => {
               </h2>
             </div>
 
-            <div className="rounded-2xl bg-black/20 backdrop-blur-md px-4 py-3 text-center shrink-0">
+            <div className="rounded-2xl bg-black/20 backdrop-blur-md px-4 py-3 text-center shrink-0 min-w-[120px] space-y-1.5">
               <div className="text-[11px] text-white/80">সম্পন্ন পাঠ</div>
               <div className="text-xl font-extrabold font-mono-num">
                 {completedCount} / 10
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-white/25 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-amber-300 transition-all duration-500"
+                  style={{ width: `${Math.round((completedCount / 10) * 100)}%` }}
+                />
               </div>
             </div>
           </div>
@@ -190,6 +197,7 @@ export const ChapterDetailPage: React.FC = () => {
               const lessonId = `ch${chapter.chapterNumber}-l${lesson.lessonNumber}`;
               const hasRich = Boolean(allDetailedLessons[lessonId]);
               const isDone = progress.completedLessonIds.includes(lessonId);
+              const isBookmarked = (progress.favoriteLessonIds || []).includes(lessonId);
               const isSaved = offlineManifest.downloadedLessonIds.includes(lessonId);
               const badgeGrad = LESSON_ACCENTS[idx % LESSON_ACCENTS.length];
 
@@ -221,6 +229,23 @@ export const ChapterDetailPage: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleFavoriteLesson(lessonId);
+                      }}
+                      title={isBookmarked ? 'পছন্দের তালিকা থেকে সরান' : 'পছন্দের তালিকায় সংরক্ষণ করুন'}
+                      aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark lesson'}
+                      className={`p-1.5 rounded-full transition-colors ${
+                        isBookmarked
+                          ? 'bg-amber-500/15 text-amber-500'
+                          : 'text-[var(--text-muted)] hover:text-amber-500 hover:bg-[var(--bg-surface-alt)]'
+                      }`}
+                    >
+                      <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
+                    </button>
                     {isDone ? (
                       <CheckCircle2 className="w-5 h-5 text-[var(--success)]" />
                     ) : (

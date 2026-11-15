@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { BookOpen, GitBranch, Sparkles, X } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { BookOpen, GitBranch, X } from 'lucide-react';
 import { matchNahwTipForToken, NahwQuickTip } from '../data/nahwQuickTips';
 import { AudioButton } from './AudioButton';
+import { computePortalPopoverCoords, FloatingAnchor, FloatingWordPortal } from './FloatingWordPortal';
 import { SentenceTarkibCard } from './SentenceTarkibCard';
 
 interface GeminiRichTextProps {
@@ -43,13 +44,37 @@ export const GeminiRichText: React.FC<GeminiRichTextProps> = ({ text, className 
     word: string;
     sentence: string;
     tip: NahwQuickTip;
+    anchor: FloatingAnchor;
   } | null>(null);
   const [activeTarkibSentence, setActiveTarkibSentence] = useState<string | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
 
   const segments = useMemo(() => splitMixedSegments(text), [text]);
 
+  useEffect(() => {
+    if (!selected) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelected(null);
+    };
+    const onDocClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setSelected(null);
+      }
+    };
+    const onScroll = () => setSelected(null);
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('click', onDocClick);
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('click', onDocClick);
+      window.removeEventListener('scroll', onScroll, { capture: true });
+    };
+  }, [selected]);
+
   return (
-    <div className="space-y-3" data-nahw-managed="true">
+    <div className="space-y-2.5" data-nahw-managed="true">
       <div className={className}>
         {segments.map((seg, sIdx) => {
           if (seg.type === 'other') {
@@ -91,13 +116,19 @@ export const GeminiRichText: React.FC<GeminiRichTextProps> = ({ text, className 
                       }
                       const tip = matchNahwTipForToken(part, prevWord, nextWord, seg.value, posInWords);
                       if (tip) {
-                        setSelected({ word: cleanWord, sentence: seg.value, tip });
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setSelected({
+                          word: cleanWord,
+                          sentence: seg.value,
+                          tip,
+                          anchor: computePortalPopoverCoords(rect),
+                        });
                       }
                     }}
-                    className={`inline font-arabic-ui px-0.5 rounded-md border-b border-dotted transition-colors cursor-pointer ${
+                    className={`inline font-arabic-ui px-0.5 rounded transition-colors cursor-pointer focus:outline-none ${
                       isSelected
-                        ? 'bg-[var(--accent)]/18 border-[var(--accent)] text-[var(--accent)]'
-                        : 'border-[var(--accent)]/55 hover:bg-[var(--emerald-highlight)]'
+                        ? 'bg-[var(--accent)]/18 text-[var(--accent)] underline decoration-2 underline-offset-4'
+                        : 'hover:bg-[var(--emerald-highlight)]'
                     }`}
                     title="শব্দের ব্যাকরণ ও তারকিব দেখুন"
                   >
@@ -110,38 +141,37 @@ export const GeminiRichText: React.FC<GeminiRichTextProps> = ({ text, className 
         })}
       </div>
 
-      {/* Inline Selected Arabic Word Inspector (Grammar + Word Tarkib) */}
+      {/* Portal-Rendered Absolute Floating Container (never disrupts AI Tutor / Grid layout) */}
       {selected && (
-        <div
-          dir="ltr"
-          className="surface-card border border-[var(--border-strong)] rounded-3xl p-4 sm:p-5 shadow-md space-y-3"
+        <FloatingWordPortal
+          anchor={selected.anchor}
+          popoverRef={popoverRef}
+          dataAttrs={{ 'data-nahw-managed': 'true', 'data-global-grammar-ignore': 'true' }}
+          onContainerClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start justify-between gap-3 pb-2.5 border-b border-[var(--border-subtle)]">
+          <div className="flex items-start justify-between gap-2 pb-1.5 border-b border-[var(--border-subtle)]">
             <div className="min-w-0 space-y-0.5">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--accent)]">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>{selected.tip.categoryBn}</span>
-              </div>
-              <div className="flex flex-wrap items-baseline gap-2.5">
-                <span className="font-arabic text-2xl text-[var(--accent)]" dir="rtl">
+              <div className="flex flex-wrap items-baseline gap-1.5">
+                <span className="font-arabic text-xl font-bold text-[var(--accent)]" dir="rtl">
                   {selected.word}
                 </span>
-                <span className="text-sm sm:text-base font-extrabold text-[var(--text-primary)]">
-                  {selected.tip.titleBn}
+                <span className="text-[11px] font-bold text-[var(--accent)]">
+                  · {selected.tip.categoryBn}
                 </span>
               </div>
-              {selected.tip.meaningBn && (
-                <div className="text-xs sm:text-sm font-semibold text-[var(--text-primary)]">
-                  অর্থ: {selected.tip.meaningBn}
-                </div>
-              )}
+              <p className="text-[11px] font-bold text-[var(--text-primary)] leading-snug">
+                {selected.tip.titleBn}
+                {selected.tip.meaningBn ? (
+                  <span className="font-normal text-[var(--text-secondary)]"> — {selected.tip.meaningBn}</span>
+                ) : null}
+              </p>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               <AudioButton text={selected.word} compact showSlow={false} />
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                className="p-1.5 rounded-full btn-secondary text-[var(--text-muted)]"
+                className="p-1 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-alt)]"
                 aria-label="বন্ধ করুন"
               >
                 <X className="w-3.5 h-3.5" />
@@ -150,20 +180,17 @@ export const GeminiRichText: React.FC<GeminiRichTextProps> = ({ text, className 
           </div>
 
           {selected.tip.tarkibRoleBn && (
-            <div className="rounded-2xl bg-[var(--emerald-highlight)] border border-[var(--accent)]/30 p-3 space-y-1">
-              <div className="flex items-center gap-1.5 text-xs font-extrabold text-[var(--accent)]">
-                <GitBranch className="w-3.5 h-3.5 shrink-0" />
-                <span>বাক্যে তারকিব: {selected.tip.tarkibRoleBn}</span>
-              </div>
+            <div className="text-[11px] space-y-0.5">
+              <div className="font-extrabold text-[var(--accent)]">{selected.tip.tarkibRoleBn}</div>
               {selected.tip.tarkibReasonBn && (
-                <p className="text-xs sm:text-sm text-[var(--text-primary)] leading-relaxed">
+                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
                   {selected.tip.tarkibReasonBn}
                 </p>
               )}
             </div>
           )}
 
-          <div className="text-xs sm:text-sm space-y-1.5 leading-relaxed">
+          <div className="pt-1.5 border-t border-[var(--border-subtle)] space-y-1 text-[11px] leading-snug">
             <p className="text-[var(--text-primary)]">
               <strong className="text-[var(--accent)]">কায়দা: </strong>
               {selected.tip.ruleBn}
@@ -174,31 +201,27 @@ export const GeminiRichText: React.FC<GeminiRichTextProps> = ({ text, className 
             </p>
           </div>
 
-          <div className="pt-2 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-              <BookOpen className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>{selected.tip.exampleBn}</span>
+          <div className="pt-1.5 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] min-w-0 truncate">
+              <BookOpen className="w-3 h-3 text-[var(--accent)] shrink-0" />
+              <span className="truncate">{selected.tip.exampleBn}</span>
             </div>
             {selected.sentence.trim().split(/\s+/).length >= 2 && (
               <button
                 type="button"
-                onClick={() =>
-                  setActiveTarkibSentence((prev) =>
-                    prev === selected.sentence ? null : selected.sentence
-                  )
-                }
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold btn-primary"
+                onClick={() => {
+                  const s = selected.sentence;
+                  setSelected(null);
+                  setActiveTarkibSentence((prev) => (prev === s ? null : s));
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold btn-primary shrink-0"
               >
-                <GitBranch className="w-3.5 h-3.5" />
-                <span>
-                  {activeTarkibSentence === selected.sentence
-                    ? 'পূর্ণ বাক্যের তারকিব লুকান'
-                    : 'সম্পূর্ণ বাক্যের তারকিব'}
-                </span>
+                <GitBranch className="w-3 h-3" />
+                <span>তারকিব</span>
               </button>
             )}
           </div>
-        </div>
+        </FloatingWordPortal>
       )}
 
       {activeTarkibSentence && (

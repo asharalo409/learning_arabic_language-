@@ -1,22 +1,11 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Clock, LogIn, Menu, Palette, UserCheck, X } from 'lucide-react';
+import { BookOpenCheck, Clock, LogIn, MoreVertical, UserCheck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { InterfaceLang, ThemeMode } from '../types/academy';
-import { PWAInstallButton } from './PWAInstallButton';
+import { InstantLookupBar } from './InstantLookupWidget';
 import { NotificationCenter } from './NotificationCenter';
-
-const THEME_LIST: ThemeMode[] = [
-  'sky-cloud',
-  'emerald',
-  'andalus',
-  'madinah',
-  'midnight',
-  'light',
-  'parchment',
-  'kaaba',
-];
+import { SidebarDrawerContent } from './SidebarDrawerContent';
 
 export const BrandLogo: React.FC = () => {
   const { t } = useApp();
@@ -44,149 +33,102 @@ export const BrandLogo: React.FC = () => {
 };
 
 export const Navbar: React.FC = () => {
-  const { t, theme, setTheme, lang, setLang } = useApp();
+  const { t, toggleQuickGrammar } = useApp();
   const { user } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 glass-panel border-b border-[var(--border-subtle)] no-print">
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
-        <BrandLogo />
+    <>
+      <header className="sticky top-0 z-40 glass-panel border-b border-[var(--border-subtle)] no-print">
+        <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
+          {/* Left: Direct 3-dot Menu Trigger + BrandLogo */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="মেনু খুলুন"
+              title="মেনু ও সেটিংস"
+              className="p-2 rounded-xl btn-secondary text-[var(--text-primary)] hover:text-[var(--accent)] shrink-0"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+            <BrandLogo />
+          </div>
 
-        <nav className="hidden lg:flex items-center gap-6 text-sm font-medium text-[var(--text-secondary)]">
-          <Link to="/courses" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
-            {t.nav.courses}
-          </Link>
-          <Link to="/ai-teacher" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
-            {t.nav.aiTeacher}
-          </Link>
-          <Link to="/prayer-weather" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
-            <span>{t.sidebar.prayerWeather}</span>
-          </Link>
-          <Link to="/themes" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5">
-            <Palette className="w-3.5 h-3.5 text-[var(--accent)]" />
-            <span>{t.sidebar.themes}</span>
-          </Link>
-          {user && (
-            <Link to="/dashboard" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
-              {t.nav.dashboard}
-            </Link>
-          )}
-        </nav>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <PWAInstallButton compact />
-          <NotificationCenter />
-
-          <Link
-            to="/auth"
-            className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs btn-secondary whitespace-nowrap shrink-0"
-          >
-            {user ? (
-              <>
-                <UserCheck className="w-3.5 h-3.5 text-[var(--success)]" />
-                <span className="max-w-[110px] truncate">{user.fullName}</span>
-              </>
-            ) : (
-              <>
-                <LogIn className="w-3.5 h-3.5 text-[var(--accent)]" />
-                <span>{t.sidebar.auth}</span>
-              </>
-            )}
-          </Link>
-
-          <Link
-            to="/courses"
-            className="hidden sm:inline-flex items-center px-3.5 py-1.5 rounded-xl text-xs btn-primary whitespace-nowrap shrink-0"
-          >
-            {t.nav.startLearning}
-          </Link>
-
-          <button
-            type="button"
-            onClick={() => setMobileOpen((v) => !v)}
-            aria-label="Toggle Menu"
-            className="lg:hidden p-2 rounded-lg btn-secondary"
-          >
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile Drawer */}
-      {mobileOpen && (
-        <div className="lg:hidden border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-2 text-sm font-medium">
-            <Link to="/courses" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
+          <nav className="hidden lg:flex items-center gap-5 text-sm font-medium text-[var(--text-secondary)]">
+            <Link to="/courses" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
               {t.nav.courses}
             </Link>
-            <Link to="/ai-teacher" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
+            <Link to="/quranic-arabic" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
+              কুরআনিক আরবি
+            </Link>
+            <Link to="/ai-teacher" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
               {t.nav.aiTeacher}
             </Link>
-            <Link to="/prayer-weather" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
-              {t.sidebar.prayerWeather}
-            </Link>
-            <Link to="/themes" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
-              {t.sidebar.themes}
+            <Link to="/prayer-weather" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>{t.sidebar.prayerWeather}</span>
             </Link>
             {user && (
-              <Link to="/dashboard" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt">
+              <Link to="/dashboard" className="hover:text-[var(--text-primary)] transition-colors whitespace-nowrap shrink-0">
                 {t.nav.dashboard}
               </Link>
             )}
-            <Link to="/auth" onClick={() => setMobileOpen(false)} className="py-2.5 px-3 rounded-xl surface-alt text-[var(--accent)]">
-              {user ? user.fullName : t.sidebar.auth}
-            </Link>
-          </div>
+          </nav>
 
-          <div className="pt-3 border-t border-[var(--border-subtle)] space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-[var(--text-muted)]">{t.sidebar.language}</span>
-              <div className="flex items-center gap-1">
-                {(['bn', 'en', 'ar'] as InterfaceLang[]).map((l) => (
-                  <button
-                    key={l}
-                    type="button"
-                    onClick={() => setLang(l)}
-                    className={`px-2.5 py-1 rounded text-xs font-medium ${
-                      lang === l ? 'btn-primary' : 'btn-secondary'
-                    }`}
-                  >
-                    {l === 'bn' ? 'বাংলা' : l === 'en' ? 'EN' : 'عربي'}
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* Right: Instant Lookup + Quick Grammar Reference + Notifications + Auth */}
+          <div className="flex items-center gap-2 shrink-0">
+            <InstantLookupBar compact />
 
-            <div className="space-y-1.5">
-              <span className="text-xs text-[var(--text-muted)] block">{t.sidebar.theme}</span>
-              <div className="flex flex-wrap gap-1">
-                {THEME_LIST.map((th) => (
-                  <button
-                    key={th}
-                    type="button"
-                    onClick={() => setTheme(th)}
-                    className={`px-2 py-1 rounded text-[11px] font-medium whitespace-nowrap ${
-                      theme === th ? 'btn-primary' : 'btn-secondary'
-                    }`}
-                  >
-                    {t.themes[th]}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={toggleQuickGrammar}
+              title="দ্রুত আরবি ব্যাকরণ রেফারেন্স (Quick Grammar Reference)"
+              aria-label="দ্রুত ব্যাকরণ রেফারেন্স"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold btn-secondary whitespace-nowrap shrink-0"
+            >
+              <BookOpenCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span className="hidden xl:inline">দ্রুত ব্যাকরণ</span>
+            </button>
+
+            <NotificationCenter />
 
             <Link
-              to="/courses"
-              onClick={() => setMobileOpen(false)}
-              className="block w-full text-center px-4 py-2.5 rounded-xl text-sm btn-primary"
+              to="/auth"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs btn-secondary whitespace-nowrap shrink-0"
             >
-              {t.nav.startLearning}
+              {user ? (
+                <>
+                  <UserCheck className="w-3.5 h-3.5 text-[var(--success)]" />
+                  <span className="max-w-[110px] truncate">{user.fullName}</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-3.5 h-3.5 text-[var(--accent)]" />
+                  <span>{t.sidebar.auth}</span>
+                </>
+              )}
             </Link>
           </div>
         </div>
+      </header>
+
+      {/* Unified Left-Side Slide-in Navigation Drawer (matches inner AppShell sidebar) */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 flex no-print">
+          <aside className="w-72 max-w-[84vw] bg-[var(--bg-surface)] border-e border-[var(--border-subtle)] h-full overflow-y-auto shadow-2xl backdrop-blur-2xl">
+            <SidebarDrawerContent
+              onNavigate={() => setDrawerOpen(false)}
+              onClose={() => setDrawerOpen(false)}
+              showCloseOnDesktop
+            />
+          </aside>
+          <div
+            className="flex-1 bg-black/45 backdrop-blur-xs"
+            onClick={() => setDrawerOpen(false)}
+          />
+        </div>
       )}
-    </header>
+    </>
   );
 };

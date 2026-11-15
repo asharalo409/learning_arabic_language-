@@ -6,23 +6,297 @@ import { MASADIR_THULATHI_PART3 } from './masadirBankThulathiPart3';
 import { MASADIR_THULATHI_PART4 } from './masadirBankThulathiPart4';
 import { MASADIR_MAZID_BANK } from './masadirBankMazid';
 import { MASADIR_EXTENDED_BANK } from './masadirBankExtended';
+import { MASADIR_CLASSICAL_23_PART1 } from './masadirBankClassical23Part1';
+import { MASADIR_CLASSICAL_23_PART2 } from './masadirBankClassical23Part2';
 
-export const SAFWATUL_MASADIR_BABS = [
-  { id: 'all', labelAr: 'جَمِيعُ الأَبْوَابِ', labelBn: 'সকল বাব' },
-  { id: 'নাসারা', labelAr: 'نَصَرَ – يَنْصُرُ', labelBn: 'বাবে নাসারা (فَعَلَ يَفْعُلُ)' },
-  { id: 'দরাবা', labelAr: 'ضَرَبَ – يَضْرِبُ', labelBn: 'বাবে দরাবা (فَعَلَ يَفْعِلُ)' },
-  { id: 'ফাতাহা', labelAr: 'فَتَحَ – يَفْتَحُ', labelBn: 'বাবে ফাতাহা (فَعَلَ يَفْعَلُ)' },
-  { id: 'সামিআ', labelAr: 'سَمِعَ – يَسْمَعُ', labelBn: 'বাবে সামিআ (فَعِلَ يَفْعَلُ)' },
-  { id: 'কারুমা', labelAr: 'كَرُمَ – يَكْرُمُ', labelBn: 'বাবে কারুমা (فَعُلَ يَفْعُلُ)' },
-  { id: 'হাসিবা', labelAr: 'حَسِبَ – يَحْسِبُ', labelBn: 'বাবে হাসিবা (فَعِلَ يَفْعِلُ)' },
-  { id: 'ইফআল', labelAr: 'الإِفْعَال', labelBn: 'বাবে ইফআল (أَفْعَلَ)' },
-  { id: 'তাফঈল', labelAr: 'التَّفْعِيل', labelBn: 'বাবে তাফঈল (فَعَّلَ)' },
-  { id: 'মুফাআলাহ', labelAr: 'المُفَاعَلَة', labelBn: 'বাবে মুফাআলাহ (فَاعَلَ)' },
-  { id: 'তাফাউল-তাশা', labelAr: 'التَّفَعُّل وَالتَّفَاعُل', labelBn: 'তাফাউল ও তাফাঊল' },
-  { id: 'ইনফিআল-ইফতি', labelAr: 'الاِنْفِعَال وَالاِفْتِعَال', labelBn: 'ইনফিআল ও ইফতিআল' },
-  { id: 'ইসতিফআল', labelAr: 'الاِسْتِفْعَال وَالاِفْعِلَال', labelBn: 'ইসতিফআল ও ইফইলাল' },
-  { id: 'রুবাই', labelAr: 'الرُّبَاعِي', labelBn: 'রুবাই (৪ মূল অক্ষর)' },
+export interface MasadirBabDescriptor {
+  id: string;
+  numberBn: string;
+  category: 'Thulathi Mujarrad' | 'Thulathi Mazid' | 'Rubai';
+  labelAr: string;
+  labelBn: string;
+  patternAr: string;
+  alamahBn: string;
+  descriptionBn: string;
+}
+
+export const SAFWATUL_MASADIR_BABS: readonly MasadirBabDescriptor[] = [
+  // সুলাসি মুজাররাদ — ৬ বাব
+  {
+    id: 'নাসারা',
+    numberBn: '১',
+    category: 'Thulathi Mujarrad',
+    labelAr: 'نَصَرَ – يَنْصُرُ',
+    labelBn: 'বাবে নাসারা (فَعَلَ – يَفْعُلُ)',
+    patternAr: 'فَعَلَ – يَفْعُلُ',
+    alamahBn: 'মাদি আইন ফাতহা, মুদারি আইন দম্মা (ُ)',
+    descriptionBn: 'সর্বাধিক ব্যবহৃত মৌলিক ৩ অক্ষরের বাব।',
+  },
+  {
+    id: 'দরাবা',
+    numberBn: '২',
+    category: 'Thulathi Mujarrad',
+    labelAr: 'ضَرَبَ – يَضْرِبُ',
+    labelBn: 'বাবে দরাবা (فَعَلَ – يَفْعِلُ)',
+    patternAr: 'فَعَلَ – يَفْعِلُ',
+    alamahBn: 'মাদি আইন ফাতহা, মুদারি আইন কাসরা (ِ)',
+    descriptionBn: 'প্রচুর মিসাল ও আজওয়াফে ইয়ায়ী শব্দ এই বাবে আসে।',
+  },
+  {
+    id: 'ফাতাহা',
+    numberBn: '৩',
+    category: 'Thulathi Mujarrad',
+    labelAr: 'فَتَحَ – يَفْتَحُ',
+    labelBn: 'বাবে ফাতাহা (فَعَلَ – يَفْتَحُ)',
+    patternAr: 'فَعَلَ – يَفْعَلُ',
+    alamahBn: 'মাদি ও মুদারি উভয় আইনে ফাতহা (َ) এবং হুরুফে হলকী থাকে',
+    descriptionBn: 'আইন বা লাম কালিমায় হুরুফে হলকী থাকলে সাধারণত এই বাব হয়।',
+  },
+  {
+    id: 'সামিআ',
+    numberBn: '৪',
+    category: 'Thulathi Mujarrad',
+    labelAr: 'سَمِعَ – يَسْمَعُ',
+    labelBn: 'বাবে সামিআ (فَعِلَ – يَفْعَلُ)',
+    patternAr: 'فَعِلَ – يَفْعَلُ',
+    alamahBn: 'মাদি আইন কাসরা, মুদারি আইন ফাতহা',
+    descriptionBn: 'অনুভূতি, অবস্থা, স্মৃতি ও কর্মপরায়ণ ক্রিয়া এতে বেশি আসে।',
+  },
+  {
+    id: 'কারুমা',
+    numberBn: '৫',
+    category: 'Thulathi Mujarrad',
+    labelAr: 'كَرُمَ – يَكْرُمُ',
+    labelBn: 'বাবে কারুমা (فَعُلَ – يَفْعُلُ)',
+    patternAr: 'فَعُلَ – يَفْعُلُ',
+    alamahBn: 'মাদি ও মুদারি উভয় আইনে দম্মা (ُ) ও সর্বদা লাযিম (অকর্মক)',
+    descriptionBn: 'স্বভাবগত গুণ, বৈশিষ্ট্য, সৌন্দর্য বা মর্যাদা বোঝাতে ব্যবহৃত হয়।',
+  },
+  {
+    id: 'হাসিবা',
+    numberBn: '৬',
+    category: 'Thulathi Mujarrad',
+    labelAr: 'حَسِبَ – يَحْسِبُ',
+    labelBn: 'বাবে হাসিবা (فَعِلَ – يَفْعِلُ)',
+    patternAr: 'فَعِلَ – يَفْعِلُ',
+    alamahBn: 'মাদি ও মুদারি উভয় আইনে কাসরা (ِ)',
+    descriptionBn: 'বিরল কিন্তু কুরআন-হাদীসে গুরুত্ববহ মিসাল ক্রিয়া এই বাবের।',
+  },
+
+  // সুলাসি মাজীদ ফীহ — ১৩ বাব (মুনশাঈবের পূর্ণাঙ্গ বাবসমূহ)
+  {
+    id: 'ইফআল',
+    numberBn: '৭',
+    category: 'Thulathi Mazid',
+    labelAr: 'الإِفْعَال (أَفْعَلَ – يُفْعِلُ)',
+    labelBn: 'বাবে ইফআল (أَفْعَلَ – يُفْعِلُ)',
+    patternAr: 'أَفْعَلَ – يُفْعِلُ',
+    alamahBn: 'শুরুতে হামযায়ে ক্বাতঈ (أَ) অতিরিক্ত',
+    descriptionBn: 'লাযিম ক্রিয়াকে মুতা‘আদ্দী (সকর্মক) করার প্রধান বাব।',
+  },
+  {
+    id: 'তাফঈল',
+    numberBn: '৮',
+    category: 'Thulathi Mazid',
+    labelAr: 'التَّفْعِيل (فَعَّلَ – يُفَعِّلُ)',
+    patternAr: 'فَعَّلَ – يُفَعِّلُ',
+    labelBn: 'বাবে তাফঈল (فَعَّلَ – يُفَعِّلُ)',
+    alamahBn: 'আইন কালিমা দ্বিত্ব (তাশদীদ)',
+    descriptionBn: 'কাজের আধিক্য, ধারাবাহিকতা বা সকর্মকতা বোঝাতে ব্যবহৃত।',
+  },
+  {
+    id: 'মুফাআলাহ',
+    numberBn: '৯',
+    category: 'Thulathi Mazid',
+    labelAr: 'المُفَاعَلَة (فَاعَلَ – يُفَاعِلُ)',
+    labelBn: 'বাবে মুফাআলাহ (فَاعَلَ – يُفَاعِلُ)',
+    patternAr: 'فَاعَلَ – يُفَاعِلُ',
+    alamahBn: 'ফা কালিমার পর আলিফ অতিরিক্ত',
+    descriptionBn: 'দুই পক্ষের পারস্পরিক কর্ম বা প্রচেষ্টা বোঝায়।',
+  },
+  {
+    id: 'তাফাউল',
+    numberBn: '১০',
+    category: 'Thulathi Mazid',
+    labelAr: 'التَّفَعُّل (تَفَعَّلَ – يَتَفَعَّلُ)',
+    labelBn: 'বাবে তাফাউল (تَفَعَّلَ – يَتَفَعَّلُ)',
+    patternAr: 'تَفَعَّلَ – يَتَفَعَّلُ',
+    alamahBn: 'শুরুতে তা (تَ) এবং আইন কালিমায় তাশদীদ',
+    descriptionBn: 'নিজে গ্রহণ করা, ধাপে ধাপে শেখা বা আত্মস্থ করা বোঝায়।',
+  },
+  {
+    id: 'তাফাঊল',
+    numberBn: '১১',
+    category: 'Thulathi Mazid',
+    labelAr: 'التَّفَاعُل (تَفَاعَلَ – يَتَفَاعَلُ)',
+    labelBn: 'বাবে তাফাঊল (تَفَاعَلَ – يَتَفَاعَلُ)',
+    patternAr: 'تَفَاعَلَ – يَتَفَاعَلُ',
+    alamahBn: 'শুরুতে তা (تَ) ও ফা কালিমার পর আলিফ',
+    descriptionBn: 'অনেকের মধ্যে পারস্পরিক সহযোগিতা বা ভান করা বোঝায়।',
+  },
+  {
+    id: 'ইনফিআল',
+    numberBn: '১২',
+    category: 'Thulathi Mazid',
+    labelAr: 'الاِنْفِعَال (اِنْفَعَلَ – يَنْفَعِلُ)',
+    labelBn: 'বাবে ইনফিআল (اِنْفَعَلَ – يَنْفَعِلُ)',
+    patternAr: 'اِنْفَعَلَ – يَنْفَعِلُ',
+    alamahBn: 'শুরুতে হামযায়ে ওয়াসল ও নূন সাকিন (اِنْ)',
+    descriptionBn: 'সকর্মক কাজের প্রভাব বা প্রতিক্রিয়া (মুতাবা‘আত) প্রকাশ করে।',
+  },
+  {
+    id: 'ইফতিআল',
+    numberBn: '১৩',
+    category: 'Thulathi Mazid',
+    labelAr: 'الاِفْتِعَال (اِفْتَعَلَ – يَفْتَعِلُ)',
+    labelBn: 'বাবে ইফতিআল (اِفْتَعَلَ – يَفْتَعِلُ)',
+    patternAr: 'اِفْتَعَلَ – يَفْتَعِلُ',
+    alamahBn: 'শুরুতে আলিফ এবং ফা-আইন কালিমার মাঝে তা (ت)',
+    descriptionBn: 'প্রচেষ্টা, গ্রহণ করা বা নিজের জন্য অর্জন বোঝাতে বহুল ব্যবহৃত।',
+  },
+  {
+    id: 'ইসতিফআল',
+    numberBn: '১৪',
+    category: 'Thulathi Mazid',
+    labelAr: 'الاِسْتِفْعَال (اِسْتَفْعَلَ – يَسْتَفْعِلُ)',
+    labelBn: 'বাবে ইসতিফআল (اِسْتَفْعَلَ – يَسْتَفْعِلُ)',
+    patternAr: 'اِسْتَفْعَلَ – يَسْتَفْعِلُ',
+    alamahBn: 'শুরুতে অতিরিক্ত اِسْتَ (আলিফ-সীন-তা)',
+    descriptionBn: 'প্রার্থনা করা, চাওয়া বা কোনো অবস্থায় রূপান্তর বোঝায়।',
+  },
+  {
+    id: 'ইফইলাল',
+    numberBn: '১৫',
+    category: 'Thulathi Mazid',
+    labelAr: 'الاِفْعِلَال (اِفْعَلَّ – يَفْعَلُّ)',
+    labelBn: 'বাবে ইফইলাল (اِفْعَلَّ – يَفْعَلُّ)',
+    patternAr: 'اِفْعَلَّ – يَفْعَلُّ',
+    alamahBn: 'শুরুতে হামযা এবং শেষে লাম কালিমায় তাশদীদ',
+    descriptionBn: 'রং ধারণ করা বা বাহ্যিক বৈশিষ্ট্য ও ত্রুটি প্রকাশ করে।',
+  },
+  {
+    id: 'ইফঈলাল',
+    numberBn: '১৬',
+    category: 'Thulathi Mazid',
+    labelAr: 'الاِفْعِيلَال (اِفْعَالَّ – يَفْعَالُّ)',
+    labelBn: 'বাবে ইফঈলাল (اِفْعَالَّ – يَفْعَالُّ)',
+    patternAr: 'اِفْعَالَّ – يَفْعَالُّ',
+    alamahBn: 'শুরুতে হামযা, আইন কালিমার পর আলিফ এবং শেষে তাশদীদ',
+    descriptionBn: 'রং বা বৈশিষ্ট্যের অত্যধিক প্রগাঢ়তা বোঝাতে ব্যবহৃত (মুবালগাহ)।',
+  },
+  {
+    id: 'ইফঈআল',
+    numberBn: '১৭',
+    category: 'Thulathi Mazid',
+    labelAr: 'الاِفْعِيعَال (اِفْعَوْعَلَ – يَفْعَوْعِلُ)',
+    labelBn: 'বাবে ইফঈআল (اِفْعَوْعَلَ – يَفْعَوْعِلُ)',
+    patternAr: 'اِفْعَوْعَلَ – يَفْعَوْعِلُ',
+    alamahBn: 'শুরুতে হামযা, মাঝে ওয়াও সাকিন ও পুনরায় আইন কালিমা',
+    descriptionBn: 'অর্থের অতিশায়ন ও প্রাচুর্য (যেমন: প্রচুর ঘাস বা অশ্রু) বোঝায়।',
+  },
+  {
+    id: 'ইফইওয়াল',
+    numberBn: '১৮',
+    category: 'Thulathi Mazid',
+    labelAr: 'الاِفْعِوَّال (اِفْعَوَّلَ – يَفْعَوِّلُ)',
+    labelBn: 'বাবে ইফইওয়াল (اِفْعَوَّلَ – يَفْعَوِّلُ)',
+    patternAr: 'اِفْعَوَّلَ – يَفْعَوِّلُ',
+    alamahBn: 'শুরুতে হামযা এবং আইন কালিমার পর তাশদীদযুক্ত ওয়াও (وَّ)',
+    descriptionBn: 'দ্রুতগতি, দীর্ঘায়ন ও অবিরাম প্রবাহ বোঝাতে ব্যবহৃত শাস্ত্রীয় বাব।',
+  },
+  {
+    id: 'ইফফাউল',
+    numberBn: '১৯',
+    category: 'Thulathi Mazid',
+    labelAr: 'الاِفَّعُّل (اِفَّعَّلَ – يَفَّعَّلُ / اِطَّهَّرَ)',
+    labelBn: 'বাবে ইফফাউল / ইদগাম (اِطَّهَّرَ)',
+    patternAr: 'اِفَّعَّلَ – يَفَّعَّلُ',
+    alamahBn: 'তাফাউলের تَ ফা কালিমার সাথে ইদগাম হয়ে শুরুতে হামযায়ে ওয়াসল হয়',
+    descriptionBn: 'কুরআন ও হাদীসে প্রচুর ব্যবহৃত ইদগামকৃত তাফাউল (যেমন: اِطَّهَّرَ, اِزَّيَّنَ)।',
+  },
+
+  // রুবাই মুজাররাদ ও মাজীদ — ৪ বাব
+  {
+    id: 'রুবাই-মুজাররাদ',
+    numberBn: '২০',
+    category: 'Rubai',
+    labelAr: 'الرُّبَاعِي المُجَرَّد (فَعْلَلَ – يُفَعْلِلُ)',
+    labelBn: 'রুবাই মুজাররাদ (فَعْلَلَ – يُفَعْلِلُ)',
+    patternAr: 'فَعْلَلَ – يُفَعْلِلُ',
+    alamahBn: 'চারটি মূল অক্ষর বিশিষ্ট, মুদারিতে পেশ (يُ)',
+    descriptionBn: 'চার অক্ষরের মৌলিক ধাতু (যেমন: دَحْرَجَ, تَرْجَمَ, بَسْمَلَ)।',
+  },
+  {
+    id: 'রুবাই-তাফাললুল',
+    numberBn: '২১',
+    category: 'Rubai',
+    labelAr: 'التَّفَعْلُل (تَفَعْلَلَ – يَتَفَعْلَلُ)',
+    labelBn: 'রুবাই মাজীদ: তাফাললুল (تَفَعْلَلَ)',
+    patternAr: 'تَفَعْلَلَ – يَتَفَعْلَلُ',
+    alamahBn: '৪ মূল অক্ষরের শুরুতে অতিরিক্ত তা (تَ)',
+    descriptionBn: 'রুবাই মুজাররাদের ক্রিয়ার প্রতিক্রিয়া বা স্বতঃস্ফূর্ত সংঘটন বোঝায়।',
+  },
+  {
+    id: 'রুবাই-ইফইনলাল',
+    numberBn: '২২',
+    category: 'Rubai',
+    labelAr: 'الاِفْعِنْلَال (اِفْعَنْلَلَ – يَفْعَنْلِلُ)',
+    labelBn: 'রুবাই মাজীদ: ইফইনলাল (اِفْعَنْلَلَ)',
+    patternAr: 'اِفْعَنْلَلَ – يَفْعَنْلِلُ',
+    alamahBn: 'শুরুতে হামযা ও প্রথম লামের পূর্বে অতিরিক্ত নূন (نْ)',
+    descriptionBn: 'সমবেত হওয়া, ছড়িয়ে পড়া বা বিশেষ দৈহিক অবস্থা প্রকাশ করে।',
+  },
+  {
+    id: 'রুবাই-ইফআল্লাল',
+    numberBn: '২৩',
+    category: 'Rubai',
+    labelAr: 'الاِفْعِلَّال (اِفْعَلَلَّ – يَفْعَلِلُّ)',
+    labelBn: 'রুবাই মাজীদ: ইফআল্লাল (اِفْعَلَلَّ)',
+    patternAr: 'اِفْعَلَلَّ – يَفْعَلِلُّ',
+    alamahBn: 'শুরুতে হামযা ও শেষ অক্ষরে তাশদীদ (অবস্থা দৃঢ় হওয়া)',
+    descriptionBn: 'মনের প্রশান্তি, শিহরণ বা অবস্থার তীব্রতা বোঝায় (যেমন: اِطْمَأَنَّ, اِقْشَعَرَّ)।',
+  },
 ] as const;
+
+export function getCanonicalBabIdForEntry(entry: MasdarEntry): string {
+  const bn = entry.babNameBn || '';
+  const ar = entry.babNameAr || '';
+
+  if (entry.babCategory === 'Rubai') {
+    if (bn.includes('তাফাললুল') || ar.includes('تَفَعْلَلَ')) return 'রুবাই-তাফাললুল';
+    if (bn.includes('ইফইনলাল') || ar.includes('اِفْعَنْلَلَ')) return 'রুবাই-ইফইনলাল';
+    if (bn.includes('ইফআল্লাল') || ar.includes('اِفْعَلَلَّ')) return 'রুবাই-ইফআল্লাল';
+    return 'রুবাই-মুজাররাদ';
+  }
+
+  if (bn.includes('নাসারা') || ar.includes('نَصَرَ')) return 'নাসারা';
+  if (bn.includes('দরাবা') || ar.includes('ضَرَبَ')) return 'দরাবা';
+  if (bn.includes('ফাতাহা') || ar.includes('فَتَحَ')) return 'ফাতাহা';
+  if (bn.includes('সামিআ') || ar.includes('سَمِعَ')) return 'সামিআ';
+  if (bn.includes('কারুমা') || ar.includes('كَرُمَ')) return 'কারুমা';
+  if (bn.includes('হাসিবা') || ar.includes('حَسِبَ')) return 'হাসিবা';
+
+  if (bn.includes('ইফফাউল') || ar.includes('الاِفَّعُّل')) return 'ইফফাউল';
+  if (bn.includes('ইফঈলাল') || ar.includes('الاِفْعِيلَال')) return 'ইফঈলাল';
+  if (bn.includes('ইফঈআল') || ar.includes('الاِفْعِيعَال')) return 'ইফঈআল';
+  if (bn.includes('ইফইওয়াল') || ar.includes('الاِفْعِوَّال')) return 'ইফইওয়াল';
+  if (bn.includes('ইফইলাল') || ar.includes('الاِفْعِلَال')) return 'ইফইলাল';
+  if (bn.includes('তাফাঊল') || ar.includes('التَّفَاعُل')) return 'তাফাঊল';
+  if (bn.includes('তাফাউল') || ar.includes('التَّفَعُّل')) return 'তাফাউল';
+  if (bn.includes('মুফাআলাহ') || ar.includes('المُفَاعَلَة')) return 'মুফাআলাহ';
+  if (bn.includes('তাফঈল') || ar.includes('التَّفْعِيل')) return 'তাফঈল';
+  if (bn.includes('ইফআল') || ar.includes('الإِفْعَال')) return 'ইফআল';
+  if (bn.includes('ইনফিআল') || ar.includes('الاِنْفِعَال')) return 'ইনফিআল';
+  if (bn.includes('ইফতিআল') || ar.includes('الاِفْتِعَال')) return 'ইফতিআল';
+  if (bn.includes('ইসতিফআল') || ar.includes('الاِسْتِفْعَال')) return 'ইসতিফআল';
+
+  return bn.split('(')[0].trim();
+}
+
+export function matchesMasdarBab(entry: MasdarEntry, babId: string): boolean {
+  if (babId === 'all') return true;
+  return getCanonicalBabIdForEntry(entry) === babId;
+}
 
 const SAFWATUL_MASADIR_BASE: MasdarEntry[] = [
   // ১. বাবে নাসারা - ইয়ানসুরু (نَصَرَ يَنْصُرُ)
@@ -1427,13 +1701,15 @@ function buildUnifiedMasadirList(): MasdarEntry[] {
     ...MASADIR_THULATHI_PART4,
     ...MASADIR_MAZID_BANK,
     ...MASADIR_EXTENDED_BANK,
+    ...MASADIR_CLASSICAL_23_PART1,
+    ...MASADIR_CLASSICAL_23_PART2,
   ];
 
   const seen = new Set<string>();
   const result: MasdarEntry[] = [];
 
   for (const item of combined) {
-    const babFamily = item.babNameBn.split('(')[0].trim();
+    const babFamily = getCanonicalBabIdForEntry(item);
     const key = `${normalizeArabicKey(item.madiAr)}|${babFamily}`;
     if (seen.has(key)) continue;
     seen.add(key);

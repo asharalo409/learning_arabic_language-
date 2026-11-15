@@ -25,7 +25,15 @@ import {
 import { AppShell } from '../components/AppShell';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { BADGE_DEFINITIONS, BadgeIconName, useApp } from '../context/AppContext';
-import { ColorSchemeMode, InterfaceLang, LearningTrack, ThemeMode, VoiceGender } from '../types/academy';
+import {
+  ColorSchemeMode,
+  GrammarTerminologyMode,
+  InterfaceLang,
+  LearningTrack,
+  SpeechEngineMode,
+  ThemeMode,
+  VoiceGender,
+} from '../types/academy';
 import {
   getSpeechTuning,
   setSpeechTuning,
@@ -86,6 +94,10 @@ export const ProfilePage: React.FC = () => {
     enableBrowserNotifications,
     sendTestNotification,
     openWelcome,
+    grammarTerminologyMode,
+    setGrammarTerminologyMode,
+    speechEngine,
+    setSpeechEngine,
   } = useApp();
 
   const earnedBadgeSet = new Set(progress.unlockedBadgeIds);
@@ -312,7 +324,7 @@ export const ProfilePage: React.FC = () => {
                 }`}
               >
                 <div className="text-xs font-bold">পুরুষ কণ্ঠ — উস্তায (Male AI Teacher)</div>
-                <div className="text-[11px] opacity-85 mt-0.5">গভীর স্বর (Pitch ~0.88) · আরবি أُسْتَاذ রূপ</div>
+                <div className="text-[11px] opacity-85 mt-0.5">প্রাকৃতিক স্পষ্ট পুরুষ স্বর (বাংলা ও আরবি উভয়ই পুরুষ)</div>
               </button>
               <button
                 type="button"
@@ -324,8 +336,53 @@ export const ProfilePage: React.FC = () => {
                 }`}
               >
                 <div className="text-xs font-bold">নারী কণ্ঠ — উস্তাধা (Female AI Teacher)</div>
-                <div className="text-[11px] opacity-85 mt-0.5">স্পষ্ট উজ্জ্বল স্বর (Pitch ~1.12) · আরবি أُسْتَاذَة রূপ</div>
+                <div className="text-[11px] opacity-85 mt-0.5">স্পষ্ট কোমল নারী স্বর (বাংলা ও আরবি উভয়ই নারী)</div>
               </button>
+            </div>
+
+            {/* Speech Engine Selector (Natural AI Studio Voice vs Native) */}
+            <div className="space-y-1.5 pt-1">
+              <div className="text-xs font-semibold text-[var(--text-primary)]">
+                অডিও ইঞ্জিন মোড (Voice Quality Engine)
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {(
+                  [
+                    {
+                      id: 'auto' as SpeechEngineMode,
+                      title: 'AI প্রাকৃতিক কণ্ঠ (Auto)',
+                      desc: 'অনলাইনে পরিষ্কার AI কণ্ঠ, অফলাইনে ডিভাইস ভয়েস',
+                    },
+                    {
+                      id: 'gemini-tts' as SpeechEngineMode,
+                      title: 'Gemini Studio TTS',
+                      desc: 'সরাসরি প্রাকৃতিক স্টুডিও ভয়েস (ঘ্যারঘ্যারমুক্ত)',
+                    },
+                    {
+                      id: 'native' as SpeechEngineMode,
+                      title: 'ডিভাইস ভয়েস (Native)',
+                      desc: 'দ্রুত অফলাইন ব্রাউজার সিন্থেসিস',
+                    },
+                  ]
+                ).map((eng) => {
+                  const active = speechEngine === eng.id;
+                  return (
+                    <button
+                      key={eng.id}
+                      type="button"
+                      onClick={() => setSpeechEngine(eng.id)}
+                      className={`p-2.5 rounded-xl border text-left transition-all ${
+                        active
+                          ? 'btn-primary border-transparent shadow-sm'
+                          : 'bg-[var(--bg-canvas)] border-[var(--border-subtle)] text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      <div className="text-xs font-bold">{eng.title}</div>
+                      <div className="text-[11px] opacity-85 mt-0.5">{eng.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Dynamic Synthesis Speed, Pitch & Emotion Tuning */}
@@ -529,6 +586,45 @@ export const ProfilePage: React.FC = () => {
                   }`}
                 >
                   {l === 'bn' ? 'বাংলা' : l === 'en' ? 'English' : 'العربية (RTL)'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-[var(--border-subtle)]">
+            <div className="text-xs font-semibold text-[var(--text-primary)]">
+              তারকিব ও ব্যাকরণ পরিভাষা (Grammar Terminology)
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)]">
+              পাঠ, কুরআন তারকিব ও পপওভারে ব্যাকরণগত পদের নাম মূল আরবি হরফে (যেমন: اِسْم، فِعْل، مُبْتَدَأ، خَبَر) নাকি বাংলায় দেখাবে তা নির্বাচন করুন।
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {(
+                [
+                  {
+                    id: 'arabic' as GrammarTerminologyMode,
+                    title: 'মূল আরবি পরিভাষা (العربية)',
+                    sub: 'اِسْم · فِعْل · مُبْتَدَأ · خَبَر · مُضَاف إِلَيْهِ (টুলটিপে বাংলা ব্যাখ্যা)',
+                  },
+                  {
+                    id: 'bengali' as GrammarTerminologyMode,
+                    title: 'বাংলা পরিভাষা (বাংলা)',
+                    sub: 'ইসম · ফেল · মুবতাদা · খবর · মুদাফ ইলাইহি',
+                  },
+                ]
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setGrammarTerminologyMode(opt.id)}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    grammarTerminologyMode === opt.id
+                      ? 'btn-primary border-transparent shadow-sm'
+                      : 'btn-secondary border-[var(--border-subtle)]'
+                  }`}
+                >
+                  <div className="text-xs font-bold">{opt.title}</div>
+                  <div className="text-[11px] opacity-85 mt-0.5 font-arabic-ui">{opt.sub}</div>
                 </button>
               ))}
             </div>

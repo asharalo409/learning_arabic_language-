@@ -25,7 +25,6 @@ import { MuslimCompanionStrip } from '../components/MuslimCompanionStrip';
 import { ResilientImage } from '../components/ResilientImage';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { QURAN_ALL_SHORT_SURAHS } from '../data/quranicData';
 import quranArtImg from '../assets/images/quranic_manuscript_art_1794510740673.jpg';
 
 interface CoreHubCard {
@@ -126,82 +125,82 @@ export const HomePage: React.FC = () => {
     <div className="min-h-screen bg-transparent text-[var(--text-primary)] pb-10">
       <Navbar />
 
-      {/* Clean Hero Section (Zero human photos) */}
-      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-8 lg:pt-12 lg:pb-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          <div className="lg:col-span-7 space-y-5">
+      {/* Compact Hero Section */}
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-3.5 pb-3.5 lg:pt-5 lg:pb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+          <div className="lg:col-span-7 space-y-2.5">
             <button
               type="button"
               onClick={openWelcome}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-emerald-500/15 to-sky-500/15 border border-emerald-500/35 text-xs font-semibold text-emerald-600 dark:text-emerald-300 hover:scale-[1.01] transition-transform"
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-emerald-500/15 to-sky-500/15 border border-emerald-500/35 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-300 hover:scale-[1.01] transition-transform"
             >
-              <Sparkles className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-left">প্রতিষ্ঠাতা: তাসীন বিল্লাহ · আল কুরআন এণ্ড ইসলামিক স্টাডিজ, কুষ্টিয়া ইসলামী বিশ্ববিদ্যালয়</span>
+              <Sparkles className="w-3 h-3 shrink-0" />
+              <span className="text-left">প্রতিষ্ঠাতা: তাসীন বিল্লাহ · আল কুরআন এণ্ড ইসলামিক স্টাডিজ, ইবি</span>
             </button>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight tracking-tight">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold leading-snug tracking-tight">
               {t.hero.title}
             </h1>
 
-            <p className="text-base sm:text-lg text-[var(--text-secondary)] leading-relaxed max-w-2xl">
+            <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed max-w-xl">
               {t.hero.subtitle}
             </p>
 
-            {/* Primary Entry Actions: Colorful & Distinct */}
-            <div className="flex flex-wrap items-center gap-3 pt-1">
+            {/* Compact Primary Entry Actions */}
+            <div className="flex flex-wrap items-center gap-2">
               <Link
                 to="/courses"
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-sm font-bold bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg hover:brightness-105 transition-all whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm hover:brightness-105 transition-all whitespace-nowrap"
               >
-                <BookOpen className="w-4 h-4" />
-                <span>{user ? 'ধাপ ১ থেকে শুরু করুন' : 'গেস্ট হিসেবে শেখা শুরু করুন'}</span>
-                <ArrowRight className="w-4 h-4" />
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>{user ? 'ধাপ ১ থেকে শুরু' : 'গেস্ট হিসেবে শুরু করুন'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
 
               <Link
                 to="/ai-teacher"
-                className="inline-flex items-center gap-2 px-5 py-3.5 rounded-full text-sm font-bold bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md hover:brightness-105 transition-all whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm hover:brightness-105 transition-all whitespace-nowrap"
               >
-                <Bot className="w-4 h-4" />
-                <span>AI লাইভ ভয়েস কল</span>
+                <Bot className="w-3.5 h-3.5" />
+                <span>AI ভয়েস কল</span>
               </Link>
 
               <Link
                 to={user ? '/dashboard' : '/auth'}
-                className="inline-flex items-center gap-2 px-5 py-3.5 rounded-full text-sm font-semibold btn-secondary whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold btn-secondary whitespace-nowrap"
               >
                 {user ? (
                   <>
-                    <LayoutDashboard className="w-4 h-4 text-[var(--accent)]" />
-                    <span>আমার ড্যাশবোর্ড</span>
+                    <LayoutDashboard className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span>ড্যাশবোর্ড</span>
                   </>
                 ) : (
                   <>
-                    <LogIn className="w-4 h-4 text-[var(--accent)]" />
-                    <span>লগইন (একবার লগইন করলেই সেভ থাকবে)</span>
+                    <LogIn className="w-3.5 h-3.5 text-[var(--accent)]" />
+                    <span>লগইন</span>
                   </>
                 )}
               </Link>
             </div>
           </div>
 
-          {/* Right Radiant Quranic Manuscript Card (No people) */}
+          {/* Right Radiant Quranic Manuscript Card (Compact) */}
           <div className="lg:col-span-5">
-            <div className="relative rounded-3xl overflow-hidden border border-[var(--border-strong)] shadow-xl aspect-[4/3]">
+            <div className="relative rounded-2xl overflow-hidden border border-[var(--border-strong)] shadow-md aspect-[16/9] max-h-[195px] w-full">
               <ResilientImage
                 src={quranArtImg}
                 alt="Illuminated Quranic Arabic Manuscript"
                 className="w-full h-full object-cover"
                 fallbackTitle="AI Arabic Academy"
               />
-              <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/85 via-black/45 to-transparent text-white space-y-1">
-                <p className="font-arabic text-2xl sm:text-3xl text-[#E5C158]" dir="rtl">
+              <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent text-white space-y-0.5">
+                <p className="font-arabic text-lg sm:text-xl text-[#E5C158]" dir="rtl">
                   رَبِّ زِدْنِي عِلْمًا
                 </p>
-                <p className="text-xs text-white/90">
+                <p className="text-[10.5px] text-white/90">
                   {lang === 'bn'
-                    ? '৫টি সহজ হাবের মাধ্যমে শুরুর হরফ থেকে কুরআন ও কথোপকথনে দক্ষতা অর্জন করুন'
-                    : '5 streamlined hubs from Arabic letters to Quranic comprehension & speech'}
+                    ? '৫টি সহজ হাবের মাধ্যমে হরফ থেকে কুরআন ও কথোপকথন'
+                    : '5 streamlined hubs from Arabic letters to Quranic speech'}
                 </p>
               </div>
             </div>
@@ -209,68 +208,65 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Live Muslim Companion Strip: Dual Clocks + Weather + Bangla/Hijri/Prayer Pills */}
-      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pb-10">
-        <MuslimCompanionStrip />
+      {/* Live Muslim Companion Strip: Compact Clock + Weather + Bangla/Hijri/Prayer */}
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pb-4">
+        <MuslimCompanionStrip compact />
       </section>
 
-      {/* 5 Distinct Vibrant Core Learning Hubs (Never monochrome light/dark) */}
-      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pb-12 space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      {/* 5 Distinct Compact Core Learning Hubs */}
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pb-5 space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
               5 STREAMLINED LEARNING HUBS
             </span>
-            <h2 className="text-2xl sm:text-3xl font-bold mt-1">
-              সহজ ও রঙিন ৫টি শিক্ষা কেন্দ্র (কোনো জটিলতা নেই)
+            <h2 className="text-lg sm:text-xl font-bold leading-tight">
+              সহজ ৫টি শিক্ষা কেন্দ্র
             </h2>
-            <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1">
-              সব ফিচার হিজিবিজি না রেখে প্রতিটি বিষয়ের জন্য আলাদা উজ্জ্বল রঙে সাজানো হয়েছে।
-            </p>
           </div>
-          <Link to="/courses" className="text-xs sm:text-sm font-bold text-[var(--accent)] hover:underline whitespace-nowrap">
+          <Link to="/courses" className="text-xs font-bold text-[var(--accent)] hover:underline whitespace-nowrap">
             ১০০ অধ্যায় গেম পথ →
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {coreHubs.map((hub, idx) => (
             <div
               key={hub.hubBadge}
-              className={`rounded-3xl p-6 text-white shadow-xl bg-gradient-to-br ${hub.gradientClass} flex flex-col justify-between gap-5 relative overflow-hidden ${
+              className={`rounded-xl p-3 sm:p-3.5 text-white shadow-sm bg-gradient-to-br ${hub.gradientClass} flex flex-col justify-between gap-2 relative overflow-hidden ${
                 idx === 3 ? 'md:col-span-2 lg:col-span-2' : ''
               }`}
             >
-              <div className="space-y-2.5 relative z-10">
+              <div className="space-y-1 relative z-10">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm text-[11px] font-bold">
+                  <span className="text-[10px] font-bold text-white/85">
                     {hub.hubBadge}
                   </span>
                   <Link
                     to={hub.primaryTo}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white text-slate-900 text-xs font-extrabold shadow-sm hover:scale-105 transition-transform"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white text-slate-900 text-[10.5px] font-extrabold shadow-xs hover:scale-105 transition-transform shrink-0"
                   >
                     <span>{hub.primaryLabel}</span>
-                    <ArrowRight className="w-3 h-3" />
+                    <ArrowRight className="w-2.5 h-2.5" />
                   </Link>
                 </div>
 
-                <h3 className="text-xl font-extrabold leading-snug">{hub.titleBn}</h3>
-                <div className="text-xs font-semibold text-white/85">{hub.subtitleBn}</div>
-                <p className="text-xs text-white/90 leading-relaxed">{hub.descBn}</p>
+                <h3 className="text-sm sm:text-base font-extrabold leading-snug">{hub.titleBn}</h3>
+                <div className="text-[10.5px] font-medium text-white/85 truncate">{hub.subtitleBn}</div>
+                <p className="text-[10.5px] text-white/85 leading-snug line-clamp-2">{hub.descBn}</p>
               </div>
 
-              {/* Clean Pill Links inside each Vibrant Hub */}
-              <div className="flex flex-wrap gap-2 pt-3 border-t border-white/20 relative z-10">
+              {/* Compact Links inside each Hub */}
+              <div className="flex flex-wrap gap-1 pt-2 border-t border-white/20 relative z-10">
                 {hub.items.map((item) => {
                   const Icon = item.icon;
                   return (
                     <Link
                       key={item.to}
                       to={item.to}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/20 hover:bg-black/35 backdrop-blur-sm border border-white/20 text-xs font-bold text-white transition-colors"
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-black/20 hover:bg-black/35 backdrop-blur-sm border border-white/15 text-[10.5px] font-bold text-white transition-colors"
                     >
-                      <Icon className="w-3.5 h-3.5" />
+                      <Icon className="w-3 h-3" />
                       <span>{item.label}</span>
                     </Link>
                   );
@@ -281,74 +277,29 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* কোরআনের মাধ্যমে পড়ুন — সরাসরি ২৬টি পূর্ণাঙ্গ সূরা (সূরা আল-ফাতিহা ও ৯০–১১৪) */}
-      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pb-12 space-y-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <span className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
-              QURANIC READING · ২৬টি পূর্ণাঙ্গ সূরা
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold mt-1">
-              কোরআনের মাধ্যমে পড়ুন (সূরা তালিকা)
-            </h2>
-            <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1">
-              যেকোনো সূরায় চাপলে সরাসরি তার পূর্ণাঙ্গ আয়াত, তিলাওয়াত ও ছরফ-নাহু গ্রামার বিশ্লেষণ খুলবে
-            </p>
-          </div>
-          <Link
-            to="/quranic-arabic"
-            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-[var(--accent)] hover:underline whitespace-nowrap"
-          >
-            <span>পূর্ণাঙ্গ কুরআন ল্যাব খুলুন</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          {QURAN_ALL_SHORT_SURAHS.map((surah) => (
-            <Link
-              key={surah.surahNumber}
-              to={`/quranic-arabic?surah=${surah.surahNumber}`}
-              className="surface-card rounded-2xl p-3.5 border border-[var(--border-subtle)] hover:border-[var(--border-strong)] hover:-translate-y-0.5 transition-all flex flex-col justify-between gap-2 group"
-            >
-              <div className="flex items-center justify-between gap-1 text-[11px] font-mono-num">
-                <span className="font-extrabold text-[var(--accent)]">সূরা {surah.surahNumber}</span>
-                <span className="text-[var(--text-muted)]">{surah.verses.length} আয়াত</span>
-              </div>
-              <p className="font-arabic text-lg text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors truncate" dir="rtl">
-                {surah.nameAr.replace('سُورَةُ ', '')}
-              </p>
-              <div className="text-xs font-bold text-[var(--text-secondary)] truncate">
-                {surah.nameBn.replace('সূরা ', '')}
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* Founder Message Card */}
-      <section className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pb-14">
-        <div className="rounded-3xl p-6 sm:p-8 bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 text-white border border-emerald-500/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">প্রতিষ্ঠাতার বার্তা</span>
-            <h2 className="text-xl sm:text-2xl font-bold">
+      {/* Compact Founder Message Card */}
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+        <div className="rounded-xl p-3.5 sm:p-4 bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 text-white border border-emerald-500/30 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="space-y-0.5 max-w-2xl">
+            <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">প্রতিষ্ঠাতার বার্তা</span>
+            <h2 className="text-sm sm:text-base font-bold">
               তাসীন বিল্লাহ — আল কুরআন এণ্ড ইসলামিক স্টাডিজ বিভাগ, কুষ্টিয়া ইসলামী বিশ্ববিদ্যালয়
             </h2>
-            <p className="text-sm text-emerald-50/90 leading-relaxed">
-              মাদরাসা, স্কুল, কলেজ ও বিশ্ববিদ্যালয়ের সকল শিক্ষার্থীর জন্য কুরআনিক ও আধুনিক আরবি শেখাকে সহজ ও গোছালো করতে এই একাডেমি নির্মিত হয়েছে। একবার লগইন করলে আপনার অগ্রগতি সবসময় সেভ থাকবে, অথবা গেস্ট হিসেবেও পড়তে পারবেন।
+            <p className="text-[11px] text-emerald-50/90 leading-snug">
+              সকল শিক্ষার্থীর জন্য কুরআনিক ও আধুনিক আরবি শেখাকে সহজ করতে এই একাডেমি নির্মিত হয়েছে। একবার লগইন করলে অগ্রগতি সেভ থাকবে, অথবা গেস্ট হিসেবেও পড়তে পারবেন।
             </p>
           </div>
-          <div className="flex flex-wrap gap-3 shrink-0">
+          <div className="flex flex-wrap gap-2 shrink-0">
             <button
               type="button"
               onClick={openWelcome}
-              className="px-4 py-2.5 rounded-full text-xs font-semibold bg-white/15 hover:bg-white/25 text-white border border-white/25 whitespace-nowrap"
+              className="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/15 hover:bg-white/25 text-white border border-white/25 whitespace-nowrap"
             >
-              আহলান ওয়া সাহলান কার্ড
+              আহলান ওয়া সাহলান
             </button>
             <Link
               to={user ? '/dashboard' : '/auth'}
-              className="px-5 py-2.5 rounded-full text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 whitespace-nowrap shadow"
+              className="px-3.5 py-1.5 rounded-full text-[11px] font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 whitespace-nowrap shadow"
             >
               {user ? 'আমার ড্যাশবোর্ড' : 'লগইন করুন'}
             </Link>

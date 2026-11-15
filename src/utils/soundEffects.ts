@@ -196,7 +196,7 @@ export function playSound(type: SoundEffectType, force = false): boolean {
 
 export function getRouteSoundEffect(pathname: string): SoundEffectType {
   if (pathname === '/quranic-arabic') return 'quran';
-  if (pathname === '/grammar' || pathname === '/safwatul-masadir') return 'grammar';
+  if (pathname === '/grammar' || pathname.startsWith('/safwatul-masadir')) return 'grammar';
   if (pathname === '/quiz' || pathname === '/daily-challenge' || pathname === '/leaderboard') return 'quiz';
   if (pathname === '/themes') return 'theme';
   if (pathname === '/auth') return 'auth';

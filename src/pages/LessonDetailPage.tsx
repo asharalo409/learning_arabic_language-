@@ -3,12 +3,18 @@ import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
+  Bookmark,
   Bot,
   CheckCircle2,
   Download,
+  GitBranch,
   Home,
+  Maximize2,
   Mic,
   MicOff,
+  Minimize2,
+  NotebookPen,
+  Save,
   Sparkles,
   Trash2,
 } from 'lucide-react';
@@ -17,9 +23,11 @@ import { AudioButton } from '../components/AudioButton';
 import { GeminiRichText } from '../components/GeminiRichText';
 import { LessonAiPracticePanel } from '../components/LessonAiPracticePanel';
 import { QuickNahwText } from '../components/QuickNahwText';
+import { TarkibVisualizer } from '../components/TarkibVisualizer';
 import { useApp } from '../context/AppContext';
 import { buildDetailedLessonForSlot } from '../data/lessonGenerator';
 import { DetailedLesson } from '../types/academy';
+import { localizeGrammarLabel } from '../utils/grammarTerminology';
 import { getDeduplicatedCurriculumLessonVocab } from '../utils/lessonVocabDedupe';
 import { buildSegmentsFromDetailedLesson } from '../utils/vocabAutoSync';
 import {
@@ -32,6 +40,39 @@ import { RecognitionHandle, startContinuousSpeechRecognition } from '../utils/sp
 
 type LessonTab = 'overview' | 'vocab' | 'grammar' | 'dialogue' | 'practice' | 'quiz' | 'ai-practice';
 
+const LESSON_NOTES_KEY = 'aaa_lesson_notes_v1';
+
+interface LessonNoteEntry {
+  text: string;
+  updatedAt: string;
+}
+
+function readAllLessonNotes(): Record<string, LessonNoteEntry> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(LESSON_NOTES_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, LessonNoteEntry>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLessonNoteToStorage(lessonId: string, text: string): string {
+  const nowIso = new Date().toISOString();
+  try {
+    const map = readAllLessonNotes();
+    if (!text.trim()) {
+      delete map[lessonId];
+    } else {
+      map[lessonId] = { text, updatedAt: nowIso };
+    }
+    localStorage.setItem(LESSON_NOTES_KEY, JSON.stringify(map));
+  } catch {
+    // ignore storage quota errors
+  }
+  return nowIso;
+}
+
 export const LessonDetailPage: React.FC = () => {
   const { chapterNumber, lessonNumber } = useParams<{ chapterNumber: string; lessonNumber: string }>();
   const {
@@ -41,9 +82,13 @@ export const LessonDetailPage: React.FC = () => {
     allChapters,
     allDetailedLessons,
     completeLesson,
+    toggleFavoriteLesson,
+    recordLastLesson,
     awardXp,
     triggerSound,
     syncMissingVocabFromSegments,
+    grammarTerminologyMode,
+    setGrammarTerminologyMode,
   } = useApp();
   const offlineManifest = useOfflineManifest();
   const syncedLessonsRef = useRef<Set<string>>(new Set());
@@ -73,7 +118,13 @@ export const LessonDetailPage: React.FC = () => {
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [listeningMic, setListeningMic] = useState(false);
   const [savingOffline, setSavingOffline] = useState(false);
+  const [expandedExampleTarkib, setExpandedExampleTarkib] = useState<number | null>(null);
+  const [distractionFree, setDistractionFree] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [noteSavedAt, setNoteSavedAt] = useState<string | null>(null);
   const micRecRef = useRef<RecognitionHandle | null>(null);
+  const notesPanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setActiveTab('overview');
@@ -83,8 +134,21 @@ export const LessonDetailPage: React.FC = () => {
     setQuizAnswers({});
     micRecRef.current?.stop();
     setListeningMic(false);
+    const saved = readAllLessonNotes()[lessonId];
+    setNoteText(saved?.text || '');
+    setNoteSavedAt(saved?.updatedAt || null);
+    recordLastLesson(lessonId);
     window.scrollTo({ top: 0 });
-  }, [chNum, lsNum]);
+  }, [chNum, lsNum, lessonId, recordLastLesson]);
+
+  useEffect(() => {
+    if (!distractionFree) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDistractionFree(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [distractionFree]);
 
   useEffect(() => {
     return () => {
@@ -213,36 +277,106 @@ export const LessonDetailPage: React.FC = () => {
       : null;
 
   const isDone = progress.completedLessonIds.includes(activeLesson.id);
+  const isBookmarked = (progress.favoriteLessonIds || []).includes(activeLesson.id);
+
+  const handleSaveLessonNote = () => {
+    const savedIso = saveLessonNoteToStorage(activeLesson.id, noteText);
+    setNoteSavedAt(noteText.trim() ? savedIso : null);
+    triggerSound('success');
+  };
+
+  const handleClearLessonNote = () => {
+    setNoteText('');
+    saveLessonNoteToStorage(activeLesson.id, '');
+    setNoteSavedAt(null);
+    triggerSound('click');
+  };
 
   return (
     <AppShell
       title={`অধ্যায় ${activeLesson.chapterNumber} · পাঠ ${activeLesson.lessonNumber}`}
       subtitle={lang === 'bn' ? activeLesson.titleBn : activeLesson.titleEn}
+      distractionFree={distractionFree}
+      onExitDistractionFree={() => setDistractionFree(false)}
     >
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* Flat Top Navigation, Offline Save & Completion Row */}
+      <div className={`${distractionFree ? 'max-w-3xl' : 'max-w-5xl'} mx-auto space-y-6`}>
+        {/* Flat Top Navigation, Distraction-Free Toggle, Notes, Offline Save & Completion Row */}
         <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-subtle)]">
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to={`/courses/chapter/${activeLesson.chapterNumber}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold btn-secondary"
+            {!distractionFree && (
+              <>
+                <Link
+                  to={`/courses/chapter/${activeLesson.chapterNumber}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold btn-secondary"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
+                  <span>অধ্যায় {activeLesson.chapterNumber}</span>
+                </Link>
+                <Link
+                  to="/courses"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium btn-secondary"
+                >
+                  <span>১০০ অধ্যায়</span>
+                </Link>
+                <Link
+                  to="/"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium btn-secondary"
+                >
+                  <Home className="w-3.5 h-3.5 text-[var(--accent)]" />
+                  <span className="hidden sm:inline">হোম</span>
+                </Link>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                triggerSound('click');
+                setDistractionFree((v) => !v);
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${
+                distractionFree
+                  ? 'btn-primary'
+                  : 'btn-secondary text-[var(--text-primary)]'
+              }`}
+              title="পার্শ্বমেনু লুকিয়ে পূর্ণ মনোযোগে আরবি পাঠ পড়ুন"
             >
-              <ArrowLeft className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>অধ্যায় {activeLesson.chapterNumber}</span>
-            </Link>
-            <Link
-              to="/courses"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium btn-secondary"
+              {distractionFree ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 text-[var(--accent)]" />}
+              <span>{distractionFree ? 'স্বাভাবিক ভিউ' : 'মনোযোগী পাঠ'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setNotesOpen(true);
+                window.setTimeout(() => {
+                  notesPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 40);
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+                noteText.trim()
+                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/40'
+                  : 'btn-secondary'
+              }`}
+              title="এই পাঠের জন্য ব্যক্তিগত নোট লিখুন"
             >
-              <span>১০০ অধ্যায়</span>
-            </Link>
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium btn-secondary"
+              <NotebookPen className="w-3.5 h-3.5 text-amber-500" />
+              <span>{noteText.trim() ? 'পাঠ নোট (সংরক্ষিত)' : 'পাঠ নোট'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => toggleFavoriteLesson(activeLesson.id)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+                isBookmarked
+                  ? 'bg-amber-500/18 text-amber-700 dark:text-amber-300 border border-amber-500/45'
+                  : 'btn-secondary'
+              }`}
+              title={isBookmarked ? 'পছন্দের তালিকা থেকে সরান' : 'ড্যাশবোর্ডের পছন্দের তালিকায় যোগ করুন'}
             >
-              <Home className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span className="hidden sm:inline">হোম</span>
-            </Link>
+              <Bookmark className={`w-3.5 h-3.5 text-amber-500 ${isBookmarked ? 'fill-current' : ''}`} />
+              <span>{isBookmarked ? 'পছন্দ ✓' : 'পছন্দের তালিকায়'}</span>
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -343,19 +477,52 @@ export const LessonDetailPage: React.FC = () => {
             })}
           </nav>
 
-          <button
-            type="button"
-            onClick={() => setNahwTipsEnabled((v) => !v)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
-              nahwTipsEnabled
-                ? 'bg-[var(--emerald-highlight)] text-[var(--accent)] border border-[var(--accent)]/40'
-                : 'btn-secondary text-[var(--text-muted)]'
-            }`}
-            title="বাক্যের আরবি ব্যাকরণিক পদে ক্লিক করে সংক্ষিপ্ত নাহু নিয়ম দেখুন"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>নাহু টিপস: {nahwTipsEnabled ? 'চালু' : 'বন্ধ'}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="inline-flex items-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface-subtle)] p-0.5 text-[11px] font-bold"
+              role="group"
+              aria-label="Grammar terminology language"
+            >
+              <button
+                type="button"
+                onClick={() => setGrammarTerminologyMode('arabic')}
+                className={`px-2.5 py-1 rounded-full transition-colors ${
+                  grammarTerminologyMode === 'arabic'
+                    ? 'bg-[var(--accent)] text-white shadow-xs'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+                title="আরবি পরিভাষা (اسم، فعل، مبتدأ، خبر)"
+              >
+                العربية
+              </button>
+              <button
+                type="button"
+                onClick={() => setGrammarTerminologyMode('bengali')}
+                className={`px-2.5 py-1 rounded-full transition-colors ${
+                  grammarTerminologyMode === 'bengali'
+                    ? 'bg-[var(--accent)] text-white shadow-xs'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+                title="বাংলা পরিভাষা (ইসম, ফেল, মুবতাদা, খবর)"
+              >
+                বাংলা
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setNahwTipsEnabled((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+                nahwTipsEnabled
+                  ? 'bg-[var(--emerald-highlight)] text-[var(--accent)] border border-[var(--accent)]/40'
+                  : 'btn-secondary text-[var(--text-muted)]'
+              }`}
+              title="বাক্যের আরবি ব্যাকরণিক পদে ক্লিক করে সংক্ষিপ্ত নাহু নিয়ম দেখুন"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>নাহু টিপস: {nahwTipsEnabled ? 'চালু' : 'বন্ধ'}</span>
+            </button>
+          </div>
         </div>
 
         {/* TAB 1: Objectives & Revision (Open Gemini-like flat sections with large readable font) */}
@@ -452,7 +619,7 @@ export const LessonDetailPage: React.FC = () => {
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-[var(--text-secondary)]">
                           {word.category && (
                             <span>
-                              শ্রেণি: <strong className="text-[var(--accent)]">{word.category}</strong>
+                              শ্রেণি: <strong className="text-[var(--accent)]">{localizeGrammarLabel(word.category, grammarTerminologyMode)}</strong>
                             </span>
                           )}
                           {word.root && (
@@ -488,9 +655,13 @@ export const LessonDetailPage: React.FC = () => {
               <p className="font-arabic text-3xl text-[var(--accent)]" dir="rtl">
                 {activeLesson.grammarTopicAr}
               </p>
-              <h3 className="text-xl font-extrabold">{activeLesson.grammarTopicBn}</h3>
+              <h3 className="text-xl font-extrabold">
+                {localizeGrammarLabel(activeLesson.grammarTopicBn, grammarTerminologyMode)}
+              </h3>
               <div className="text-[15.5px] sm:text-base text-[var(--text-primary)] leading-[1.85] whitespace-pre-line">
-                {lang === 'bn' ? activeLesson.grammarExplanationBn : activeLesson.grammarExplanationEn}
+                {lang === 'bn'
+                  ? localizeGrammarLabel(activeLesson.grammarExplanationBn, grammarTerminologyMode)
+                  : activeLesson.grammarExplanationEn}
               </div>
             </section>
 
@@ -499,41 +670,67 @@ export const LessonDetailPage: React.FC = () => {
                 <h4 className="text-base font-extrabold text-[var(--accent)]">উদাহরণ ও পদ-বিশ্লেষণ:</h4>
                 {nahwTipsEnabled && (
                   <span className="text-xs text-[var(--text-muted)]">
-                    ডট-দাগযুক্ত আরবি শব্দে ক্লিক করে দ্রুত নাহু নিয়ম দেখুন
+                    ডট-দাগযুক্ত আরবি শব্দে ক্লিক করে দ্রুত নাহু নিয়ম ও তারকিব ট্রি দেখুন
                   </span>
                 )}
               </div>
               <div className="divide-y divide-[var(--border-subtle)]">
-                {activeLesson.grammarExamples.map((ex, i) => (
-                  <div key={i} className="py-4 first:pt-1 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <QuickNahwText
-                          text={ex.arabic}
-                          enabled={nahwTipsEnabled}
-                          className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]"
-                        />
-                      </div>
-                      <AudioButton text={ex.arabic} compact />
-                    </div>
-                    <div className="space-y-1 text-[15px] sm:text-base leading-relaxed">
-                      <div>
-                        <span className="text-[var(--text-muted)]">উচ্চারণ: </span>
-                        <span className="font-medium">{ex.pronunciationBn}</span>
-                      </div>
-                      <div>
-                        <span className="text-[var(--text-muted)]">বাংলা অর্থ: </span>
-                        <span className="font-bold">{ex.meaningBn}</span>
-                      </div>
-                      {ex.meaningEn && ex.meaningEn !== ex.meaningBn && (
-                        <div className="text-sm text-[var(--text-secondary)]">
-                          <span className="font-bold text-[var(--accent)]">বিশ্লেষণ: </span>
-                          {ex.meaningEn}
+                {activeLesson.grammarExamples.map((ex, i) => {
+                  const showTarkib = expandedExampleTarkib === i;
+                  return (
+                    <div key={i} className="py-4 first:pt-1 space-y-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <QuickNahwText
+                            text={ex.arabic}
+                            enabled={nahwTipsEnabled}
+                            showSentenceTarkibButton={false}
+                            className="font-arabic text-2xl sm:text-3xl text-[var(--accent)]"
+                          />
                         </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <AudioButton text={ex.arabic} compact />
+                          {ex.arabic.trim().split(/\s+/).length >= 2 && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedExampleTarkib(showTarkib ? null : i)}
+                              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                                showTarkib ? 'btn-primary' : 'btn-secondary'
+                              }`}
+                            >
+                              <GitBranch className="w-3.5 h-3.5" />
+                              <span>{showTarkib ? 'ট্রি লুকান' : 'তারকিব ট্রি'}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-1 text-[15px] sm:text-base leading-relaxed">
+                        <div>
+                          <span className="text-[var(--text-muted)]">উচ্চারণ: </span>
+                          <span className="font-medium">{ex.pronunciationBn}</span>
+                        </div>
+                        <div>
+                          <span className="text-[var(--text-muted)]">বাংলা অর্থ: </span>
+                          <span className="font-bold">{ex.meaningBn}</span>
+                        </div>
+                        {ex.meaningEn && ex.meaningEn !== ex.meaningBn && (
+                          <div className="text-sm text-[var(--text-secondary)]">
+                            <span className="font-bold text-[var(--accent)]">বিশ্লেষণ: </span>
+                            {localizeGrammarLabel(ex.meaningEn, grammarTerminologyMode)}
+                          </div>
+                        )}
+                      </div>
+                      {showTarkib && (
+                        <TarkibVisualizer
+                          sentenceAr={ex.arabic}
+                          translationBn={ex.meaningBn}
+                          compact
+                          onClose={() => setExpandedExampleTarkib(null)}
+                        />
                       )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           </div>
@@ -752,6 +949,80 @@ export const LessonDetailPage: React.FC = () => {
             levelLabel={`Level ${chapter.level}`}
           />
         )}
+
+        {/* Personal Per-Lesson Notes (localStorage persisted under aaa_lesson_notes_v1) */}
+        <section
+          ref={notesPanelRef}
+          className="surface-card rounded-3xl border border-amber-500/35 bg-gradient-to-br from-amber-500/8 via-transparent to-emerald-500/5 p-5 space-y-3"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setNotesOpen((v) => !v)}
+              className="inline-flex items-center gap-2 text-sm sm:text-base font-extrabold text-[var(--text-primary)]"
+            >
+              <NotebookPen className="w-4 h-4 text-amber-500 shrink-0" />
+              <span>পাঠের ব্যক্তিগত নোট (Lesson Notes · {activeLesson.chapterNumber}.{activeLesson.lessonNumber})</span>
+            </button>
+
+            <div className="flex items-center gap-2 text-xs">
+              {noteSavedAt && (
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-300 font-semibold">
+                  সংরক্ষিত ({new Date(noteSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setNotesOpen((v) => !v)}
+                className="px-2.5 py-1 rounded-xl text-xs font-semibold btn-secondary"
+              >
+                {notesOpen ? 'সংকুচিত করুন' : 'নোট লিখুন'}
+              </button>
+            </div>
+          </div>
+
+          {(notesOpen || noteText.trim().length > 0) && (
+            <div className="space-y-3 pt-1">
+              <textarea
+                rows={3}
+                value={noteText}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNoteText(val);
+                  const iso = saveLessonNoteToStorage(activeLesson.id, val);
+                  setNoteSavedAt(val.trim() ? iso : null);
+                }}
+                placeholder="এই পাঠের গুরুত্বপূর্ণ নাহু-ছরফ নিয়ম, নতুন শব্দের অর্থ বা নিজের বোঝার জন্য নোট লিখে রাখুন (অটো-সেভ হবে)..."
+                className="w-full p-3.5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] focus:border-[var(--accent)] focus:outline-none text-sm leading-relaxed text-[var(--text-primary)]"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] text-[var(--text-muted)]">
+                  নোট আপনার ব্রাউজারে পাঠ #{activeLesson.chapterNumber}.{activeLesson.lessonNumber}-এর সাথে স্থায়ীভাবে সংরক্ষিত থাকে।
+                </span>
+                <div className="flex items-center gap-2">
+                  {noteText.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleClearLessonNote}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold btn-secondary text-rose-600 dark:text-rose-300"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>মুছুন</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSaveLessonNote}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold btn-primary"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>নোট সেভ করুন</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Clean Footer Lesson Navigation */}
         <div className="pt-4 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3">

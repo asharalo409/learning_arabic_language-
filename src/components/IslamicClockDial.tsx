@@ -16,7 +16,7 @@ interface IslamicClockDialProps {
 export const IslamicClockDial: React.FC<IslamicClockDialProps> = ({
   now,
   variant,
-  sizeClass = 'w-40 h-40',
+  sizeClass = 'w-28 h-28',
 }) => {
   const seconds = now.getSeconds();
   const minutes = now.getMinutes() + seconds / 60;
