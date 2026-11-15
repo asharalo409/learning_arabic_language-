@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  Download,
   GitBranch,
   Home,
   Link2,
@@ -19,6 +20,7 @@ import { analyzeSentenceTarkib, SentenceTarkibResult, SentenceTarkibWord } from 
 import { QURAN_GRAMMAR_BY_SURAH } from '../data/quranGrammarData';
 import { analyzeQuranWord, WordGrammarDetail } from '../data/quranWordMorphology';
 import { QURAN_ALL_SHORT_SURAHS, QuranSurahComplete } from '../data/quranicData';
+import { exportElementToPdf } from '../utils/domPdfExport';
 import { formatGrammarTerm, localizeGrammarLabel } from '../utils/grammarTerminology';
 
 type SurahTab = 'verses' | 'vocab' | 'grammar' | 'tarkib' | 'practice';
@@ -146,7 +148,12 @@ export const SurahReaderPage: React.FC = () => {
     anchor: FloatingAnchor;
   } | null>(null);
 
+  const [showPdfSheet, setShowPdfSheet] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [pdfExportError, setPdfExportError] = useState<string | null>(null);
+
   const popoverRef = useRef<HTMLDivElement | null>(null);
+  const pdfSheetRef = useRef<HTMLDivElement | null>(null);
   const syncedSurahsRef = useRef<Set<number>>(new Set());
 
   const isArabicMode = grammarTerminologyMode === 'arabic';
@@ -224,6 +231,34 @@ export const SurahReaderPage: React.FC = () => {
     });
   };
 
+  const handleExportSurahPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    setPdfExportError(null);
+    setShowPdfSheet(true);
+
+    try {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
+      if (!pdfSheetRef.current) {
+        throw new Error('সূরার PDF শিট প্রস্তুত হয়নি। অনুগ্রহ করে আবার চেষ্টা করুন।');
+      }
+      const slug = activeSurah.nameEn.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      await exportElementToPdf(pdfSheetRef.current, {
+        filename: `surah-${activeSurah.surahNumber}-${slug || 'study'}.pdf`,
+        scale: 2,
+        margin: [10, 10, 10, 10],
+        captureWidthPx: 794,
+      });
+    } catch (err: unknown) {
+      setPdfExportError(err instanceof Error ? err.message : 'PDF ডাউনলোড করা যায়নি।');
+    } finally {
+      setExportingPdf(false);
+      setShowPdfSheet(false);
+    }
+  };
+
   const linkedSetForActiveAyah = useMemo(() => {
     if (!selectedToken?.tarkibWord) return new Set<number>();
     return new Set(selectedToken.tarkibWord.linkedIndices || []);
@@ -293,6 +328,17 @@ export const SurahReaderPage: React.FC = () => {
               </button>
             </div>
 
+            <button
+              type="button"
+              onClick={() => void handleExportSurahPdf()}
+              disabled={exportingPdf}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold btn-secondary disabled:opacity-60"
+              title="এই সূরার আয়াত, শব্দভাণ্ডার ও নাহু-ছরফ PDF হিসেবে ডাউনলোড করুন"
+            >
+              <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>{exportingPdf ? 'PDF তৈরি হচ্ছে...' : 'PDF ডাউনলোড'}</span>
+            </button>
+
             {isSurahCompleted ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[var(--emerald-highlight)] text-[var(--success)]">
                 <CheckCircle2 className="w-4 h-4" />
@@ -309,6 +355,19 @@ export const SurahReaderPage: React.FC = () => {
             )}
           </div>
         </div>
+
+        {pdfExportError && (
+          <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-700 dark:text-rose-300 flex items-center justify-between gap-2">
+            <span>{pdfExportError}</span>
+            <button
+              type="button"
+              onClick={() => setPdfExportError(null)}
+              className="px-2 py-0.5 rounded-lg font-bold hover:bg-rose-500/15"
+            >
+              বন্ধ
+            </button>
+          </div>
+        )}
 
         {/* Rich Surah Header Banner */}
         <header
@@ -875,6 +934,193 @@ export const SurahReaderPage: React.FC = () => {
             </button>
           </div>
         </FloatingWordPortal>
+      )}
+
+      {showPdfSheet && (
+        <div
+          style={{
+            position: 'fixed',
+            left: '-12000px',
+            top: 0,
+            width: '794px',
+            pointerEvents: 'none',
+            zIndex: -1,
+          }}
+          aria-hidden="true"
+        >
+          <div
+            ref={pdfSheetRef}
+            style={{
+              width: '794px',
+              backgroundColor: '#ffffff',
+              color: '#0f172a',
+              padding: '28px',
+            }}
+            className="space-y-6"
+          >
+            <div
+              style={{
+                borderBottom: '2px solid #047857',
+                paddingBottom: '14px',
+              }}
+              className="flex items-start justify-between gap-4"
+            >
+              <div className="space-y-1">
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#047857' }}>
+                  সূরা নং {activeSurah.surahNumber} · {activeSurah.revelationTypeBn} · {activeSurah.verses.length} আয়াত
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>
+                  {activeSurah.nameBn} ({activeSurah.nameEn})
+                </div>
+                <div style={{ fontSize: '12px', color: '#475569', lineHeight: 1.6 }}>
+                  {activeSurah.summaryBn}
+                </div>
+              </div>
+              <div
+                dir="rtl"
+                className="font-arabic shrink-0"
+                style={{ fontSize: '28px', fontWeight: 700, color: '#065f46' }}
+              >
+                {activeSurah.nameAr}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div style={{ fontSize: '14px', fontWeight: 800, color: '#065f46' }}>
+                আয়াতসমূহ ও বঙ্গানুবাদ
+              </div>
+              <div className="space-y-3">
+                {activeSurah.verses.map((v) => {
+                  const ayahNote = surahGrammar?.ayat?.[v.ayahNumber];
+                  return (
+                    <div
+                      key={v.ayahNumber}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '10px',
+                        padding: '12px 14px',
+                        backgroundColor: '#ffffff',
+                      }}
+                      className="space-y-1.5"
+                    >
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#047857' }}>
+                        আয়াত {activeSurah.surahNumber}:{v.ayahNumber}
+                      </div>
+                      <p
+                        dir="rtl"
+                        className="font-arabic"
+                        style={{ fontSize: '22px', lineHeight: 1.9, color: '#0f172a' }}
+                      >
+                        {v.arabic}
+                      </p>
+                      <p style={{ fontSize: '12px', color: '#475569' }}>
+                        উচ্চারণ: {v.pronunciationBn}
+                      </p>
+                      <p style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', lineHeight: 1.6 }}>
+                        অর্থ: {v.translationBn}
+                      </p>
+                      {ayahNote && (
+                        <div
+                          style={{
+                            borderTop: '1px dashed #cbd5e1',
+                            paddingTop: '6px',
+                            marginTop: '6px',
+                            fontSize: '11.5px',
+                            color: '#334155',
+                            lineHeight: 1.55,
+                          }}
+                          className="space-y-1"
+                        >
+                          <div>
+                            <strong style={{ color: '#047857' }}>নাহু: </strong>
+                            {localizeGrammarLabel(ayahNote.nahwBn, grammarTerminologyMode)}
+                          </div>
+                          <div>
+                            <strong style={{ color: '#047857' }}>ছরফ: </strong>
+                            {localizeGrammarLabel(ayahNote.sarfBn, grammarTerminologyMode)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {activeSurah.keyWords.length > 0 && (
+              <div className="space-y-2">
+                <div style={{ fontSize: '14px', fontWeight: 800, color: '#065f46' }}>
+                  গুরুত্বপূর্ণ কুরআনিক শব্দ ও মূলধাতু ({activeSurah.keyWords.length}টি)
+                </div>
+                <table
+                  style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    fontSize: '12px',
+                  }}
+                >
+                  <thead>
+                    <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                      <th style={{ border: '1px solid #cbd5e1', padding: '6px 8px' }}>শব্দ</th>
+                      <th style={{ border: '1px solid #cbd5e1', padding: '6px 8px' }}>উচ্চারণ ও অর্থ</th>
+                      <th style={{ border: '1px solid #cbd5e1', padding: '6px 8px' }}>মূলধাতু ও ব্যাকরণ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeSurah.keyWords.map((kw, idx) => (
+                      <tr key={`${kw.arabic}-${idx}`}>
+                        <td
+                          dir="rtl"
+                          className="font-arabic"
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '6px 8px',
+                            fontSize: '17px',
+                            fontWeight: 700,
+                            color: '#065f46',
+                          }}
+                        >
+                          {kw.arabic}
+                        </td>
+                        <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px' }}>
+                          <div style={{ fontWeight: 700 }}>{kw.meaningBn}</div>
+                          <div style={{ fontSize: '11px', color: '#475569' }}>{kw.pronunciationBn}</div>
+                        </td>
+                        <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px', fontSize: '11.5px' }}>
+                          <div>
+                            মূলধাতু: <span className="font-arabic">{kw.root}</span>
+                          </div>
+                          <div style={{ color: '#475569' }}>
+                            {localizeGrammarLabel(kw.grammarNoteBn, grammarTerminologyMode)}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {surahGrammar && (
+              <div
+                style={{
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  backgroundColor: '#f8fafc',
+                }}
+                className="space-y-1.5"
+              >
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#065f46' }}>
+                  {localizeGrammarLabel(surahGrammar.overviewTitleBn, grammarTerminologyMode)}
+                </div>
+                <p style={{ fontSize: '12px', color: '#1e293b', lineHeight: 1.65 }}>
+                  {localizeGrammarLabel(surahGrammar.overviewBn, grammarTerminologyMode)}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </AppShell>
   );

@@ -17,6 +17,7 @@ import { GeminiRichText } from './GeminiRichText';
 import { QuickNahwText } from './QuickNahwText';
 import { useApp } from '../context/AppContext';
 import { VoiceGender } from '../types/academy';
+import { formatHttpFallbackError, safeParseResponseJson } from '../utils/safeFetchJson';
 import { VoiceEmotion } from '../utils/speech';
 
 export interface DocumentOcrWordBreakdown {
@@ -164,13 +165,17 @@ export const DocumentAnalyzerPanel: React.FC<DocumentAnalyzerPanelProps> = ({
         }),
       });
 
-      const data = (await res.json()) as {
+      const parsed = await safeParseResponseJson<{
         reply?: string;
         analysis?: DocumentOcrAnalysisResult;
         error?: string;
-      };
-      if (!res.ok) {
-        throw new Error(data.error || 'ডকুমেন্ট বিশ্লেষণ করা যায়নি।');
+      }>(res);
+      const data = parsed.data;
+      if (!res.ok || !data) {
+        throw new Error(
+          data?.error ||
+            formatHttpFallbackError(res.status, parsed.rawText, 'ডকুমেন্ট বিশ্লেষণ করা যায়নি।')
+        );
       }
       if (data.analysis && data.analysis.extractedArabic) {
         setResult(data.analysis);

@@ -35,6 +35,7 @@ import { SentenceTarkibCard } from '../components/SentenceTarkibCard';
 import { useApp } from '../context/AppContext';
 import { SpeechEngineMode, VoiceGender } from '../types/academy';
 import { useOnlineStatus } from '../utils/offlineCache';
+import { formatHttpFallbackError, safeParseResponseJson } from '../utils/safeFetchJson';
 import {
   getSpeechSupport,
   getSpeechTuning,
@@ -454,9 +455,17 @@ export const AiTeacherPage: React.FC = () => {
           }),
         });
 
-        const data = (await res.json()) as { reply?: string; error?: string };
-        if (!res.ok || !data.reply) {
-          throw new Error(data.error || 'AI Teacher could not generate a response.');
+        const parsed = await safeParseResponseJson<{ reply?: string; error?: string }>(res);
+        const data = parsed.data;
+        if (!res.ok || !data?.reply) {
+          throw new Error(
+            data?.error ||
+              formatHttpFallbackError(
+                res.status,
+                parsed.rawText,
+                'AI Teacher could not generate a response.'
+              )
+          );
         }
 
         const assistantMsg: ChatMessage = {
@@ -691,7 +700,7 @@ export const AiTeacherPage: React.FC = () => {
         {/* Clean Minimalist Gemini Top Bar + Dedicated OCR Lab Switch & Synthesis Tuning */}
         <div className="space-y-3">
           {/* Primary Workspace Tab Bar: Chat vs Dedicated Document OCR & Grammar Lab */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[var(--border-subtle)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[var(--border-subtle)] print:hidden">
             <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-2xl sm:rounded-full surface-alt border border-[var(--border-subtle)]">
               <button
                 type="button"
@@ -782,7 +791,7 @@ export const AiTeacherPage: React.FC = () => {
 
           {/* Expandable AI Synthesis Settings Panel (Pitch, Rate, Emotion, Gender) */}
           {showVoiceSettings && (
-            <div className="surface-card rounded-2xl p-4 sm:p-5 border border-[var(--border-strong)] space-y-4 shadow-md">
+            <div className="surface-card rounded-2xl p-4 sm:p-5 border border-[var(--border-strong)] space-y-4 shadow-md print:hidden">
               <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[var(--border-subtle)]">
                 <div className="flex items-center gap-2 text-xs font-bold text-[var(--accent)]">
                   <Sliders className="w-4 h-4" />
@@ -948,7 +957,7 @@ export const AiTeacherPage: React.FC = () => {
 
           {/* Chat Mode Controls Row */}
           {activeWorkspace === 'chat' && (
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
               <div className="flex flex-wrap items-center gap-1.5">
                 <select
                   value={mode}

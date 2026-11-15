@@ -7,6 +7,7 @@ import {
   Bot,
   CheckCircle2,
   Download,
+  FileDown,
   GitBranch,
   Home,
   Maximize2,
@@ -36,6 +37,7 @@ import {
   saveLessonOffline,
   useOfflineManifest,
 } from '../utils/offlineCache';
+import { exportElementToPdf } from '../utils/domPdfExport';
 import { RecognitionHandle, startContinuousSpeechRecognition } from '../utils/speech';
 
 type LessonTab = 'overview' | 'vocab' | 'grammar' | 'dialogue' | 'practice' | 'quiz' | 'ai-practice';
@@ -123,8 +125,12 @@ export const LessonDetailPage: React.FC = () => {
   const [notesOpen, setNotesOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [noteSavedAt, setNoteSavedAt] = useState<string | null>(null);
+  const [showPdfSheet, setShowPdfSheet] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [pdfExportError, setPdfExportError] = useState<string | null>(null);
   const micRecRef = useRef<RecognitionHandle | null>(null);
   const notesPanelRef = useRef<HTMLDivElement | null>(null);
+  const pdfSheetRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setActiveTab('overview');
@@ -173,6 +179,33 @@ export const LessonDetailPage: React.FC = () => {
       }
     } finally {
       setSavingOffline(false);
+    }
+  };
+
+  const handleExportLessonPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    setPdfExportError(null);
+    setShowPdfSheet(true);
+
+    try {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
+      if (!pdfSheetRef.current) {
+        throw new Error('পাঠের PDF শিট প্রস্তুত হয়নি। অনুগ্রহ করে আবার চেষ্টা করুন।');
+      }
+      await exportElementToPdf(pdfSheetRef.current, {
+        filename: `lesson-ch${activeLesson.chapterNumber}-l${activeLesson.lessonNumber}.pdf`,
+        scale: 2,
+        margin: [10, 10, 10, 10],
+        captureWidthPx: 794,
+      });
+    } catch (err: unknown) {
+      setPdfExportError(err instanceof Error ? err.message : 'PDF ডাউনলোড করা যায়নি।');
+    } finally {
+      setExportingPdf(false);
+      setShowPdfSheet(false);
     }
   };
 
@@ -382,6 +415,17 @@ export const LessonDetailPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <button
               type="button"
+              onClick={() => void handleExportLessonPdf()}
+              disabled={exportingPdf}
+              className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold btn-secondary disabled:opacity-60"
+              title="এই পাঠের শব্দভাণ্ডার, ব্যাকরণ ও সংলাপ PDF হিসেবে ডাউনলোড করুন"
+            >
+              <FileDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[var(--accent)]" />
+              <span>{exportingPdf ? 'PDF তৈরি হচ্ছে...' : 'PDF ডাউনলোড'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => void handleToggleOfflineSave()}
               disabled={savingOffline}
               className={`inline-flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-bold transition-colors ${
@@ -421,6 +465,19 @@ export const LessonDetailPage: React.FC = () => {
             )}
           </div>
         </div>
+
+        {pdfExportError && (
+          <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-700 dark:text-rose-300 flex items-center justify-between gap-2">
+            <span>{pdfExportError}</span>
+            <button
+              type="button"
+              onClick={() => setPdfExportError(null)}
+              className="px-2 py-0.5 rounded-lg font-bold hover:bg-rose-500/15"
+            >
+              বন্ধ
+            </button>
+          </div>
+        )}
 
         {/* Open Flat Lesson Header (No outer card squeezing mobile width) */}
         <header className="space-y-2 pb-4 border-b border-[var(--border-subtle)]">
@@ -1057,6 +1114,202 @@ export const LessonDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {showPdfSheet && (
+        <div
+          style={{
+            position: 'fixed',
+            left: '-12000px',
+            top: 0,
+            width: '794px',
+            pointerEvents: 'none',
+            zIndex: -1,
+          }}
+          aria-hidden="true"
+        >
+          <div
+            ref={pdfSheetRef}
+            style={{
+              width: '794px',
+              backgroundColor: '#ffffff',
+              color: '#0f172a',
+              padding: '28px',
+            }}
+            className="space-y-6"
+          >
+            <div
+              style={{
+                borderBottom: '2px solid #047857',
+                paddingBottom: '14px',
+              }}
+              className="flex items-start justify-between gap-4"
+            >
+              <div className="space-y-1">
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#047857' }}>
+                  অধ্যায় {activeLesson.chapterNumber} · পাঠ {activeLesson.lessonNumber} · স্তর {chapter.level} · {activeLesson.track}
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a' }}>
+                  {lang === 'bn' ? activeLesson.titleBn : activeLesson.titleEn}
+                </div>
+              </div>
+              <div
+                dir="rtl"
+                className="font-arabic shrink-0"
+                style={{ fontSize: '24px', fontWeight: 700, color: '#065f46' }}
+              >
+                {activeLesson.titleAr}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div style={{ fontSize: '14px', fontWeight: 800, color: '#065f46' }}>
+                পাঠের শিখনফল (Learning Objectives)
+              </div>
+              <ul style={{ fontSize: '12.5px', color: '#1e293b', lineHeight: 1.65, paddingLeft: '18px' }} className="list-disc space-y-1">
+                {(lang === 'bn' ? activeLesson.objectivesBn : activeLesson.objectivesEn).map((obj, idx) => (
+                  <li key={idx}>{obj}</li>
+                ))}
+              </ul>
+            </div>
+
+            {dedupedVocab.words.length > 0 && (
+              <div className="space-y-2">
+                <div style={{ fontSize: '14px', fontWeight: 800, color: '#065f46' }}>
+                  পাঠের নতুন শব্দভাণ্ডার ({dedupedVocab.words.length}টি)
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f1f5f9', textAlign: 'left' }}>
+                      <th style={{ border: '1px solid #cbd5e1', padding: '6px 8px' }}>আরবি শব্দ</th>
+                      <th style={{ border: '1px solid #cbd5e1', padding: '6px 8px' }}>উচ্চারণ ও বাংলা অর্থ</th>
+                      <th style={{ border: '1px solid #cbd5e1', padding: '6px 8px' }}>উদাহরণ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dedupedVocab.words.map((word) => (
+                      <tr key={word.id}>
+                        <td
+                          dir="rtl"
+                          className="font-arabic"
+                          style={{
+                            border: '1px solid #cbd5e1',
+                            padding: '6px 8px',
+                            fontSize: '17px',
+                            fontWeight: 700,
+                            color: '#065f46',
+                          }}
+                        >
+                          {word.arabic}
+                        </td>
+                        <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px' }}>
+                          <div style={{ fontWeight: 700 }}>{word.meaningBn}</div>
+                          <div style={{ fontSize: '11px', color: '#475569' }}>
+                            {word.pronunciationBn}
+                            {word.root ? ` · মূলধাতু: ${word.root}` : ''}
+                          </div>
+                        </td>
+                        <td style={{ border: '1px solid #cbd5e1', padding: '6px 8px' }}>
+                          <div dir="rtl" className="font-arabic" style={{ fontSize: '14px', color: '#0f172a' }}>
+                            {word.exampleAr}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#475569' }}>{word.exampleBn}</div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div
+              style={{
+                border: '1px solid #cbd5e1',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                backgroundColor: '#f8fafc',
+              }}
+              className="space-y-2"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div style={{ fontSize: '14px', fontWeight: 800, color: '#065f46' }}>
+                  ব্যাকরণ: {localizeGrammarLabel(activeLesson.grammarTopicBn, grammarTerminologyMode)}
+                </div>
+                <div dir="rtl" className="font-arabic" style={{ fontSize: '18px', fontWeight: 700, color: '#065f46' }}>
+                  {activeLesson.grammarTopicAr}
+                </div>
+              </div>
+              <p style={{ fontSize: '12px', color: '#1e293b', lineHeight: 1.65, whiteSpace: 'pre-line' }}>
+                {lang === 'bn'
+                  ? localizeGrammarLabel(activeLesson.grammarExplanationBn, grammarTerminologyMode)
+                  : activeLesson.grammarExplanationEn}
+              </p>
+              {activeLesson.grammarExamples.length > 0 && (
+                <div className="space-y-1.5 pt-2" style={{ borderTop: '1px dashed #cbd5e1' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#047857' }}>উদাহরণ:</div>
+                  {activeLesson.grammarExamples.map((ex, idx) => (
+                    <div key={idx} style={{ fontSize: '12px', color: '#0f172a' }}>
+                      <span dir="rtl" className="font-arabic" style={{ fontSize: '15px', fontWeight: 700, color: '#065f46' }}>
+                        {ex.arabic}
+                      </span>{' '}
+                      — {ex.pronunciationBn} — <strong>{ex.meaningBn}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {activeLesson.conversation.length > 0 && (
+              <div className="space-y-2">
+                <div style={{ fontSize: '14px', fontWeight: 800, color: '#065f46' }}>
+                  সংলাপ ({activeLesson.conversation.length} লাইন)
+                </div>
+                <div className="space-y-2">
+                  {activeLesson.conversation.map((line, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        backgroundColor: '#ffffff',
+                      }}
+                      className="space-y-1"
+                    >
+                      <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#047857' }}>
+                        {String(idx + 1).padStart(2, '0')}. {line.speaker} ({line.speakerRoleBn})
+                      </div>
+                      <p dir="rtl" className="font-arabic" style={{ fontSize: '17px', color: '#0f172a', lineHeight: 1.8 }}>
+                        {line.arabic}
+                      </p>
+                      <p style={{ fontSize: '11.5px', color: '#475569' }}>{line.pronunciationBn}</p>
+                      <p style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>{line.translationBn}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {noteText.trim() && (
+              <div
+                style={{
+                  border: '1px solid #f59e0b',
+                  borderRadius: '10px',
+                  padding: '10px 12px',
+                  backgroundColor: '#fffbeb',
+                }}
+                className="space-y-1"
+              >
+                <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#92400e' }}>
+                  ব্যক্তিগত পাঠ নোট
+                </div>
+                <p style={{ fontSize: '12px', color: '#78350f', whiteSpace: 'pre-line', lineHeight: 1.6 }}>
+                  {noteText}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 };

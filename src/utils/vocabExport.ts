@@ -223,8 +223,16 @@ export function exportVocabToPrintablePdf(items: VocabItem[], titleBn: string): 
   iframe.setAttribute('aria-hidden', 'true');
 
   iframe.onload = () => {
-    window.setTimeout(() => {
+    const triggerPrint = async () => {
       try {
+        const doc = iframe.contentDocument;
+        if (doc?.fonts?.ready) {
+          await Promise.race([
+            doc.fonts.ready,
+            new Promise((resolve) => window.setTimeout(resolve, 2500)),
+          ]);
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
         iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
       } catch {
@@ -235,7 +243,8 @@ export function exportVocabToPrintablePdf(items: VocabItem[], titleBn: string): 
           iframe.parentNode.removeChild(iframe);
         }
       }, 60000);
-    }, 350);
+    };
+    void triggerPrint();
   };
 
   iframe.srcdoc = html;

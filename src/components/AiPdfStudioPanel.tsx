@@ -23,6 +23,8 @@ import {
   PdfVisualStyle,
 } from '../types/academy';
 import { paginatePdfDocument } from '../utils/pdfPagination';
+import { exportPaginatedElementsToPdf } from '../utils/domPdfExport';
+import { formatHttpFallbackError, safeParseResponseJson } from '../utils/safeFetchJson';
 
 interface UploadedFile {
   id: string;
@@ -191,33 +193,87 @@ function splitLongTextIntoChunks(rawText: string, maxChunkChars = 2200): string[
   return chunks;
 }
 
-const PDF_BATCH_PAGES = 3;
+const PDF_BATCH_PAGES = 2;
+const MAX_SAFE_PDF_BASE64_CHARS = 2_400_000;
 
-async function fetchPdfBatchWithStream(
+async function fetchPdfBatchViaJsonEndpoint(
   payload: Record<string, unknown>,
-  signal: AbortSignal,
-  onStreamChars: (chars: number) => void
+  signal: AbortSignal
 ): Promise<{ document: FormattedPdfDocument; model?: string }> {
-  const res = await fetch('/api/format-pdf-stream', {
+  const resFallback = await fetch('/api/format-pdf', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal,
     body: JSON.stringify(payload),
   });
 
+  const parsed = await safeParseResponseJson<{
+    document?: FormattedPdfDocument;
+    error?: string;
+    model?: string;
+  }>(resFallback);
+
+  if (!resFallback.ok || !parsed.data?.document) {
+    const fallbackErr = parsed.data?.error
+      ? parsed.data.error
+      : formatHttpFallbackError(
+          resFallback.status,
+          parsed.rawText,
+          'ডকুমেন্ট প্রসেস করা যায়নি।'
+        );
+    throw new Error(fallbackErr);
+  }
+
+  return { document: parsed.data.document, model: parsed.data.model };
+}
+
+async function fetchPdfBatchWithStream(
+  payload: Record<string, unknown>,
+  signal: AbortSignal,
+  onStreamChars: (chars: number) => void
+): Promise<{ document: FormattedPdfDocument; model?: string }> {
+  let res: Response | null = null;
+  try {
+    res = await fetch('/api/format-pdf-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify(payload),
+    });
+  } catch (networkErr: unknown) {
+    if ((networkErr as { name?: string })?.name === 'AbortError') throw networkErr;
+    // Network drop on stream endpoint — try standard JSON endpoint once
+    return fetchPdfBatchViaJsonEndpoint(payload, signal);
+  }
+
   const contentType = (res.headers.get('content-type') || '').toLowerCase();
 
-  // Fallback gracefully if server returned plain JSON instead of SSE
+  // Handle non-SSE response safely without ever calling bare res.json()
   if (!contentType.includes('text/event-stream')) {
-    const fallbackData = (await res.json()) as { document?: FormattedPdfDocument; error?: string; model?: string };
-    if (!res.ok || !fallbackData.document) {
-      throw new Error(fallbackData.error || 'ডকুমেন্ট প্রসেস করা যায়নি।');
+    const parsed = await safeParseResponseJson<{
+      document?: FormattedPdfDocument;
+      error?: string;
+      model?: string;
+    }>(res);
+
+    if (res.ok && parsed.data?.document) {
+      return { document: parsed.data.document, model: parsed.data.model };
     }
-    return { document: fallbackData.document, model: fallbackData.model };
+
+    // Immediate non-retryable client/auth/quota errors
+    if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 413 || res.status === 429) {
+      throw new Error(
+        parsed.data?.error ||
+          formatHttpFallbackError(res.status, parsed.rawText, 'ডকুমেন্ট প্রসেস করা যায়নি।')
+      );
+    }
+
+    // For 404/405/502/504 or empty proxy response, try non-streaming /api/format-pdf fallback
+    return fetchPdfBatchViaJsonEndpoint(payload, signal);
   }
 
   if (!res.body) {
-    throw new Error('স্ট্রিমিং রেসপন্স পাওয়া যায়নি।');
+    return fetchPdfBatchViaJsonEndpoint(payload, signal);
   }
 
   const reader = res.body.getReader();
@@ -225,6 +281,8 @@ async function fetchPdfBatchWithStream(
   let buffer = '';
   let resolvedDoc: FormattedPdfDocument | null = null;
   let resolvedModel: string | undefined;
+  let streamErrorMsg: string | null = null;
+  let streamErrorStatus: number | undefined;
 
   const processFrame = (rawFrame: string) => {
     const lines = rawFrame.split(/\r?\n/);
@@ -255,7 +313,8 @@ async function fetchPdfBatchWithStream(
         resolvedModel = typeof parsed.model === 'string' ? parsed.model : undefined;
       }
     } else if (eventName === 'error') {
-      throw new Error(typeof parsed.error === 'string' ? parsed.error : 'ডকুমেন্ট স্ট্রিমিং ত্রুটি।');
+      streamErrorStatus = typeof parsed.status === 'number' ? parsed.status : undefined;
+      streamErrorMsg = typeof parsed.error === 'string' ? parsed.error : 'ডকুমেন্ট স্ট্রিমিং ত্রুটি।';
     }
   };
 
@@ -278,22 +337,18 @@ async function fetchPdfBatchWithStream(
     }
   }
 
-  if (!resolvedDoc) {
-    // Attempt non-streaming endpoint once as safety net if stream closed cleanly without final frame
-    const resFallback = await fetch('/api/format-pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal,
-      body: JSON.stringify(payload),
-    });
-    const fb = (await resFallback.json()) as { document?: FormattedPdfDocument; error?: string; model?: string };
-    if (!resFallback.ok || !fb.document) {
-      throw new Error(fb.error || 'স্ট্রিমিং থেকে সম্পূর্ণ ডকুমেন্ট পাওয়া যায়নি।');
-    }
-    return { document: fb.document, model: fb.model };
+  if (resolvedDoc) {
+    return { document: resolvedDoc, model: resolvedModel };
   }
 
-  return { document: resolvedDoc, model: resolvedModel };
+  if (streamErrorMsg) {
+    if (streamErrorStatus === 400 || streamErrorStatus === 403 || streamErrorStatus === 429) {
+      throw new Error(streamErrorMsg);
+    }
+  }
+
+  // Fallback safely to non-streaming /api/format-pdf if SSE closed early or returned transient stream error
+  return fetchPdfBatchViaJsonEndpoint(payload, signal);
 }
 
 export const AiPdfStudioPanel: React.FC<AiPdfStudioPanelProps> = ({ onAwardXp }) => {
@@ -311,6 +366,7 @@ export const AiPdfStudioPanel: React.FC<AiPdfStudioPanelProps> = ({ onAwardXp })
   const [maxPages, setMaxPages] = useState<number>(100);
 
   const [loading, setLoading] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [progressMsg, setProgressMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [formattedDoc, setFormattedDoc] = useState<FormattedPdfDocument | null>(null);
@@ -437,31 +493,52 @@ export const AiPdfStudioPanel: React.FC<AiPdfStudioPanelProps> = ({ onAwardXp })
         .filter((a) => a.mimeType !== 'application/pdf')
         .map((a) => ({ name: a.name, mimeType: a.mimeType, base64Data: a.base64Data }));
 
-      const textChunks = splitLongTextIntoChunks(sourceText, 2200);
+      const textChunks = splitLongTextIntoChunks(sourceText, 1800);
 
-      // 1. Slice multi-page PDFs into 3-page zero-omission streaming batches
+      // 1. Adaptive 1–2 page zero-omission PDF slicing so payload stays safely below Vercel 4.5MB limit
       for (const pdfAtt of pdfFiles) {
         const srcDoc = await PDFDocument.load(pdfAtt.pdfBytes!, { ignoreEncryption: true });
         const total = srcDoc.getPageCount();
-        for (let start = 0; start < total; start += PDF_BATCH_PAGES) {
-          const end = Math.min(total, start + PDF_BATCH_PAGES);
-          const subDoc = await PDFDocument.create();
-          const indices = Array.from({ length: end - start }, (_, k) => start + k);
-          const copied = await subDoc.copyPages(srcDoc, indices);
-          copied.forEach((p) => subDoc.addPage(p));
-          const subBase64 = await subDoc.saveAsBase64();
+        let cursor = 0;
+
+        while (cursor < total) {
+          let batchCount = Math.min(PDF_BATCH_PAGES, total - cursor);
+          let subBase64 = '';
+
+          while (batchCount >= 1) {
+            const subDoc = await PDFDocument.create();
+            const indices = Array.from({ length: batchCount }, (_, k) => cursor + k);
+            const copied = await subDoc.copyPages(srcDoc, indices);
+            copied.forEach((p) => subDoc.addPage(p));
+            subBase64 = await subDoc.saveAsBase64();
+            if (subBase64.length <= MAX_SAFE_PDF_BASE64_CHARS || batchCount === 1) {
+              break;
+            }
+            batchCount = 1;
+          }
+
+          if (subBase64.length > 3_800_000) {
+            throw new Error(
+              `"${pdfAtt.name}" এর পৃষ্ঠা ${cursor + 1} এর ছবি খুব ভারী (${Math.round(
+                subBase64.length / 1024 / 1024
+              )}MB)। অনুগ্রহ করে পৃষ্ঠাটির স্ক্রিনশট/কমপ্রেসড PDF দিন।`
+            );
+          }
+
+          const end = cursor + batchCount;
           jobs.push({
-            labelBn: `${pdfAtt.name}: পৃষ্ঠা ${start + 1}–${end} / ${total}`,
+            labelBn: `${pdfAtt.name}: পৃষ্ঠা ${cursor + 1}${end > cursor + 1 ? `–${end}` : ''} / ${total}`,
             text: jobs.length === 0 && textChunks.length > 0 ? textChunks.shift()! : '',
             attachments: [
               ...(jobs.length === 0 ? imageFiles : []),
               {
-                name: `${pdfAtt.name}-p${start + 1}-${end}.pdf`,
+                name: `${pdfAtt.name}-p${cursor + 1}-${end}.pdf`,
                 mimeType: 'application/pdf',
                 base64Data: subBase64,
               },
             ],
           });
+          cursor = end;
         }
       }
 
@@ -550,6 +627,34 @@ export const AiPdfStudioPanel: React.FC<AiPdfStudioPanelProps> = ({ onAwardXp })
   const handlePrintPdf = () => {
     if (!formattedDoc) return;
     window.print();
+  };
+
+  const handleDownloadDirectPdf = async () => {
+    if (!formattedDoc || !pagesContainerRef.current || exportingPdf) return;
+    setExportingPdf(true);
+    setErrorMsg(null);
+    try {
+      const pageNodes = Array.from(
+        pagesContainerRef.current.querySelectorAll<HTMLElement>('.pdf-a4-page')
+      );
+      if (pageNodes.length === 0) {
+        throw new Error('রপ্তানি করার জন্য কোনো A4 পৃষ্ঠা পাওয়া যায়নি।');
+      }
+      await exportPaginatedElementsToPdf(pageNodes, {
+        filename: `arabic-academy-${category}-${Date.now()}.pdf`,
+        scale: 2,
+        margin: [8, 8, 8, 8],
+        captureWidthPx: 794,
+        onProgress: (cur, total) => {
+          setProgressMsg(`PDF ফাইল তৈরি হচ্ছে: পৃষ্ঠা ${cur} / ${total}...`);
+        },
+      });
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'PDF ডাউনলোড করতে সমস্যা হয়েছে।');
+    } finally {
+      setExportingPdf(false);
+      setProgressMsg(null);
+    }
   };
 
   const handleDownloadStandaloneHtml = () => {
@@ -893,11 +998,24 @@ export const AiPdfStudioPanel: React.FC<AiPdfStudioPanelProps> = ({ onAwardXp })
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={handlePrintPdf}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold btn-primary whitespace-nowrap"
+                disabled={exportingPdf}
+                onClick={() => void handleDownloadDirectPdf()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold btn-primary whitespace-nowrap disabled:opacity-60"
               >
-                <Printer className="w-4 h-4" />
-                <span>PDF ডাউনলোড / প্রিন্ট ({paginatedResult?.pages.length || 1} পৃষ্ঠা)</span>
+                <Download className="w-4 h-4" />
+                <span>
+                  {exportingPdf
+                    ? 'PDF তৈরি হচ্ছে...'
+                    : `PDF ডাউনলোড (.pdf · ${paginatedResult?.pages.length || 1} পৃষ্ঠা)`}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={handlePrintPdf}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold btn-secondary whitespace-nowrap"
+              >
+                <Printer className="w-4 h-4 text-[var(--accent)]" />
+                <span>প্রিন্ট</span>
               </button>
               <button
                 type="button"
@@ -931,15 +1049,16 @@ export const AiPdfStudioPanel: React.FC<AiPdfStudioPanelProps> = ({ onAwardXp })
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)] px-1 print:hidden">
             <span>
               মোট <strong className="text-[var(--accent)] font-mono-num">{paginatedResult.pages.length}টি</strong> A4 পৃষ্ঠা তৈরি হয়েছে
-              (প্রতি পৃষ্ঠায় প্রায় {paginatedResult.effectiveCharsPerPage} অক্ষর ওজন) — প্রিন্ট বা &quot;Save as PDF&quot; করুন
+              (প্রতি পৃষ্ঠায় প্রায় {paginatedResult.effectiveCharsPerPage} অক্ষর ওজন)
             </span>
             <button
               type="button"
-              onClick={handlePrintPdf}
-              className="inline-flex items-center gap-1 font-bold text-[var(--accent)] hover:underline whitespace-nowrap"
+              disabled={exportingPdf}
+              onClick={() => void handleDownloadDirectPdf()}
+              className="inline-flex items-center gap-1 font-bold text-[var(--accent)] hover:underline whitespace-nowrap disabled:opacity-60"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>সব পৃষ্ঠা PDF সেভ করুন</span>
+              <span>সব পৃষ্ঠা PDF ডাউনলোড করুন</span>
             </button>
           </div>
 
