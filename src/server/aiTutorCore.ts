@@ -106,11 +106,104 @@ const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
   'application/pdf',
 ]);
 
-export function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
-    return null;
+interface KeyCooldownEntry {
+  untilMs: number;
+  reason: string;
+}
+
+const keyCooldownMap = new Map<string, KeyCooldownEntry>();
+let activeKeyPointer = 0;
+
+function parseKeyTokens(rawValue: string | undefined): string[] {
+  if (!rawValue || typeof rawValue !== 'string') return [];
+  return rawValue
+    .split(/[\s,;]+/)
+    .map((token) => token.trim().replace(/^['"]|['"]$/g, ''))
+    .filter((token) => token.length > 0 && token !== 'MY_GEMINI_API_KEY');
+}
+
+export function getConfiguredGeminiApiKeys(): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+
+  const pushUnique = (raw: string | undefined) => {
+    for (const token of parseKeyTokens(raw)) {
+      if (!seen.has(token)) {
+        seen.add(token);
+        keys.push(token);
+      }
+    }
+  };
+
+  // 1. Primary comma/newline-separated multi-key variable (unlimited keys)
+  pushUnique(process.env.GEMINI_API_KEYS);
+
+  // 2. Standard single or comma-separated GEMINI_API_KEY
+  pushUnique(process.env.GEMINI_API_KEY);
+
+  // 3. Numbered / named env vars: GEMINI_API_KEY_1, GEMINI_API_KEY_2, ..., GEMINI_API_KEY_100, GEMINI_API_KEY_BACKUP, etc.
+  const numberedOrNamedEnvNames = Object.keys(process.env)
+    .filter((name) => /^GEMINI_API_KEY_[A-Z0-9_]+$/i.test(name) && name !== 'GEMINI_API_KEYS')
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+  for (const envName of numberedOrNamedEnvNames) {
+    pushUnique(process.env[envName]);
   }
+
+  return keys;
+}
+
+function getOrderedCandidateKeys(): string[] {
+  const allKeys = getConfiguredGeminiApiKeys();
+  if (allKeys.length === 0) return [];
+
+  const now = Date.now();
+  // Prune expired cooldowns
+  for (const [key, entry] of keyCooldownMap.entries()) {
+    if (entry.untilMs <= now) {
+      keyCooldownMap.delete(key);
+    }
+  }
+
+  const startIdx = ((activeKeyPointer % allKeys.length) + allKeys.length) % allKeys.length;
+  const rotated = [...allKeys.slice(startIdx), ...allKeys.slice(0, startIdx)];
+
+  const healthy: string[] = [];
+  const cooledDown: Array<{ key: string; untilMs: number }> = [];
+
+  for (const key of rotated) {
+    const cooldown = keyCooldownMap.get(key);
+    if (!cooldown || cooldown.untilMs <= now) {
+      healthy.push(key);
+    } else {
+      cooledDown.push({ key, untilMs: cooldown.untilMs });
+    }
+  }
+
+  cooledDown.sort((a, b) => a.untilMs - b.untilMs);
+  return [...healthy, ...cooledDown.map((item) => item.key)];
+}
+
+function advanceKeyPointer(failedKey: string, allKeys: string[]) {
+  if (allKeys.length <= 1) return;
+  const idx = allKeys.indexOf(failedKey);
+  if (idx >= 0) {
+    activeKeyPointer = (idx + 1) % allKeys.length;
+  } else {
+    activeKeyPointer = (activeKeyPointer + 1) % allKeys.length;
+  }
+}
+
+function markKeyCooldown(key: string, ttlMs: number, reason: string, allKeys: string[]) {
+  const effectiveTtl = allKeys.length > 1 ? ttlMs : Math.min(ttlMs, 8000);
+  keyCooldownMap.set(key, {
+    untilMs: Date.now() + effectiveTtl,
+    reason,
+  });
+  advanceKeyPointer(key, allKeys);
+}
+
+export function createGeminiClient(apiKey: string): GoogleGenAI {
   return new GoogleGenAI({
     apiKey,
     httpOptions: {
@@ -119,6 +212,30 @@ export function getGeminiClient(): GoogleGenAI | null {
       },
     },
   });
+}
+
+export function getGeminiKeyPoolInfo(): { configuredKeyCount: number; availableKeyCount: number } {
+  const allKeys = getConfiguredGeminiApiKeys();
+  const now = Date.now();
+  let available = 0;
+  for (const key of allKeys) {
+    const cd = keyCooldownMap.get(key);
+    if (!cd || cd.untilMs <= now) {
+      available += 1;
+    }
+  }
+  return {
+    configuredKeyCount: allKeys.length,
+    availableKeyCount: available,
+  };
+}
+
+export function getGeminiClient(): GoogleGenAI | null {
+  const candidates = getOrderedCandidateKeys();
+  if (candidates.length === 0) {
+    return null;
+  }
+  return createGeminiClient(candidates[0]);
 }
 
 const BASE_TUTOR_INSTRUCTION = `You are Ustadha/Ustadh AI, an expert bilingual Arabic & Bengali language teacher at AI Arabic Academy teaching both Modern Standard Arabic (MSA / فصحى), classical Nahw & Sarf (Mabadiul Arabiyyah, Nahw Mir, Sharh Mi'at Amil, Hidayatun Nahw, Al-Kafiyah, Mizanus Sarf, Munsha'ib, Safwatul Masadir), and Quranic Arabic.
@@ -225,17 +342,64 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isQuotaOrRateLimitError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err || '')).toLowerCase();
+  return (
+    msg.includes('429') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('too many requests') ||
+    msg.includes('exceeded your current quota') ||
+    msg.includes('limit exceeded')
+  );
+}
+
+function isInvalidKeyError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err || '')).toLowerCase();
+  return (
+    msg.includes('api_key_invalid') ||
+    msg.includes('api key not valid') ||
+    msg.includes('api key expired') ||
+    msg.includes('api_key') ||
+    msg.includes('permission_denied') ||
+    msg.includes('unauthenticated') ||
+    msg.includes('401') ||
+    msg.includes('403')
+  );
+}
+
 function isTransientError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
+  const lower = msg.toLowerCase();
   return (
     msg.includes('503') ||
     msg.includes('502') ||
     msg.includes('500') ||
     msg.includes('UNAVAILABLE') ||
-    msg.toLowerCase().includes('high demand') ||
-    msg.toLowerCase().includes('overloaded') ||
-    msg.toLowerCase().includes('temporarily')
+    lower.includes('high demand') ||
+    lower.includes('overloaded') ||
+    lower.includes('temporarily') ||
+    lower.includes('timeout') ||
+    lower.includes('econnreset') ||
+    lower.includes('fetch failed')
   );
+}
+
+function recordKeyFailureAndShouldRotate(err: unknown, key: string, allKeys: string[]): boolean {
+  if (isQuotaOrRateLimitError(err)) {
+    markKeyCooldown(key, 90_000, 'rate_limit', allKeys);
+    return true;
+  }
+  if (isInvalidKeyError(err)) {
+    markKeyCooldown(key, 15 * 60_000, 'invalid_key', allKeys);
+    return true;
+  }
+  if (isTransientError(err)) {
+    advanceKeyPointer(key, allKeys);
+    return true;
+  }
+  return false;
 }
 
 export async function runAiTeacherRequest(payload: {
@@ -286,13 +450,13 @@ export async function runAiTeacherRequest(payload: {
     };
   }
 
-  const ai = getGeminiClient();
-  if (!ai) {
+  const candidateKeys = getOrderedCandidateKeys();
+  if (candidateKeys.length === 0) {
     return {
       status: 503,
       body: {
         error:
-          'GEMINI_API_KEY সেট করা নেই। Vercel-এ Environment Variables বা Google AI Studio Settings > Secrets-এ GEMINI_API_KEY যুক্ত করুন।',
+          'GEMINI_API_KEY বা GEMINI_API_KEYS সেট করা নেই। Vercel-এ Environment Variables বা Google AI Studio Settings > Secrets-এ API Key যুক্ত করুন।',
       },
     };
   }
@@ -360,96 +524,120 @@ export async function runAiTeacherRequest(payload: {
 
   const attempts: { model: string; thinkingLevel?: ThinkingLevel; delayMs: number }[] = [
     { model: 'gemini-4-hydrogen', thinkingLevel: ThinkingLevel.LOW, delayMs: 0 },
-    { model: 'gemini-4-hydrogen', thinkingLevel: ThinkingLevel.LOW, delayMs: 800 },
-    { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayMs: 400 },
-    { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayMs: 1000 },
+    { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayMs: 350 },
   ];
 
   let lastError: unknown = null;
 
-  for (const attempt of attempts) {
-    if (attempt.delayMs > 0) {
-      await sleep(attempt.delayMs);
-    }
-    try {
-      const response = await ai.models.generateContent({
-        model: attempt.model,
-        contents,
-        config: {
-          systemInstruction,
-          ...(effectiveMode === 'document-ocr-grammar'
-            ? {
-                responseMimeType: 'application/json',
-                responseSchema: DOCUMENT_OCR_SCHEMA,
-              }
-            : {}),
-          ...(attempt.thinkingLevel ? { thinkingConfig: { thinkingLevel: attempt.thinkingLevel } } : {}),
-        },
-      });
-      const reply = response.text?.trim();
-      if (reply) {
-        if (effectiveMode === 'document-ocr-grammar') {
-          try {
-            const parsed = JSON.parse(reply) as DocumentOcrAnalysisResult;
-            return {
-              status: 200,
-              body: {
-                reply: parsed.summaryBn || parsed.fullTranslationBn || reply,
-                analysis: parsed,
-                model: attempt.model,
-                mode,
-              },
-            };
-          } catch {
-            // Fall back cleanly if text wasn't strict JSON
-            return {
-              status: 200,
-              body: {
-                reply,
-                model: attempt.model,
-                mode,
-              },
-            };
-          }
-        }
+  for (let keyIdx = 0; keyIdx < candidateKeys.length; keyIdx++) {
+    const apiKey = candidateKeys[keyIdx];
+    const ai = createGeminiClient(apiKey);
+    let rotateToNextKey = false;
 
-        return {
-          status: 200,
-          body: {
-            reply,
-            model: attempt.model,
-            mode,
+    for (const attempt of attempts) {
+      if (attempt.delayMs > 0) {
+        await sleep(attempt.delayMs);
+      }
+      try {
+        const response = await ai.models.generateContent({
+          model: attempt.model,
+          contents,
+          config: {
+            systemInstruction,
+            ...(effectiveMode === 'document-ocr-grammar'
+              ? {
+                  responseMimeType: 'application/json',
+                  responseSchema: DOCUMENT_OCR_SCHEMA,
+                }
+              : {}),
+            ...(attempt.thinkingLevel ? { thinkingConfig: { thinkingLevel: attempt.thinkingLevel } } : {}),
           },
-        };
+        });
+        const reply = response.text?.trim();
+        if (reply) {
+          if (effectiveMode === 'document-ocr-grammar') {
+            try {
+              const parsed = JSON.parse(reply) as DocumentOcrAnalysisResult;
+              return {
+                status: 200,
+                body: {
+                  reply: parsed.summaryBn || parsed.fullTranslationBn || reply,
+                  analysis: parsed,
+                  model: attempt.model,
+                  mode,
+                },
+              };
+            } catch {
+              return {
+                status: 200,
+                body: {
+                  reply,
+                  model: attempt.model,
+                  mode,
+                },
+              };
+            }
+          }
+
+          return {
+            status: 200,
+            body: {
+              reply,
+              model: attempt.model,
+              mode,
+            },
+          };
+        }
+        lastError = new Error('Empty response returned from AI model.');
+      } catch (err: unknown) {
+        lastError = err;
+        console.warn(
+          `Gemini attempt failed (key #${keyIdx + 1}/${candidateKeys.length}, ${attempt.model}):`,
+          err instanceof Error ? err.message : err
+        );
+
+        if (isQuotaOrRateLimitError(err)) {
+          markKeyCooldown(apiKey, 90_000, 'rate_limit', candidateKeys);
+          rotateToNextKey = true;
+          break;
+        }
+        if (isInvalidKeyError(err)) {
+          markKeyCooldown(apiKey, 15 * 60_000, 'invalid_key', candidateKeys);
+          rotateToNextKey = true;
+          break;
+        }
+        if (!isTransientError(err)) {
+          rotateToNextKey = false;
+          break;
+        }
       }
-      lastError = new Error('Empty response returned from AI model.');
-    } catch (err: unknown) {
-      lastError = err;
-      console.warn(`Gemini attempt failed (${attempt.model}):`, err instanceof Error ? err.message : err);
-      if (!isTransientError(err)) {
-        break;
-      }
+    }
+
+    if (!rotateToNextKey && !isTransientError(lastError)) {
+      break;
+    }
+    if (isTransientError(lastError)) {
+      advanceKeyPointer(apiKey, candidateKeys);
     }
   }
 
   const errMsg = lastError instanceof Error ? lastError.message : String(lastError || 'Unexpected error');
-  const status =
-    errMsg.includes('429') || errMsg.toLowerCase().includes('resource_exhausted')
-      ? 429
-      : errMsg.includes('403') || errMsg.includes('401') || errMsg.toLowerCase().includes('api_key')
-      ? 403
-      : isTransientError(lastError)
-      ? 503
-      : 500;
+  const status = isQuotaOrRateLimitError(lastError)
+    ? 429
+    : isInvalidKeyError(lastError)
+    ? 403
+    : isTransientError(lastError)
+    ? 503
+    : 500;
 
   return {
     status,
     body: {
       error:
         status === 429
-          ? 'API ব্যবহারের সীমা (Rate limit) সাময়িকভাবে পূর্ণ হয়েছে। কয়েক সেকেন্ড পর আবার চেষ্টা করুন।'
+          ? `যুক্ত থাকা ${candidateKeys.length}টি Gemini API Key-এর সাময়িক ব্যবহার সীমা (Rate limit) পূর্ণ হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন অথবা Vercel Environment Variables-এ আরও API Key যুক্ত করুন।`
           : status === 403
-          ? 'Gemini API Key যাচাই ব্যর্থ হয়েছে। অনুগ্রহ করে GEMINI_API_KEY সঠিক আছে কিনা পরীক্ষা করুন।'
+          ? 'Gemini API Key যাচাই ব্যর্থ হয়েছে। অনুগ্রহ করে Vercel Environment Variables-এর API Key গুলো সঠিক আছে কিনা পরীক্ষা করুন।'
           : status === 503
           ? 'Gemini সার্ভার এখন অতিরিক্ত ব্যস্ত রয়েছে (সাময়িক 503)। কয়েক সেকেন্ড পর আবার চেষ্টা করুন।'
           : `AI শিক্ষক ত্রুটি: ${errMsg}`,
@@ -489,94 +677,115 @@ export async function runGeminiTtsRequest(payload: {
     return { status: 400, body: { error: 'অডিও তৈরি করার জন্য টেক্সট প্রয়োজন।' } };
   }
 
-  const ai = getGeminiClient();
-  if (!ai) {
-    return { status: 503, body: { error: 'GEMINI_API_KEY কনফিগার করা নেই।' } };
+  const candidateKeys = getOrderedCandidateKeys();
+  if (candidateKeys.length === 0) {
+    return { status: 503, body: { error: 'GEMINI_API_KEY বা GEMINI_API_KEYS কনফিগার করা নেই।' } };
   }
 
   const voiceName = payload.voiceGender === 'female' ? 'Kore' : 'Charon';
   const clippedText = rawText.slice(0, 1400);
+  let lastError: unknown = null;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash-lite-tts',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: clippedText,
-              speechMetadata: {
-                style:
-                  payload.style ||
-                  (payload.langCode?.startsWith('ar')
-                    ? 'Clear, articulate, natural Modern Standard Arabic teacher voice with crisp vowel pronunciation'
-                    : 'Warm, clear, natural Bengali and Arabic teacher voice'),
+  for (let keyIdx = 0; keyIdx < candidateKeys.length; keyIdx++) {
+    const apiKey = candidateKeys[keyIdx];
+    const ai = createGeminiClient(apiKey);
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash-lite-tts',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: clippedText,
+                speechMetadata: {
+                  style:
+                    payload.style ||
+                    (payload.langCode?.startsWith('ar')
+                      ? 'Clear, articulate, natural Modern Standard Arabic teacher voice with crisp vowel pronunciation'
+                      : 'Warm, clear, natural Bengali and Arabic teacher voice'),
+                },
               },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName },
             },
-          ],
-        },
-      ],
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName },
           },
         },
-      },
-    });
+      });
 
-    const audioPart = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-    const base64Data = audioPart?.inlineData?.data;
-    const rawMime = (audioPart?.inlineData?.mimeType || 'audio/wav').toLowerCase();
+      const audioPart = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+      const base64Data = audioPart?.inlineData?.data;
+      const rawMime = (audioPart?.inlineData?.mimeType || 'audio/wav').toLowerCase();
 
-    if (!base64Data) {
-      return { status: 502, body: { error: 'TTS মডেল থেকে কোনো অডিও পাওয়া যায়নি।' } };
-    }
+      if (!base64Data) {
+        lastError = new Error('TTS মডেল থেকে কোনো অডিও পাওয়া যায়নি।');
+        continue;
+      }
 
-    const buf = Buffer.from(base64Data, 'base64');
-    const isRiffWav = buf.length >= 4 && buf.subarray(0, 4).toString('ascii') === 'RIFF';
+      const buf = Buffer.from(base64Data, 'base64');
+      const isRiffWav = buf.length >= 4 && buf.subarray(0, 4).toString('ascii') === 'RIFF';
 
-    if (isRiffWav) {
+      if (isRiffWav) {
+        return {
+          status: 200,
+          body: {
+            audioBase64: base64Data,
+            mimeType: 'audio/wav',
+            voiceName,
+          },
+        };
+      }
+
+      if (rawMime.includes('l16') || rawMime.includes('pcm')) {
+        const wavBuf = wrapPcmAsWav(buf, 24000, 1, 16);
+        return {
+          status: 200,
+          body: {
+            audioBase64: wavBuf.toString('base64'),
+            mimeType: 'audio/wav',
+            voiceName,
+          },
+        };
+      }
+
       return {
         status: 200,
         body: {
           audioBase64: base64Data,
-          mimeType: 'audio/wav',
+          mimeType: rawMime || 'audio/wav',
           voiceName,
         },
       };
+    } catch (err: unknown) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : 'TTS generation failed';
+      console.warn(`Gemini TTS error (key #${keyIdx + 1}/${candidateKeys.length}):`, msg);
+      const shouldRotate = recordKeyFailureAndShouldRotate(err, apiKey, candidateKeys);
+      if (!shouldRotate) {
+        break;
+      }
     }
-
-    if (rawMime.includes('l16') || rawMime.includes('pcm')) {
-      const wavBuf = wrapPcmAsWav(buf, 24000, 1, 16);
-      return {
-        status: 200,
-        body: {
-          audioBase64: wavBuf.toString('base64'),
-          mimeType: 'audio/wav',
-          voiceName,
-        },
-      };
-    }
-
-    return {
-      status: 200,
-      body: {
-        audioBase64: base64Data,
-        mimeType: rawMime || 'audio/wav',
-        voiceName,
-      },
-    };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'TTS generation failed';
-    console.warn('Gemini TTS error:', msg);
-    return {
-      status: isTransientError(err) ? 503 : 500,
-      body: { error: msg },
-    };
   }
+
+  const msg = lastError instanceof Error ? lastError.message : 'TTS generation failed';
+  const status = isQuotaOrRateLimitError(lastError)
+    ? 429
+    : isInvalidKeyError(lastError)
+    ? 403
+    : isTransientError(lastError)
+    ? 503
+    : 500;
+  return {
+    status,
+    body: { error: msg },
+  };
 }
 
 export type PdfFormatterCategory =
@@ -672,7 +881,7 @@ Rules:
 }
 
 interface PreparedPdfRequest {
-  ai: GoogleGenAI;
+  candidateKeys: string[];
   systemInstruction: string;
   userParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>;
 }
@@ -719,12 +928,12 @@ function preparePdfFormatRequest(payload: {
     };
   }
 
-  const ai = getGeminiClient();
-  if (!ai) {
+  const candidateKeys = getOrderedCandidateKeys();
+  if (candidateKeys.length === 0) {
     return {
       error: {
         status: 503,
-        message: 'GEMINI_API_KEY সেট করা নেই। অনুগ্রহ করে Server Secrets-এ GEMINI_API_KEY যুক্ত করুন।',
+        message: 'GEMINI_API_KEY বা GEMINI_API_KEYS সেট করা নেই। অনুগ্রহ করে Vercel Environment Variables-এ API Key যুক্ত করুন।',
       },
     };
   }
@@ -759,7 +968,7 @@ ${buildPdfCategoryPrompt(category, payload.userInstructions)}`;
   ];
 
   return {
-    prepared: { ai, systemInstruction, userParts },
+    prepared: { candidateKeys, systemInstruction, userParts },
   };
 }
 
@@ -779,52 +988,92 @@ export async function runFormatPdfRequest(payload: {
     };
   }
 
-  const { ai, systemInstruction, userParts } = prep.prepared;
+  const { candidateKeys, systemInstruction, userParts } = prep.prepared;
 
   const attempts: { model: string; thinkingLevel?: ThinkingLevel; delayMs: number }[] = [
     { model: 'gemini-4-hydrogen', thinkingLevel: ThinkingLevel.LOW, delayMs: 0 },
-    { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayMs: 500 },
+    { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayMs: 350 },
   ];
 
   let lastError: unknown = null;
-  for (const attempt of attempts) {
-    if (attempt.delayMs > 0) await sleep(attempt.delayMs);
-    try {
-      const response = await ai.models.generateContent({
-        model: attempt.model,
-        contents: [{ role: 'user', parts: userParts }],
-        config: {
-          systemInstruction,
-          maxOutputTokens: 16384,
-          responseMimeType: 'application/json',
-          responseSchema: PDF_FORMAT_SCHEMA,
-          ...(attempt.thinkingLevel ? { thinkingConfig: { thinkingLevel: attempt.thinkingLevel } } : {}),
-        },
-      });
-      const jsonText = response.text?.trim();
-      if (jsonText) {
-        const doc = JSON.parse(jsonText) as Record<string, unknown>;
-        return {
-          status: 200,
-          body: {
-            document: doc,
-            model: attempt.model,
+
+  for (let keyIdx = 0; keyIdx < candidateKeys.length; keyIdx++) {
+    const apiKey = candidateKeys[keyIdx];
+    const ai = createGeminiClient(apiKey);
+    let rotateToNextKey = false;
+
+    for (const attempt of attempts) {
+      if (attempt.delayMs > 0) await sleep(attempt.delayMs);
+      try {
+        const response = await ai.models.generateContent({
+          model: attempt.model,
+          contents: [{ role: 'user', parts: userParts }],
+          config: {
+            systemInstruction,
+            maxOutputTokens: 16384,
+            responseMimeType: 'application/json',
+            responseSchema: PDF_FORMAT_SCHEMA,
+            ...(attempt.thinkingLevel ? { thinkingConfig: { thinkingLevel: attempt.thinkingLevel } } : {}),
           },
-        };
+        });
+        const jsonText = response.text?.trim();
+        if (jsonText) {
+          const doc = JSON.parse(jsonText) as Record<string, unknown>;
+          return {
+            status: 200,
+            body: {
+              document: doc,
+              model: attempt.model,
+            },
+          };
+        }
+        lastError = new Error('Empty response returned from document formatter.');
+      } catch (err: unknown) {
+        lastError = err;
+        console.warn(
+          `PDF format attempt failed (key #${keyIdx + 1}/${candidateKeys.length}, ${attempt.model}):`,
+          err instanceof Error ? err.message : err
+        );
+        if (isQuotaOrRateLimitError(err)) {
+          markKeyCooldown(apiKey, 90_000, 'rate_limit', candidateKeys);
+          rotateToNextKey = true;
+          break;
+        }
+        if (isInvalidKeyError(err)) {
+          markKeyCooldown(apiKey, 15 * 60_000, 'invalid_key', candidateKeys);
+          rotateToNextKey = true;
+          break;
+        }
+        if (!isTransientError(err)) {
+          rotateToNextKey = false;
+          break;
+        }
       }
-      lastError = new Error('Empty response returned from document formatter.');
-    } catch (err: unknown) {
-      lastError = err;
-      console.warn(`PDF format attempt failed (${attempt.model}):`, err instanceof Error ? err.message : err);
-      if (!isTransientError(err)) break;
+    }
+
+    if (!rotateToNextKey && !isTransientError(lastError)) {
+      break;
+    }
+    if (isTransientError(lastError)) {
+      advanceKeyPointer(apiKey, candidateKeys);
     }
   }
 
+  const status = isQuotaOrRateLimitError(lastError)
+    ? 429
+    : isInvalidKeyError(lastError)
+    ? 403
+    : isTransientError(lastError)
+    ? 503
+    : 500;
+
   return {
-    status: isTransientError(lastError) ? 503 : 500,
+    status,
     body: {
       error:
-        lastError instanceof Error
+        status === 429
+          ? `যুক্ত থাকা ${candidateKeys.length}টি API Key-এর সাময়িক লিমিট পূর্ণ হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।`
+          : lastError instanceof Error
           ? lastError.message
           : 'PDF ডকুমেন্ট ফরম্যাট করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
     },
@@ -858,80 +1107,120 @@ export async function streamFormatPdfRequest(
     return;
   }
 
-  const { ai, systemInstruction, userParts } = prep.prepared;
+  const { candidateKeys, systemInstruction, userParts } = prep.prepared;
 
   const attempts: { model: string; thinkingLevel?: ThinkingLevel; delayMs: number }[] = [
     { model: 'gemini-4-hydrogen', thinkingLevel: ThinkingLevel.LOW, delayMs: 0 },
-    { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayMs: 500 },
+    { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL, delayMs: 350 },
   ];
 
   let lastError: unknown = null;
 
-  for (const attempt of attempts) {
+  for (let keyIdx = 0; keyIdx < candidateKeys.length; keyIdx++) {
     if (signal?.aborted) return;
-    if (attempt.delayMs > 0) await sleep(attempt.delayMs);
+    const apiKey = candidateKeys[keyIdx];
+    const ai = createGeminiClient(apiKey);
+    let rotateToNextKey = false;
 
-    try {
-      const stream = await ai.models.generateContentStream({
-        model: attempt.model,
-        contents: [{ role: 'user', parts: userParts }],
-        config: {
-          systemInstruction,
-          maxOutputTokens: 16384,
-          responseMimeType: 'application/json',
-          responseSchema: PDF_FORMAT_SCHEMA,
-          ...(attempt.thinkingLevel ? { thinkingConfig: { thinkingLevel: attempt.thinkingLevel } } : {}),
-        },
-      });
+    for (const attempt of attempts) {
+      if (signal?.aborted) return;
+      if (attempt.delayMs > 0) await sleep(attempt.delayMs);
 
-      let fullText = '';
-      let lastReported = 0;
+      try {
+        const stream = await ai.models.generateContentStream({
+          model: attempt.model,
+          contents: [{ role: 'user', parts: userParts }],
+          config: {
+            systemInstruction,
+            maxOutputTokens: 16384,
+            responseMimeType: 'application/json',
+            responseSchema: PDF_FORMAT_SCHEMA,
+            ...(attempt.thinkingLevel ? { thinkingConfig: { thinkingLevel: attempt.thinkingLevel } } : {}),
+          },
+        });
 
-      for await (const chunk of stream) {
-        if (signal?.aborted) return;
-        const delta = chunk.text || '';
-        if (delta) {
-          fullText += delta;
-          if (fullText.length - lastReported >= 180) {
-            lastReported = fullText.length;
-            onEvent({
-              type: 'progress',
-              charsReceived: fullText.length,
-              model: attempt.model,
-            });
+        let fullText = '';
+        let lastReported = 0;
+
+        for await (const chunk of stream) {
+          if (signal?.aborted) return;
+          const delta = chunk.text || '';
+          if (delta) {
+            fullText += delta;
+            if (fullText.length - lastReported >= 180) {
+              lastReported = fullText.length;
+              onEvent({
+                type: 'progress',
+                charsReceived: fullText.length,
+                model: attempt.model,
+              });
+            }
           }
         }
-      }
 
-      const trimmed = fullText.trim();
-      if (trimmed) {
-        const doc = JSON.parse(trimmed) as Record<string, unknown>;
-        onEvent({
-          type: 'progress',
-          charsReceived: trimmed.length,
-          model: attempt.model,
-        });
-        onEvent({
-          type: 'result',
-          document: doc,
-          model: attempt.model,
-        });
-        return;
+        const trimmed = fullText.trim();
+        if (trimmed) {
+          const doc = JSON.parse(trimmed) as Record<string, unknown>;
+          onEvent({
+            type: 'progress',
+            charsReceived: trimmed.length,
+            model: attempt.model,
+          });
+          onEvent({
+            type: 'result',
+            document: doc,
+            model: attempt.model,
+          });
+          return;
+        }
+        lastError = new Error('Empty stream returned from document formatter.');
+      } catch (err: unknown) {
+        if (signal?.aborted) return;
+        lastError = err;
+        console.warn(
+          `PDF stream attempt failed (key #${keyIdx + 1}/${candidateKeys.length}, ${attempt.model}):`,
+          err instanceof Error ? err.message : err
+        );
+        if (isQuotaOrRateLimitError(err)) {
+          markKeyCooldown(apiKey, 90_000, 'rate_limit', candidateKeys);
+          rotateToNextKey = true;
+          break;
+        }
+        if (isInvalidKeyError(err)) {
+          markKeyCooldown(apiKey, 15 * 60_000, 'invalid_key', candidateKeys);
+          rotateToNextKey = true;
+          break;
+        }
+        if (!isTransientError(err)) {
+          rotateToNextKey = false;
+          break;
+        }
       }
-      lastError = new Error('Empty stream returned from document formatter.');
-    } catch (err: unknown) {
-      if (signal?.aborted) return;
-      lastError = err;
-      console.warn(`PDF stream attempt failed (${attempt.model}):`, err instanceof Error ? err.message : err);
-      if (!isTransientError(err)) break;
+    }
+
+    if (!rotateToNextKey && !isTransientError(lastError)) {
+      break;
+    }
+    if (isTransientError(lastError)) {
+      advanceKeyPointer(apiKey, candidateKeys);
     }
   }
 
+  const status = isQuotaOrRateLimitError(lastError)
+    ? 429
+    : isInvalidKeyError(lastError)
+    ? 403
+    : isTransientError(lastError)
+    ? 503
+    : 500;
+
   onEvent({
     type: 'error',
-    status: isTransientError(lastError) ? 503 : 500,
+    status,
     error:
-      lastError instanceof Error
+      status === 429
+        ? `যুক্ত থাকা ${candidateKeys.length}টি API Key-এর সাময়িক লিমিট পূর্ণ হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।`
+        : lastError instanceof Error
         ? lastError.message
         : 'PDF ডকুমেন্ট স্ট্রিমিং ফরম্যাটে ত্রুটি হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
   });

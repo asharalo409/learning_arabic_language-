@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import {
-  getGeminiClient,
+  getGeminiKeyPoolInfo,
   runAiTeacherRequest,
   runFormatPdfRequest,
   runGeminiTtsRequest,
@@ -21,9 +21,12 @@ const PORT = Number(process.env.PORT) || 3000;
 app.use(express.json({ limit: '60mb' }));
 
 app.get('/api/health', (_req: Request, res: Response) => {
+  const poolInfo = getGeminiKeyPoolInfo();
   res.json({
     ok: true,
-    geminiConfigured: Boolean(getGeminiClient()),
+    geminiConfigured: poolInfo.configuredKeyCount > 0,
+    configuredKeyCount: poolInfo.configuredKeyCount,
+    availableKeyCount: poolInfo.availableKeyCount,
     timestamp: new Date().toISOString(),
   });
 });

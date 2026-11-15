@@ -415,37 +415,37 @@ export const DashboardPage: React.FC = () => {
     >
       <div className="space-y-6">
         {/* Top Greeting + Dedicated Header Daily Streak Counter + 7-Day Strip */}
-        <div className="surface-card rounded-3xl p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        <div className="surface-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-5">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--accent)]">
-              <Cloud className="w-3.5 h-3.5" />
-              <span>
+            <div className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-[var(--accent)]">
+              <Cloud className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">
                 {user
                   ? `${user.email} · ${supabaseConnected ? 'Supabase Synced' : 'Account Synced'}`
                   : 'গেস্ট মোড · সব ডিভাইসে সেভ রাখতে লগইন করুন'}
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-xl sm:text-2xl font-bold">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h2 className="text-lg sm:text-2xl font-bold">
                 স্বাগতম, {progress.studentName}
               </h2>
               {/* Dashboard Header Daily Streak Counter */}
               <div
-                className="inline-flex items-center gap-2 px-3 py-1 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300"
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300"
                 title="টানা অধ্যয়নের দিন (Consecutive Days of Study)"
               >
-                <Flame className="w-4 h-4 text-amber-500 shrink-0" />
-                <span className="text-sm font-extrabold font-mono-num">{progress.streakDays} দিন</span>
-                <span className="text-[11px] font-semibold">টানা স্ট্রিক</span>
+                <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500 shrink-0" />
+                <span className="text-xs sm:text-sm font-extrabold font-mono-num">{progress.streakDays} দিন</span>
+                <span className="text-[10px] sm:text-[11px] font-semibold">টানা স্ট্রিক</span>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               <Link
                 to={`/courses/lesson/${continueTarget.chapterNumber}/${continueTarget.lessonNumber}`}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold btn-primary shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-bold btn-primary shadow-sm"
                 title={lang === 'bn' ? continueTarget.titleBn : continueTarget.titleEn}
               >
-                <Play className="w-3.5 h-3.5 fill-current" />
+                <Play className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-current shrink-0" />
                 <span>
                   {continueTarget.isResume
                     ? `পড়া চালিয়ে যান: অধ্যায় ${continueTarget.chapterNumber} · পাঠ ${continueTarget.lessonNumber}`
@@ -454,7 +454,7 @@ export const DashboardPage: React.FC = () => {
               </Link>
               <Link
                 to="/courses"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold btn-secondary"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-semibold btn-secondary"
               >
                 <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
                 <span>সব ১০০ অধ্যায়</span>
@@ -462,7 +462,7 @@ export const DashboardPage: React.FC = () => {
               {!user && (
                 <Link
                   to="/auth"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold btn-secondary"
+                  className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-semibold btn-secondary"
                 >
                   <LogIn className="w-3.5 h-3.5 text-[var(--accent)]" />
                   <span>Gmail লগইন</span>
@@ -472,11 +472,11 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           {/* 7-Day Horizontal Calendar Pill Strip */}
-          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1">
+          <div className="grid grid-cols-7 lg:flex items-center gap-1 sm:gap-2 pb-1">
             {weekStrip.map((d, i) => (
               <div
                 key={`${d.dayNum}-${i}`}
-                className={`min-w-[46px] py-2.5 px-2 rounded-2xl text-center border transition-all ${
+                className={`lg:min-w-[46px] py-1.5 sm:py-2.5 px-1 sm:px-2 rounded-xl sm:rounded-2xl text-center border transition-all ${
                   d.isToday
                     ? 'bg-[var(--accent)] text-[var(--accent-fg)] border-transparent shadow-md'
                     : d.active
@@ -484,44 +484,44 @@ export const DashboardPage: React.FC = () => {
                     : 'surface-alt border-[var(--border-subtle)] opacity-75'
                 }`}
               >
-                <div className="text-[10px] font-medium opacity-80">{d.dayName}</div>
-                <div className="text-sm font-bold font-mono-num mt-0.5">{d.dayNum}</div>
+                <div className="text-[9px] sm:text-[10px] font-medium opacity-80 truncate">{d.dayName}</div>
+                <div className="text-xs sm:text-sm font-bold font-mono-num mt-0.5">{d.dayNum}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Top Habit Builder: Daily Study Streak + Daily Target Counter alongside 100-Chapter Gauge */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
           {/* Daily Study Streak Counter */}
-          <div className="surface-card rounded-3xl p-5 border border-amber-500/35 bg-gradient-to-br from-amber-500/12 via-transparent to-orange-500/5 flex flex-col justify-between gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shrink-0">
-                  <Flame className="w-6 h-6" />
+          <div className="surface-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-amber-500/35 bg-gradient-to-br from-amber-500/12 via-transparent to-orange-500/5 flex flex-col justify-between gap-3.5 sm:gap-4">
+            <div className="flex items-start justify-between gap-2.5 sm:gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3.5">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shrink-0">
+                  <Flame className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-300">
+                  <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-300">
                     {lang === 'bn' ? 'দৈনিক অধ্যয়ন স্ট্রিক (Daily Study Streak)' : 'Daily Study Streak'}
                   </div>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-3xl font-extrabold font-mono-num">{progress.streakDays}</span>
-                    <span className="text-sm font-semibold text-[var(--text-secondary)]">
+                  <div className="flex items-baseline gap-1.5 sm:gap-2 mt-0.5">
+                    <span className="text-2xl sm:text-3xl font-extrabold font-mono-num">{progress.streakDays}</span>
+                    <span className="text-xs sm:text-sm font-semibold text-[var(--text-secondary)]">
                       {lang === 'bn' ? 'দিন একটানা সক্রিয়' : 'days running'}
                     </span>
                   </div>
                 </div>
               </div>
-              <span className="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[11px] font-bold shrink-0">
+              <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] sm:text-[11px] font-bold shrink-0">
                 {progress.streakDays >= 7 ? 'ধারাবাহিক সাধক' : 'নিয়মিত চর্চা'}
               </span>
             </div>
 
-            <div className="grid grid-cols-7 gap-1.5">
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
               {weekStrip.map((d, i) => (
                 <div
                   key={`streak-${d.dayNum}-${i}`}
-                  className={`py-2 rounded-xl text-center border text-[11px] transition-all ${
+                  className={`py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-center border text-[10px] sm:text-[11px] transition-all ${
                     d.isToday
                       ? 'bg-amber-500 text-white border-transparent font-bold shadow'
                       : d.active
@@ -529,7 +529,7 @@ export const DashboardPage: React.FC = () => {
                       : 'surface-alt border-[var(--border-subtle)] text-[var(--text-muted)]'
                   }`}
                 >
-                  <div>{d.dayName}</div>
+                  <div className="truncate">{d.dayName}</div>
                   <div className="font-mono-num mt-0.5">{d.active ? '●' : '○'}</div>
                 </div>
               ))}
@@ -548,22 +548,22 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* 4-Column Prodex KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
           {kpis.map((item) => {
             const Icon = item.icon;
             return (
               <div
                 key={item.label}
-                className="surface-card rounded-2xl p-4 sm:p-5 flex items-center gap-3.5"
+                className="surface-card rounded-2xl p-3 sm:p-5 flex items-center gap-2.5 sm:gap-3.5"
               >
-                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${item.tint}`}>
-                  <Icon className="w-5 h-5" />
+                <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${item.tint}`}>
+                  <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs text-[var(--text-muted)] truncate">{item.label}</div>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-xl sm:text-2xl font-bold font-mono-num">{item.value}</span>
-                    <span className="text-[11px] font-medium text-[var(--success)] truncate">{item.sub}</span>
+                  <div className="text-[11px] sm:text-xs text-[var(--text-muted)] truncate">{item.label}</div>
+                  <div className="flex items-baseline gap-1.5 sm:gap-2 mt-0.5">
+                    <span className="text-lg sm:text-2xl font-bold font-mono-num">{item.value}</span>
+                    <span className="text-[10px] sm:text-[11px] font-medium text-[var(--success)] truncate">{item.sub}</span>
                   </div>
                 </div>
               </div>
@@ -580,43 +580,43 @@ export const DashboardPage: React.FC = () => {
         />
 
         {/* Favorite / Bookmarked Lessons Quick Access */}
-        <section className="surface-card rounded-3xl p-5 sm:p-6 space-y-4 border border-amber-500/25">
+        <section className="surface-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 border border-amber-500/25">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="text-base font-bold flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
                 <Bookmark className="w-4 h-4 text-amber-500 fill-amber-500" />
                 <span>
                   {lang === 'en' ? 'Favorite Lessons (Bookmarks)' : 'পছন্দের পাঠসমূহ (Favorites)'}
                 </span>
               </h3>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              <p className="text-[11px] sm:text-xs text-[var(--text-muted)] mt-0.5">
                 গুরুত্বপূর্ণ পাঠগুলো বুকমার্ক করে রাখলে এখান থেকে সরাসরি এক ক্লিকে খুলতে পারবেন
               </p>
             </div>
-            <span className="px-2.5 py-1 rounded-full bg-amber-500/12 text-amber-700 dark:text-amber-300 text-xs font-mono-num font-bold">
+            <span className="px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-500/12 text-amber-700 dark:text-amber-300 text-[11px] sm:text-xs font-mono-num font-bold">
               {favoriteLessons.length}টি সংরক্ষিত
             </span>
           </div>
 
           {favoriteLessons.length === 0 ? (
-            <div className="rounded-2xl surface-alt border border-[var(--border-subtle)] p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="rounded-2xl surface-alt border border-[var(--border-subtle)] p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-2.5">
               <p className="text-xs text-[var(--text-secondary)]">
                 এখনো কোনো পাঠ পছন্দের তালিকায় সংরক্ষণ করা হয়নি। যেকোনো পাঠের ভেতর থেকে <strong>“পছন্দের তালিকায়”</strong> বাটনে চাপ দিন।
               </p>
               <Link
                 to={`/courses/lesson/${continueTarget.chapterNumber}/${continueTarget.lessonNumber}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold btn-secondary"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold btn-secondary"
               >
                 <span>পাঠ খুলুন</span>
                 <ArrowRight className="w-3.5 h-3.5 text-[var(--accent)]" />
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
               {favoriteLessons.map((fav) => (
                 <div
                   key={fav.lessonId}
-                  className="rounded-2xl surface-alt border border-[var(--border-subtle)] hover:border-amber-500/45 p-3.5 flex flex-col justify-between gap-2.5 transition-all"
+                  className="rounded-2xl surface-alt border border-[var(--border-subtle)] hover:border-amber-500/45 p-3 sm:p-3.5 flex flex-col justify-between gap-2 transition-all"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 space-y-1">
@@ -663,7 +663,7 @@ export const DashboardPage: React.FC = () => {
         </section>
 
         {/* Vocabulary Deck Status Summary (Learning / Mastered / Review) + Grammar Mastery Radar */}
-        <div className="surface-card rounded-3xl p-5 sm:p-6 space-y-4">
+        <div className="surface-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 space-y-3.5 sm:space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-base font-bold flex items-center gap-2">
@@ -743,7 +743,7 @@ export const DashboardPage: React.FC = () => {
         <MuslimCompanionStrip compact />
 
         {/* Weekly Activity Chart (Recharts: Hours Studied + Vocabulary Learned over last 7 days) */}
-        <div className="surface-card rounded-3xl p-5 sm:p-6 space-y-5">
+        <div className="surface-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 space-y-4 sm:space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-base sm:text-lg font-bold flex items-center gap-2">
@@ -863,9 +863,9 @@ export const DashboardPage: React.FC = () => {
         <LearningVelocityChart data={weeklyLessonVelocity} lang={lang} />
 
         {/* Middle 2-Column Analytics: Bar Chart + Donut Ring (Image 1 Prodex style) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Left: Activity / Level Bar Chart */}
-          <div className="lg:col-span-7 surface-card rounded-3xl p-6 flex flex-col justify-between gap-5">
+          <div className="lg:col-span-7 surface-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 flex flex-col justify-between gap-4 sm:gap-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold flex items-center gap-2">
@@ -958,7 +958,7 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           {/* Right: Donut Mastery Breakdown (Image 1 Top Categories style) */}
-          <div className="lg:col-span-5 surface-card rounded-3xl p-6 flex flex-col justify-between gap-5">
+          <div className="lg:col-span-5 surface-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 flex flex-col justify-between gap-4 sm:gap-5">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold flex items-center gap-2">
                 <Award className="w-4 h-4 text-[var(--accent)]" />
@@ -1020,9 +1020,9 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Bottom 2-Column Split: Recent Activity + Curriculum Matrix Table (Prodex style) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Recent Activity */}
-          <div className="lg:col-span-5 surface-card rounded-3xl p-6 space-y-4">
+          <div className="lg:col-span-5 surface-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 space-y-3.5 sm:space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold">সাম্প্রতিক কার্যক্রম</h3>
               <span className="text-xs text-[var(--text-muted)] font-mono-num">
@@ -1068,7 +1068,7 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           {/* Curriculum Progress Table */}
-          <div className="lg:col-span-7 surface-card rounded-3xl p-6 space-y-4">
+          <div className="lg:col-span-7 surface-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 space-y-3.5 sm:space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-bold flex items-center gap-2">
                 <GraduationCap className="w-4 h-4 text-[var(--accent)]" />
